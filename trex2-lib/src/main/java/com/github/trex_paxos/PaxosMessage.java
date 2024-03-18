@@ -13,8 +13,6 @@ public sealed interface PaxosMessage permits
         AcceptAck,
         AcceptNack,
         Commit,
-        RetransmitRequest,
-        RetransmitResponse,
         CheckTimeout,
         HeartBeat,
         AbstractCommand,
@@ -30,13 +28,11 @@ enum CommandType {
     AcceptAck((byte)4),
     AcceptNack((byte)5),
     Commit((byte)6),
-    RetransmitRequest((byte)7),
-    RetransmitResponse((byte)8),
-    CheckTimeout((byte)9),
-    HeartBeat((byte)10),
-    CommandValue((byte)11),
-    NoOperation((byte)12),
-    ClientCommand((byte)13);
+    CheckTimeout((byte)7),
+    HeartBeat((byte)8),
+    CommandValue((byte)9),
+    NoOperation((byte)10),
+    ClientCommand((byte)11);
 
     private final byte id;
 
