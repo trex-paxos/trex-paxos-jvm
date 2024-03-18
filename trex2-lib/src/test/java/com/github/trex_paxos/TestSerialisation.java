@@ -21,7 +21,7 @@ public class TestSerialisation {
     @Test
     public void testAccept() throws IOException {
         byte[] bytes1 = "test".getBytes();
-        Accept accept = new Accept(new Identifier(2552, new BallotNumber(2, 2552), 4L), new Command("0", bytes1));
+        Accept accept = new Accept(new Identifier(2552, new BallotNumber(2, 2552), 4L));
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dataOutputStream = new DataOutputStream(bos);
         accept.writeTo(dataOutputStream);
@@ -54,8 +54,8 @@ public class TestSerialisation {
                 new Progress(new BallotNumber(2, 2552), new Identifier(2552, new BallotNumber(2, 2552), 4L)),
                 4L,
                 4L,
-                Optional.of(new Accept(new Identifier(2552, new BallotNumber(2, 2552), 4L),
-                        new Command("0", bytes1))));
+                Optional.of(new Accept(new Identifier(2552, new BallotNumber(2, 2552), 4L)
+                )));
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dataOutputStream = new DataOutputStream(bos);
         prepareAck.writeTo(dataOutputStream);
@@ -84,4 +84,22 @@ public class TestSerialisation {
         PrepareNack prepareNack2 = PrepareNack.readFrom(dataInputStream);
         assertThat(prepareNack2).isEqualTo(prepareNack);
     }
+
+    @Test
+    public void testAcceptNackSerialisation() throws IOException {
+        AcceptNack acceptNack = new AcceptNack(
+                new Identifier(2552, new BallotNumber(2, 2552), 4L),
+                2552,
+                new Progress(new BallotNumber(2, 2552), new Identifier(2552, new BallotNumber(2, 2552), 4L)));
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        DataOutputStream dataOutputStream = new DataOutputStream(bos);
+        acceptNack.writeTo(dataOutputStream);
+        dataOutputStream.flush();
+        byte[] bytes = bos.toByteArray();
+        DataInputStream dataInputStream = new DataInputStream(new ByteArrayInputStream(bytes));
+        AcceptNack acceptNack2 = AcceptNack.readFrom(dataInputStream);
+        assertThat(acceptNack2).isEqualTo(acceptNack);
+    }
+
+
 }

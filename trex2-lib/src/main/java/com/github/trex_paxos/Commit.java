@@ -1,5 +1,16 @@
 package com.github.trex_paxos;
 
-public record Commit() implements PaxosMessage {
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 
+public record Commit(Identifier identifier, long heartbeat) implements PaxosMessage {
+
+    public static PaxosMessage readFrom(DataInputStream dis) {
+        throw new AssertionError("Not implemented");
+    }
+
+    @Override
+    public void writeTo(DataOutputStream dos) {
+        throw new AssertionError("Not implemented");
+    }
 }
