@@ -7,13 +7,20 @@ import java.io.IOException;
 public record Progress(BallotNumber highestPromised, Identifier highestCommitted) implements JournalRecord {
     public static final Progress EMPTY = new Progress(BallotNumber.EMPTY, Identifier.EMPTY);
 
+    // Java may get `with` so that we can retire this method.
+    public Progress withHighestPromised(BallotNumber highestPromised) {
+        return new Progress(highestPromised, highestCommitted);
+    }
+
     public void writeTo(DataOutputStream dos) throws IOException {
         highestPromised.writeTo(dos);
         highestCommitted.writeTo(dos);
     }
+
     public static Progress readFrom(DataInputStream dis) throws IOException {
         return new Progress(BallotNumber.readFrom(dis), Identifier.readFrom(dis));
     }
+
     @Override
     public String toString() {
         return String.format("P(p=%s,c=%s)", highestPromised, highestCommitted);

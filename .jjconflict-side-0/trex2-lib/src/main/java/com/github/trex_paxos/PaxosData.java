@@ -12,6 +12,11 @@ public record PaxosData(Progress progress,
                         Optional<BallotNumber> epoch,
                         SortedMap<Identifier, AcceptResponsesAndTimeout> acceptResponses) {
 
+    // Java may get `with` so that we can retire this method.
+    public PaxosData withProgress(Progress progress) {
+        return new PaxosData(progress, leaderHeartbeat, timeout, prepareResponses, epoch, acceptResponses);
+    }
+
     public static SortedMap<Identifier, Map<Integer, PrepareResponse>> emptyPrepares() {
         throw new AssertionError("Not implemented");
     }
