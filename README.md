@@ -3,8 +3,7 @@
 
 Checkout the [blog posts](https://simbo1905.wordpress.com/2016/01/09/trex-a-paxos-replication-engine/) for a description of this implementation of [Paxos Made Simple](https://courses.cs.washington.edu/courses/cse550/17au/papers/CSE550.paxos-simple.pdf).
 
-This is a work in progress. It will use the latest Java 22+ Data Oriented Programming and Structured Concurrency to build 
-correct and modular implementation of the Paxos Made Simple algorithm for state replication.
+This is a work in progress. It will use the latest Java 22+ Data Oriented Programming and Structured Concurrency to build a modular implementation of the Paxos Made Simple algorithm for state replication.
 
 ### Goals
 
