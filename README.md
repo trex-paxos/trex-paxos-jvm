@@ -7,10 +7,10 @@ This is a work in progress. It will use the latest Java 22+ Data Oriented Progra
 
 ### Goals
 
- - Have at least one 3rd party verification tool (e.g. `maelstrom`)
- - Demonstrate log replication with Paxos
+ - Verify via a 3rd party verification tool (e.g. `maelstrom`).
+ - Demonstrate log replication with Paxos.
  - Use minimal (ideally zero) third-party libraries.
- - Keep all LTS Java beyond > Java 21
+ - Keep all LTS Java beyond > Java 21.
 
 ### Non-Goals
 
