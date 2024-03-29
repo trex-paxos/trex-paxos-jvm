@@ -20,7 +20,7 @@ public class TestSerialisation {
 
     @Test
     public void testAccept() throws IOException {
-        Accept accept = new Accept(new Identifier((byte) 1, new BallotNumber(2, (byte) 3), 4L));
+        Accept accept = new Accept(new Identifier((byte) 1, new BallotNumber(2, (byte) 3), 4L), NoOperation.NOOP);
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dataOutputStream = new DataOutputStream(bos);
         accept.writeTo(dataOutputStream);
@@ -46,15 +46,13 @@ public class TestSerialisation {
 
     @Test
     public void testPrepareAck() throws IOException {
-        byte[] bytes1 = "test".getBytes();
         PrepareAck prepareAck = new PrepareAck(
                 new Identifier((byte) 1, new BallotNumber(2, (byte) 3), 4L),
                 (byte) 4,
                 new Progress(new BallotNumber(5, (byte) 6), new Identifier((byte) 7, new BallotNumber(8, (byte) 9), 10L)),
                 11L,
                 12L,
-                Optional.of(new Accept(new Identifier((byte) 13, new BallotNumber(14, (byte) 15), 16L)
-                )));
+                Optional.of(new Accept(new Identifier((byte) 13, new BallotNumber(14, (byte) 15), 16L), NoOperation.NOOP)));
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dataOutputStream = new DataOutputStream(bos);
         prepareAck.writeTo(dataOutputStream);

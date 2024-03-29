@@ -7,11 +7,23 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public sealed interface PaxosMessage permits AbstractCommand, Accept, AcceptAck, AcceptNack, AcceptResponse, CheckTimeout, Command, Commit, HeartBeat, NoOperation, Prepare, PrepareAck, PrepareNack, PrepareResponse {
+public sealed interface PaxosMessage permits
+        AbstractCommand,
+        Accept,
+        AcceptAck,
+        AcceptNack,
+        AcceptResponse,
+        Command,
+        Commit,
+        NoOperation,
+        Prepare,
+        PrepareAck,
+        PrepareNack,
+        PrepareResponse {
     void writeTo(DataOutputStream dos) throws IOException;
 }
 
-enum CommandType {
+enum MessageType {
     Prepare(0),
     PrepareAck(1),
     PrepareNack(2),
@@ -19,15 +31,13 @@ enum CommandType {
     AcceptAck(4),
     AcceptNack(5),
     Commit(6),
-    CheckTimeout(7),
-    HeartBeat(8),
-    CommandValue(9),
-    NoOperation(10),
-    ClientCommand(11);
+    CommandValue(7),
+    NoOperation(8),
+    ClientCommand(9);
 
     private final byte id;
 
-    CommandType(int id) {
+    MessageType(int id) {
         this.id = (byte)id;
     }
 
@@ -35,18 +45,18 @@ enum CommandType {
         return id;
     }
 
-    public static final Map<Byte, CommandType> ORDINAL_TO_TYPE_MAP;
+    public static final Map<Byte, MessageType> ORDINAL_TO_TYPE_MAP;
 
     static {
         ORDINAL_TO_TYPE_MAP = Arrays.stream(values())
-                .collect(Collectors.toMap(CommandType::id, Function.identity()));
+                .collect(Collectors.toMap(MessageType::id, Function.identity()));
     }
 
-    public static CommandType fromId(byte id) {
+    public static MessageType fromId(byte id) {
         return ORDINAL_TO_TYPE_MAP.get(id);
     }
 
-    public static CommandType fromPaxosMessage(PaxosMessage paxosMessage){
+    public static MessageType fromPaxosMessage(PaxosMessage paxosMessage){
         return switch(paxosMessage){
             case Prepare _ -> Prepare;
             case PrepareAck _ -> PrepareAck;
@@ -55,8 +65,6 @@ enum CommandType {
             case AcceptAck _ -> AcceptAck;
             case AcceptNack _ -> AcceptNack;
             case Commit _ -> Commit;
-            case CheckTimeout _ -> CheckTimeout;
-            case HeartBeat _ -> HeartBeat;
             case NoOperation _ -> NoOperation;
             case Command _ -> ClientCommand;
             case AbstractCommand _ -> CommandValue;

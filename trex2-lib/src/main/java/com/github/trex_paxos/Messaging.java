@@ -15,4 +15,7 @@ public interface Messaging {
      */
     void nack(Accept accept);
 
+    void ack(Prepare prepare);
+
+    void nack(Prepare prepare);
 }

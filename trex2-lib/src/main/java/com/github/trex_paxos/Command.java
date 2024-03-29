@@ -25,7 +25,7 @@ public record Command(String msgUuid, byte[] values) implements AbstractCommand,
     }
 
     @Override
-    public final boolean equals(Object arg0) {
+    public boolean equals(Object arg0) {
         if (this == arg0) {
             return true;
         }

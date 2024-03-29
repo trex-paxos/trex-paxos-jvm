@@ -7,24 +7,24 @@ public class Pickle {
         ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
         DataInputStream dis = new DataInputStream(bis);
         try {
-            CommandType commandType = CommandType.fromId(dis.readByte());
-            switch (commandType) {
-                case CommandType.Prepare:
+            MessageType messageType = MessageType.fromId(dis.readByte());
+            switch (messageType) {
+                case MessageType.Prepare:
                     return Prepare.readFrom(dis);
-                case CommandType.PrepareAck:
+                case MessageType.PrepareAck:
                     return PrepareAck.readFrom(dis);
-                case CommandType.PrepareNack:
+                case MessageType.PrepareNack:
                     return PrepareNack.readFrom(dis);
-                case CommandType.Accept:
+                case MessageType.Accept:
                     return Accept.readFrom(dis);
-                case CommandType.AcceptAck:
+                case MessageType.AcceptAck:
                     return AcceptAck.readFrom(dis);
-                case CommandType.AcceptNack:
+                case MessageType.AcceptNack:
                     return AcceptNack.readFrom(dis);
-                case CommandType.Commit:
+                case MessageType.Commit:
                     return Commit.readFrom(dis);
                 default:
-                    throw new AssertionError("Unknown command type: " + commandType);
+                    throw new AssertionError("Unknown command type: " + messageType);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -34,7 +34,7 @@ public class Pickle {
     public static byte[] write(PaxosMessage message) throws IOException {
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(byteArrayOutputStream);
-        dos.writeByte(CommandType.fromPaxosMessage(message).id());
+        dos.writeByte(MessageType.fromPaxosMessage(message).id());
         message.writeTo(dos);
         dos.close();
         return byteArrayOutputStream.toByteArray();
