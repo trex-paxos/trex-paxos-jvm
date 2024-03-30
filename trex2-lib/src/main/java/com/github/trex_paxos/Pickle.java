@@ -21,14 +21,11 @@ public class Pickle {
                     return AcceptAck.readFrom(dis);
                 case MessageType.AcceptNack:
                     return AcceptNack.readFrom(dis);
-                case MessageType.Commit:
-                    return Commit.readFrom(dis);
-                default:
-                    throw new AssertionError("Unknown command type: " + messageType);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        throw new AssertionError("unreachable as the switch statement is exhaustive");
     }
 
     public static byte[] write(PaxosMessage message) throws IOException {

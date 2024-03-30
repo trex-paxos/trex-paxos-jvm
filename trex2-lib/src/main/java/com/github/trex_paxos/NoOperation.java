@@ -3,7 +3,7 @@ package com.github.trex_paxos;
 import java.io.DataOutputStream;
 
 @SuppressWarnings("unused")
-public final class NoOperation implements AbstractCommand, PaxosMessage {
+public final class NoOperation implements AbstractCommand {
 
     public final static NoOperation NOOP = new NoOperation();
 

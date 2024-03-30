@@ -8,14 +8,10 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public sealed interface PaxosMessage permits
-        AbstractCommand,
         Accept,
         AcceptAck,
         AcceptNack,
         AcceptResponse,
-        Command,
-        Commit,
-        NoOperation,
         Prepare,
         PrepareAck,
         PrepareNack,
@@ -24,16 +20,13 @@ public sealed interface PaxosMessage permits
 }
 
 enum MessageType {
-    Prepare(0),
-    PrepareAck(1),
-    PrepareNack(2),
-    Accept(3),
-    AcceptAck(4),
-    AcceptNack(5),
-    Commit(6),
-    CommandValue(7),
-    NoOperation(8),
-    ClientCommand(9);
+    Prepare(1),
+    PrepareAck(2),
+    PrepareNack(3),
+
+    Accept(4),
+    AcceptAck(5),
+    AcceptNack(6);
 
     private final byte id;
 
@@ -64,10 +57,6 @@ enum MessageType {
             case Accept _ -> Accept;
             case AcceptAck _ -> AcceptAck;
             case AcceptNack _ -> AcceptNack;
-            case Commit _ -> Commit;
-            case NoOperation _ -> NoOperation;
-            case Command _ -> ClientCommand;
-            case AbstractCommand _ -> CommandValue;
         };
     }
 }

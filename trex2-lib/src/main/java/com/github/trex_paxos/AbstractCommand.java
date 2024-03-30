@@ -4,7 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public sealed interface AbstractCommand extends PaxosMessage permits NoOperation, Command {
+public sealed interface AbstractCommand permits NoOperation, Command {
 
     void writeTo(DataOutputStream dataStream) throws IOException;
 

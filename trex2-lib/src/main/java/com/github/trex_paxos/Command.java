@@ -5,7 +5,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 @SuppressWarnings("unused")
-public record Command(String msgUuid, byte[] values) implements AbstractCommand, PaxosMessage {
+public record Command(String msgUuid, byte[] values) implements AbstractCommand {
 
     @Override
     public void writeTo(DataOutputStream dataStream) throws IOException {

@@ -2,11 +2,11 @@ package com.github.trex_paxos;
 
 import java.util.*;
 
-public class PaxosNode {
+public class TrexNode {
     final byte nodeIdentifier;
     final Journal journal;
     final Messaging messaging;
-    private PaxosRole role = PaxosRole.FOLLOWER;
+    private TrexRole role = TrexRole.FOLLOWER;
     Progress progress;
     Long leaderHeartbeat = 0L;
     Long timeout = 0L;
@@ -14,7 +14,7 @@ public class PaxosNode {
     SortedMap<Identifier, Map<Integer, PrepareResponse>> prepareResponses = new TreeMap<>();
     SortedMap<Identifier, AcceptResponsesAndTimeout> acceptResponses = new TreeMap<>();
 
-    public PaxosNode(byte nodeIdentifier, Journal journal, Messaging messaging) {
+    public TrexNode(byte nodeIdentifier, Journal journal, Messaging messaging) {
         this.nodeIdentifier = nodeIdentifier;
         this.journal = journal;
         this.messaging = messaging;
@@ -23,7 +23,7 @@ public class PaxosNode {
 
     public Set<PaxosMessage> apply(PaxosMessage msg) {
         switch (role) {
-            case PaxosRole.FOLLOWER -> {
+            case TrexRole.FOLLOWER -> {
                 switch (msg) {
                     case Prepare prepare -> {
                         switch (PrepareHandler.process(progress, prepare, journal, messaging)) {
@@ -35,16 +35,6 @@ public class PaxosNode {
                             case StateUpdate(var p, _) -> this.progress = p;
                         }
                     }
-                    case Commit commit -> {
-                        throw new AssertionError("Not implemented");
-                    }
-                    case Command command -> {
-                        // TODO i suspect we need to forward this to the leader.
-                        return Set.of();
-                    }
-                    case NoOperation _ -> {
-                        return Set.of();
-                    }
                     case PrepareAck _, PrepareNack _, PrepareResponse _, AcceptAck _, AcceptNack _, AcceptResponse _ -> {
                         // ignore as not a leader
                     }
@@ -53,5 +43,4 @@ public class PaxosNode {
         }
         return null;
     }
-
 }
