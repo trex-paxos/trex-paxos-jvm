@@ -7,6 +7,10 @@ import java.io.IOException;
 public record Progress(BallotNumber highestPromised, Identifier highestCommitted) implements JournalRecord {
     public static final Progress EMPTY = new Progress(BallotNumber.EMPTY, Identifier.EMPTY);
 
+    public Progress withHighestCommitted(Identifier id) {
+        return new Progress(this.highestPromised, id);
+    }
+
     // Java may get `with` so that we can retire this method.
     public Progress withHighestPromised(BallotNumber highestPromised) {
         return new Progress(highestPromised, highestCommitted);

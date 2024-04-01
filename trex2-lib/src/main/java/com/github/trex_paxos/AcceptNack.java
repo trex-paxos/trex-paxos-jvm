@@ -16,4 +16,8 @@ public record AcceptNack(Identifier requestId, int from, Progress progress) impl
         return new AcceptNack(Identifier.readFrom(dis), dis.readInt(), Progress.readFrom(dis));
     }
 
+    @Override
+    public Identifier highestCommitted() {
+        return progress.highestCommitted();
+    }
 }
