@@ -1,6 +1,7 @@
 package com.github.trex_paxos;
 
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
 import static com.github.trex_paxos.AcceptHandler.*;
@@ -92,7 +93,10 @@ public class TrexNode {
           Optional.ofNullable(this.acceptVotesById.get(id)).ifPresent(acceptVotes -> {
             if (!acceptVotes.chosen()) {
               acceptVotes.responses().put(acceptResponse.from(), acceptResponse);
-              final var quorumOutcome = quorumStrategy.assessAccepts(acceptVotes.responses().values());
+              Collection<Vote> vs = acceptVotes.responses().values().stream()
+                .map(AcceptResponse::vote).collect(Collectors.toCollection(ArrayList::new));
+              final var quorumOutcome =
+                quorumStrategy.assessAccepts(vs);
               switch (quorumOutcome) {
                 case QUORUM -> {
                   final var acceptId = acceptVotes.accept().id();
@@ -152,7 +156,9 @@ public class TrexNode {
               Optional.ofNullable(prepareResponses.get(id)).ifPresent(
                 votes -> {
                   votes.put(from, prepareResponse);
-                  final var quorumOutcome = quorumStrategy.assessPromises(votes.values());
+                  Collection<Vote> vs = votes.values().stream()
+                    .map(PrepareResponse::vote).collect(Collectors.toCollection(ArrayList::new));
+                  final var quorumOutcome = quorumStrategy.assessPromises(vs);
                   switch (quorumOutcome) {
                     case NO_DECISION ->
                       // do nothing as a quorum has not yet been reached.
@@ -180,9 +186,7 @@ public class TrexNode {
 
                       // find the highest accepted command if any
                       AbstractCommand highestAcceptedCommand = votes.values().stream()
-                        .filter(r -> r instanceof PrepareAck)
-                        .map(r -> (PrepareAck) r)
-                        .map(PrepareAck::highestUncommitted)
+                        .map(PrepareResponse::highestUncommitted)
                         .filter(Optional::isPresent)
                         .map(Optional::get)
                         .max(Accept::compareTo)

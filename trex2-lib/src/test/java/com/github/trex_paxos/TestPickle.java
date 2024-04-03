@@ -1,6 +1,5 @@
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.*;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
@@ -39,16 +38,14 @@ public class TestPickle {
     }
 
     @Test
-    public void testPrepareAckPickleUnpickle() throws IOException {
-        PrepareAck prepareAck = new PrepareAck(
-                new Identifier(new BallotNumber(2, (byte)2), 4L),
-                (byte)5,
+    public void testPrepareResponsePickleUnpickle() throws IOException {
+      PrepareResponse prepareAck = new PrepareResponse(
+        new Vote((byte) 1, new Identifier(new BallotNumber(2, (byte) 3), 4L), true),
                 new Progress(new BallotNumber(2, (byte)6), new Identifier(new BallotNumber(8, (byte)9), 10L)),
                 11L,
-                12L,
                 Optional.of(new Accept(new Identifier(new BallotNumber(14, (byte)15), 16L), NoOperation.NOOP)));
         byte[] pickled = Pickle.write(prepareAck);
-        PrepareAck unpickled = (PrepareAck) Pickle.read(pickled);
+      PrepareResponse unpickled = (PrepareResponse) Pickle.read(pickled);
         assertEquals(prepareAck, unpickled);
     }
 
@@ -62,13 +59,12 @@ public class TestPickle {
 
     @Test
     public void testAcceptNackPickleUnpickle() throws IOException {
-        AcceptNack acceptNack = new AcceptNack(
-                new Identifier(new BallotNumber(2, (byte) 3), 4L),
-                5,
+      AcceptResponse acceptNack = new AcceptResponse(
+        new Vote((byte) 1, new Identifier(new BallotNumber(2, (byte) 3), 4L), true),
                 new Progress(new BallotNumber(6, (byte) 7), new Identifier(new BallotNumber(9, (byte) 10), 11L))
         );
         byte[] pickled = Pickle.write(acceptNack);
-        AcceptNack unpickled = (AcceptNack) Pickle.read(pickled);
+      AcceptResponse unpickled = (AcceptResponse) Pickle.read(pickled);
         assertEquals(acceptNack, unpickled);
     }
 }

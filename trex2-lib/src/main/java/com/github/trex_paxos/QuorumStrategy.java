@@ -5,6 +5,7 @@ package com.github.trex_paxos;
  of the current cluster configuration, so it is not part of the core library.
  */
 public interface QuorumStrategy {
-    QuorumOutcome assessPromises(Iterable<PrepareResponse> promises);
-    QuorumOutcome assessAccepts(Iterable<AcceptResponse> accepts);
+  QuorumOutcome assessPromises(Iterable<Vote> promises);
+
+  QuorumOutcome assessAccepts(Iterable<Vote> accepts);
 }

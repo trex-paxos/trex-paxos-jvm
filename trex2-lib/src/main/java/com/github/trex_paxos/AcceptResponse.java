@@ -1,23 +1,35 @@
 package com.github.trex_paxos;
 
-public sealed interface AcceptResponse extends TrexMessage permits AcceptAck, AcceptNack {
-    /**
-    * @return the highest committed identifier in the progress of the responder
-    */
-    Identifier highestCommitted();
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 
-    /**
+record AcceptResponse(Vote vote, Progress progress) implements TrexMessage {
+
+  /**
      * @return the request identifier of the request that this response is for
      */
-    Identifier requestId();
+  Identifier requestId() {
+    return vote.identifier();
+  }
 
     /**
      * @return the proposer that sent the request
      */
-    int from();
+    int from() {
+      return vote.from();
+    }
 
-    /**
-     * @return the progress of the responder
-     */
-    Progress progress();
+
+  @Override
+  public void writeTo(DataOutputStream dos) throws IOException {
+    vote.writeTo(dos);
+    progress.writeTo(dos);
+  }
+
+  public static AcceptResponse readFrom(DataInputStream dis) throws IOException {
+    Vote vote = Vote.readFrom(dis);
+    Progress progress = Progress.readFrom(dis);
+    return new AcceptResponse(vote, progress);
+  }
 }

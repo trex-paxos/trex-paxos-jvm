@@ -9,12 +9,8 @@ import java.util.stream.Collectors;
 
 public sealed interface TrexMessage permits
   Accept,
-  AcceptAck,
-  AcceptNack,
   AcceptResponse,
   Prepare,
-  PrepareAck,
-  PrepareNack,
   PrepareResponse,
   Commit,
   RetransmitRequest,
@@ -24,15 +20,13 @@ public sealed interface TrexMessage permits
 
 enum MessageType {
   Prepare(1),
-  PrepareAck(2),
-  PrepareNack(3),
+  PrepareResponse(2),
 
-  Accept(4),
-  AcceptAck(5),
-  AcceptNack(6),
-  Commit(7),
-  RetransmitRequest(8),
-  RetransmitResponse(9);
+  Accept(3),
+  AcceptResponse(4),
+  Commit(5),
+  RetransmitRequest(6),
+  RetransmitResponse(7);
 
   private final byte id;
 
@@ -58,14 +52,12 @@ enum MessageType {
   public static MessageType fromPaxosMessage(TrexMessage trexMessage) {
     return switch (trexMessage) {
       case Prepare _ -> Prepare;
-      case PrepareAck _ -> PrepareAck;
-      case PrepareNack _ -> PrepareNack;
+      case PrepareResponse _ -> PrepareResponse;
       case Accept _ -> Accept;
-      case AcceptAck _ -> AcceptAck;
-      case AcceptNack _ -> AcceptNack;
-      case Commit commit -> Commit;
-      case RetransmitRequest retransmitRequest -> RetransmitRequest;
-      case RetransmitResponse retransmitResponse -> RetransmitResponse;
+      case AcceptResponse _ -> AcceptResponse;
+      case Commit _ -> Commit;
+      case RetransmitRequest _ -> RetransmitRequest;
+      case RetransmitResponse _ -> RetransmitResponse;
     };
   }
 }

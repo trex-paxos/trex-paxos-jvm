@@ -5,7 +5,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 public record Progress(BallotNumber highestPromised, Identifier highestCommitted) implements JournalRecord {
-    public static final Progress EMPTY = new Progress(BallotNumber.EMPTY, Identifier.EMPTY);
 
     public Progress withHighestCommitted(Identifier id) {
         return new Progress(this.highestPromised, id);
