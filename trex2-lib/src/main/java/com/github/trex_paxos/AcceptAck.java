@@ -3,9 +3,9 @@ package com.github.trex_paxos;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 
-public record AcceptAck(Identifier requestId, int from, Progress progress) implements PaxosMessage, AcceptResponse {
+public record AcceptAck(Identifier requestId, int from, Progress progress) implements TrexMessage, AcceptResponse {
 
-    public static PaxosMessage readFrom(DataInputStream dis) {
+    public static TrexMessage readFrom(DataInputStream dis) {
         throw new AssertionError("Not implemented");
     }
 

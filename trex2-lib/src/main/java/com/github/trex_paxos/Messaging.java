@@ -18,4 +18,10 @@ public interface Messaging {
     void ack(Prepare prepare);
 
     void nack(Prepare prepare);
+
+    void prepare(Prepare p);
+
+    void accept(Accept a);
+
+  void send(TrexMessage retransmitRequest);
 }

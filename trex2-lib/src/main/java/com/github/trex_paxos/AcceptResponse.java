@@ -1,6 +1,6 @@
 package com.github.trex_paxos;
 
-public sealed interface AcceptResponse extends PaxosMessage permits AcceptAck, AcceptNack {
+public sealed interface AcceptResponse extends TrexMessage permits AcceptAck, AcceptNack {
     /**
     * @return the highest committed identifier in the progress of the responder
     */

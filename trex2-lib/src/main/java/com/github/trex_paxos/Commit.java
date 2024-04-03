@@ -4,9 +4,9 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 
 // TOTO what if this was not a PaxosMessage?
-public record Commit(Identifier identifier, long heartbeat) {
+public record Commit(Identifier identifier, long heartbeat) implements TrexMessage {
 
-    public static PaxosMessage readFrom(DataInputStream dis) {
+    public static Commit readFrom(DataInputStream dis) {
         throw new AssertionError("Not implemented");
     }
 

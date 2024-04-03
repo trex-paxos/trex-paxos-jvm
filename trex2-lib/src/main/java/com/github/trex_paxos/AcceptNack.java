@@ -4,7 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public record AcceptNack(Identifier requestId, int from, Progress progress) implements PaxosMessage, AcceptResponse {
+public record AcceptNack(Identifier requestId, int from, Progress progress) implements TrexMessage, AcceptResponse {
     @Override
     public void writeTo(DataOutputStream dos) throws IOException {
         requestId.writeTo(dos);

@@ -20,7 +20,7 @@ public class TestSerialisation {
 
     @Test
     public void testAccept() throws IOException {
-        Accept accept = new Accept(new Identifier((byte) 1, new BallotNumber(2, (byte) 3), 4L), NoOperation.NOOP);
+        Accept accept = new Accept(new Identifier(new BallotNumber(2, (byte) 3), 4L), NoOperation.NOOP);
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dataOutputStream = new DataOutputStream(bos);
         accept.writeTo(dataOutputStream);
@@ -33,7 +33,7 @@ public class TestSerialisation {
 
     @Test
     public void testPrepare() throws IOException {
-        Prepare prepare = new Prepare(new Identifier((byte) 1, new BallotNumber(2, (byte) 3), 4L));
+        Prepare prepare = new Prepare(new Identifier(new BallotNumber(2, (byte) 3), 4L));
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dataOutputStream = new DataOutputStream(bos);
         prepare.writeTo(dataOutputStream);
@@ -47,12 +47,12 @@ public class TestSerialisation {
     @Test
     public void testPrepareAck() throws IOException {
         PrepareAck prepareAck = new PrepareAck(
-                new Identifier((byte) 1, new BallotNumber(2, (byte) 3), 4L),
+                new Identifier(new BallotNumber(2, (byte) 3), 4L),
                 (byte) 4,
-                new Progress(new BallotNumber(5, (byte) 6), new Identifier((byte) 7, new BallotNumber(8, (byte) 9), 10L)),
+                new Progress(new BallotNumber(5, (byte) 6), new Identifier(new BallotNumber(8, (byte) 9), 10L)),
                 11L,
                 12L,
-                Optional.of(new Accept(new Identifier((byte) 13, new BallotNumber(14, (byte) 15), 16L), NoOperation.NOOP)));
+                Optional.of(new Accept(new Identifier(new BallotNumber(14, (byte) 15), 16L), NoOperation.NOOP)));
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dataOutputStream = new DataOutputStream(bos);
         prepareAck.writeTo(dataOutputStream);
@@ -66,9 +66,9 @@ public class TestSerialisation {
     @Test
     public void testPrepareNackSerialisation() throws IOException {
         PrepareNack prepareNack = new PrepareNack(
-                new Identifier((byte) 1, new BallotNumber(2, (byte) 3), 4L),
-                4,
-                new Progress(new BallotNumber(5, (byte) 6), new Identifier((byte) 7, new BallotNumber(8, (byte) 9), 10L)),
+                new Identifier(new BallotNumber(2, (byte) 3), 4L),
+                (byte)4,
+                new Progress(new BallotNumber(5, (byte) 6), new Identifier(new BallotNumber(8, (byte) 9), 10L)),
                 11L,
                 12L);
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -84,9 +84,9 @@ public class TestSerialisation {
     @Test
     public void testAcceptNackSerialisation() throws IOException {
         AcceptNack acceptNack = new AcceptNack(
-                new Identifier((byte) 1, new BallotNumber(2, (byte) 3), 4L),
+                new Identifier(new BallotNumber(2, (byte) 3), 4L),
                 5,
-                new Progress(new BallotNumber(6, (byte) 7), new Identifier((byte) 8, new BallotNumber(9, (byte) 10), 11L)));
+                new Progress(new BallotNumber(6, (byte) 7), new Identifier(new BallotNumber(9, (byte) 10), 11L)));
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dataOutputStream = new DataOutputStream(bos);
         acceptNack.writeTo(dataOutputStream);

@@ -3,7 +3,7 @@ package com.github.trex_paxos;
 import java.io.*;
 
 public class Pickle {
-    public static PaxosMessage read(byte[] bytes) {
+    public static TrexMessage read(byte[] bytes) {
         ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
         DataInputStream dis = new DataInputStream(bis);
         try {
@@ -28,7 +28,7 @@ public class Pickle {
         throw new AssertionError("unreachable as the switch statement is exhaustive");
     }
 
-    public static byte[] write(PaxosMessage message) throws IOException {
+    public static byte[] write(TrexMessage message) throws IOException {
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(byteArrayOutputStream);
         dos.writeByte(MessageType.fromPaxosMessage(message).id());

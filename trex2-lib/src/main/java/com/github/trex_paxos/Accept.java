@@ -4,7 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public record Accept(Identifier id, AbstractCommand command) implements PaxosMessage, JournalRecord {
+public record Accept(Identifier id, AbstractCommand command) implements TrexMessage, JournalRecord {
 
     final static byte NOOP = 1;
     final static byte COMMAND = 2;
@@ -28,4 +28,7 @@ public record Accept(Identifier id, AbstractCommand command) implements PaxosMes
             return new Accept(id, Command.readFrom(dataInputStream));
     }
 
+    public int compareTo(Accept accept) {
+        return id.compareTo(accept.id());
+    }
 }

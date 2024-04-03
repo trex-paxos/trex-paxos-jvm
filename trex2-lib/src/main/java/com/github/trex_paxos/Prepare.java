@@ -4,7 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public record Prepare(Identifier id) implements PaxosMessage{
+public record Prepare(Identifier id) implements TrexMessage {
 
     public static Prepare readFrom(DataInputStream dataInputStream) throws IOException {
        return new Prepare(Identifier.readFrom(dataInputStream));
