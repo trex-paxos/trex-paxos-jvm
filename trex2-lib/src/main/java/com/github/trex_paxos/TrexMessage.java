@@ -12,9 +12,7 @@ public sealed interface TrexMessage permits
   AcceptResponse,
   Prepare,
   PrepareResponse,
-  Commit,
-  RetransmitRequest,
-  RetransmitResponse {
+  Commit {
   void writeTo(DataOutputStream dos) throws IOException;
 }
 
@@ -56,8 +54,6 @@ enum MessageType {
       case Accept _ -> Accept;
       case AcceptResponse _ -> AcceptResponse;
       case Commit _ -> Commit;
-      case RetransmitRequest _ -> RetransmitRequest;
-      case RetransmitResponse _ -> RetransmitResponse;
     };
   }
 }

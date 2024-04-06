@@ -4,6 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
+// FIXME add highest accepted index
 public record Progress(BallotNumber highestPromised, Identifier highestCommitted) implements JournalRecord {
 
     public Progress withHighestCommitted(Identifier id) {

@@ -1,6 +1,8 @@
 package com.github.trex_paxos;
 
 
+import java.util.List;
+
 public interface Messaging {
 
     /**
@@ -17,7 +19,7 @@ public interface Messaging {
 
     void ack(Prepare prepare);
 
-    void nack(Prepare prepare);
+  void nack(Prepare prepare, List<Accept> catchup);
 
     void prepare(Prepare p);
 

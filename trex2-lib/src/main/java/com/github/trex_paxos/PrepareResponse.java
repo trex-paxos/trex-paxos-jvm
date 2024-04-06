@@ -3,11 +3,15 @@ package com.github.trex_paxos;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 record PrepareResponse(Vote vote, Progress progress,
-                       long highestAcceptedIndex,
-                       Optional<Accept> highestUncommitted) implements TrexMessage {
+                       long highestAcceptedIndex, // FIXME move over to Progress
+                       Optional<Accept> highestUncommitted,
+
+                       List<Accept> catchup) implements TrexMessage {
   byte from() {
     return vote.from();
   }
@@ -30,6 +34,10 @@ record PrepareResponse(Vote vote, Progress progress,
     if (highestUncommitted.isPresent()) {
       highestUncommitted.get().writeTo(dos);
     }
+    dos.writeInt(catchup.size());
+    for (Accept accept : catchup) {
+      accept.writeTo(dos);
+    }
   }
 
   public static PrepareResponse readFrom(DataInputStream dis) throws IOException {
@@ -37,6 +45,11 @@ record PrepareResponse(Vote vote, Progress progress,
     Progress progress = Progress.readFrom(dis);
     long highestAcceptedIndex = dis.readLong();
     Optional<Accept> highestUncommitted = dis.readBoolean() ? Optional.of(Accept.readFrom(dis)) : Optional.empty();
-    return new PrepareResponse(vote, progress, highestAcceptedIndex, highestUncommitted);
+    int catchupSize = dis.readInt();
+    List<Accept> catchup = new ArrayList<>();
+    for (var i = 0; i < catchupSize; i++) {
+      catchup.add(Accept.readFrom(dis));
+    }
+    return new PrepareResponse(vote, progress, highestAcceptedIndex, highestUncommitted, catchup);
   }
 }

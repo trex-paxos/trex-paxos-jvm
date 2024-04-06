@@ -41,7 +41,7 @@ public class TrexNode {
 
   public Set<TrexMessage> apply(TrexMessage msg) {
     // when testing we can check invariants
-    assert invariants() : STR."invariants failed: \{this}";
+    assert invariants() : STR."invariants failed: \{this.role} \{this.epoch} \{this.prepareResponses} \{this.acceptVotesById}";
 
     // main Trex paxos algorithm
     switch (msg) {
@@ -51,14 +51,14 @@ public class TrexNode {
         } else if (equalOrHigherAccept(progress, accept)) {
           // always journal first
           journal.journalAccept(accept);
-          Progress updatedProgress;
+
           if (higherAccept(progress, accept)) {
-            updatedProgress = progress.withHighestPromised(accept.id().number());
+            // we must update promise on a higher accept http://stackoverflow.com/q/29880949/329496
+            Progress updatedProgress = progress.withHighestPromised(accept.id().number());
             journal.saveProgress(updatedProgress);
-          } else {
-            updatedProgress = progress;
+            this.progress = updatedProgress;
           }
-          this.progress = updatedProgress;
+
           messaging.ack(accept); // TODO detect/avoid messages sent to self
         } else {
           throw new AssertionError(STR."unreachable progress=\{progress}, accept=\{accept}");
@@ -66,9 +66,16 @@ public class TrexNode {
       }
       case Prepare prepare -> {
         var number = prepare.id().number();
-        if (number.lessThan(progress.highestPromised())) {
-          // nack a low prepare
-          messaging.nack(prepare);
+        if (number.lessThan(progress.highestPromised()) || prepare.id().logIndex() <= progress.highestCommitted().logIndex()) {
+          // nack a low prepare else any prepare for a committed slot sending any accepts they are missing
+          final long highestCommitted = progress.highestCommitted().logIndex();
+          final long highestCommittedOther = prepare.id().logIndex();
+          List<Accept> catchup = new ArrayList<>();
+          for (long slot = highestCommitted + 1; slot < highestCommittedOther; slot++) {
+            journal.loadAccept(slot).ifPresent(catchup::add);
+          }
+          // FIXME add highestAccepted to progress and speculatively send those.
+          messaging.nack(prepare, catchup);
         } else if (number.greaterThan(progress.highestPromised())) {
           // ack a higher prepare
           final var newProgress = progress.withHighestPromised(prepare.id().number());
@@ -139,16 +146,29 @@ public class TrexNode {
       }
       case PrepareResponse prepareResponse -> {
         if (TrexRole.CANIDATE == role ) {
-          // TODO if the prepare was a low response we should figure out if there is evidence of a stale leader
-          // else issue a high prepare.
 
           final var id = prepareResponse.requestId();
           final long highestCommitted = progress.highestCommitted().logIndex();
           final long highestCommittedOther = prepareResponse.highestCommittedIndex();
           if (highestCommitted < highestCommittedOther)  {
-            // request retransmission of the highest committed
-            messaging.send(new RetransmitRequest(nodeIdentifier, prepareResponse.from(), progress.highestCommitted().logIndex()));
-            // we cannot lead as we are not up-to-date
+            // we are not up-to-date in terms of commit so another leader may be active. now try to catch up
+            for (Accept accept : prepareResponse.catchup()) {
+              final var slot = accept.id().logIndex();
+              if (slot <= highestCommitted) {
+                continue;
+              }
+              if (equalOrHigherAccept(progress, accept)) {
+                // always journal first
+                journal.journalAccept(accept);
+
+                if (higherAccept(progress, accept)) {
+                  // we must update promise on a higher accept http://stackoverflow.com/q/29880949/329496
+                  Progress updatedProgress = progress.withHighestPromised(accept.id().number());
+                  journal.saveProgress(updatedProgress);
+                  this.progress = updatedProgress;
+                }
+              }
+            }
             backdown();
           } else {
             if (id.number().nodeIdentifier() == nodeIdentifier) {
@@ -217,13 +237,7 @@ public class TrexNode {
         }
       }
       case Commit commit -> {
-        throw new AssertionError("not implemented");
-      }
-      case RetransmitRequest retransmitRequest -> {
-        throw new AssertionError("not implemented");
-      }
-      case RetransmitResponse retransmitResponse -> {
-        throw new AssertionError("not implemented");
+        journal.commit(commit.identifier().logIndex());
       }
     }
     return null;
