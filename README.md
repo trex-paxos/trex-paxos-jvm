@@ -10,16 +10,20 @@ This is a work in progress. It will use the latest Java 22+ Data Oriented Progra
  - Verify via a 3rd party verification tool (e.g. `maelstrom`).
  - Demonstrate log replication with Paxos.
  - Use minimal (ideally zero) third-party libraries.
- - Keep all LTS Java beyond > Java 21.
+ - Keep working on the next LTS Java.
 
 ### Non-Goals
 
  - Demonstrate arbitrary Paxos use cases. A replicated k-v store is a sufficient demo.
  - Backport to Java 21 LTS. Structured concurrency and Virtual Threads are compelling. 
 
-## Building
+## Docker Maelstrom Testing
 
-TBD
+```shell
+docker build . -t maelstrom-trex
+docker run --rm -it --entrypoint /bin/sh maelstrom-trex
+cd /app/demo/java
+```
 
 ## Java Spinnaker Demo
 

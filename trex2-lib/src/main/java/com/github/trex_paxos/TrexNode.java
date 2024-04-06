@@ -37,7 +37,7 @@ public class TrexNode {
     };
   }
 
-  private List<TrexMessage> messageToSend = new ArrayList();
+  private final List<TrexMessage> messageToSend = new ArrayList<>();
 
   /**
    * The main entry point for the Trex paxos algorithm.
@@ -104,10 +104,10 @@ public class TrexNode {
           Optional.ofNullable(this.acceptVotesById.get(id)).ifPresent(acceptVotes -> {
             if (!acceptVotes.chosen()) {
               acceptVotes.responses().put(acceptResponse.from(), acceptResponse);
-              Collection<Vote> vs = acceptVotes.responses().values().stream()
-                .map(AcceptResponse::vote).collect(Collectors.toCollection(ArrayList::new));
+              Set<Vote> vs = acceptVotes.responses().values().stream()
+                .map(AcceptResponse::vote).collect(Collectors.toSet());
               final var quorumOutcome =
-                quorumStrategy.assessAccepts(vs);
+                quorumStrategy.assessAccepts(acceptResponse.requestId().logIndex(), vs);
               switch (quorumOutcome) {
                 case QUORUM -> {
                   final var acceptId = acceptVotes.accept().id();
@@ -139,10 +139,9 @@ public class TrexNode {
                 case NO_DECISION -> {
                   // do nothing as a quorum has not yet been reached.
                 }
-                case NO_QUORUM -> {
+                case NO_QUORUM ->
                   // we are unable to achieve a quorum, so we must back down
                   backdown();
-                }
               }
             }
           });
@@ -180,9 +179,9 @@ public class TrexNode {
               Optional.ofNullable(prepareResponses.get(id)).ifPresent(
                 votes -> {
                   votes.put(from, prepareResponse);
-                  Collection<Vote> vs = votes.values().stream()
-                    .map(PrepareResponse::vote).collect(Collectors.toCollection(ArrayList::new));
-                  final var quorumOutcome = quorumStrategy.assessPromises(vs);
+                  Set<Vote> vs = votes.values().stream()
+                    .map(PrepareResponse::vote).collect(Collectors.toSet());
+                  final var quorumOutcome = quorumStrategy.assessPromises(prepareResponse.requestId().logIndex(), vs);
                   switch (quorumOutcome) {
                     case NO_DECISION ->
                       // do nothing as a quorum has not yet been reached.
@@ -218,7 +217,7 @@ public class TrexNode {
                         .map(Accept::command)
                         .orElse(NoOperation.NOOP);
 
-                      // use the highest accepted command to issue an accept
+                      // use the highest accepted command to issue an Accept
                       Accept accept = new Accept(id, highestAcceptedCommand);
 
                       acceptVotesById.put(id, new AcceptVotes(accept));
@@ -241,9 +240,7 @@ public class TrexNode {
           }
         }
       }
-      case Commit commit -> {
-        journal.commit(commit.identifier().logIndex());
-      }
+      case Commit commit -> journal.committed(nodeIdentifier, commit.identifier().logIndex());
     }
     return null;
   }
@@ -297,5 +294,9 @@ public class TrexNode {
       progress,
       journal.loadAccept(prepare.id().logIndex()),
       catchup);
+  }
+
+  public boolean append(Command command) {
+    throw new AssertionError("Implement me!");
   }
 }
