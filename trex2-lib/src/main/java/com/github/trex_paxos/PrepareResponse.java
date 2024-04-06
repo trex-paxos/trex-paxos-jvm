@@ -10,7 +10,6 @@ import java.util.Optional;
 record PrepareResponse(Vote vote,
                        Progress progress,
                        Optional<Accept> highestUncommitted,
-
                        List<Accept> catchup) implements TrexMessage {
   byte from() {
     return vote.from();
@@ -19,7 +18,6 @@ record PrepareResponse(Vote vote,
   Identifier requestId() {
     return vote.identifier();
   }
-
 
   long highestCommittedIndex() {
     return progress.highestCommitted().logIndex();

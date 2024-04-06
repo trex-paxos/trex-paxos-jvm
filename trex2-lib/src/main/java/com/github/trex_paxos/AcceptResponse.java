@@ -16,7 +16,7 @@ record AcceptResponse(Vote vote, Progress progress) implements TrexMessage {
     /**
      * @return the proposer that sent the request
      */
-    int from() {
+    byte from() {
       return vote.from();
     }
 

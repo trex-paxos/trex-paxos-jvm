@@ -7,12 +7,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public sealed interface TrexMessage permits
-  Accept,
-  AcceptResponse,
-  Prepare,
-  PrepareResponse,
-  Commit {
+public sealed interface TrexMessage permits Accept, AcceptResponse, Catchup, CatchupResponse, Commit, Prepare, PrepareResponse {
   void writeTo(DataOutputStream dos) throws IOException;
 }
 
@@ -23,8 +18,8 @@ enum MessageType {
   Accept(3),
   AcceptResponse(4),
   Commit(5),
-  RetransmitRequest(6),
-  RetransmitResponse(7);
+  Catchup(6),
+  CatchupResponse(7);
 
   private final byte id;
 
@@ -54,6 +49,8 @@ enum MessageType {
       case Accept _ -> Accept;
       case AcceptResponse _ -> AcceptResponse;
       case Commit _ -> Commit;
+      case Catchup _ -> Catchup;
+      case CatchupResponse _ -> CatchupResponse;
     };
   }
 }

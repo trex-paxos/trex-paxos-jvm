@@ -4,8 +4,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-// TODO we must timeout on not hearing back any responses
-record AcceptVotes(Accept accept, Map<Integer, AcceptResponse> responses, boolean chosen){
+record AcceptVotes(Accept accept, Map<Byte, AcceptResponse> responses, boolean chosen) {
  AcceptVotes(Accept accept) {
   this(accept, new HashMap<>(), false);
 }
