@@ -42,8 +42,8 @@ public class TestPickle {
   public void testPrepareResponsePickleUnpickle() throws IOException {
     PrepareResponse prepareAck = new PrepareResponse(
       new Vote((byte) 1, new Identifier(new BallotNumber(2, (byte) 3), 4L), true),
-      new Progress(new BallotNumber(2, (byte) 6), new Identifier(new BallotNumber(8, (byte) 9), 10L)),
-      11L,
+      new Progress(new BallotNumber(2, (byte) 6), new Identifier(new BallotNumber(8, (byte) 9), 10L),
+        11L),
       Optional.of(new Accept(new Identifier(new BallotNumber(14, (byte) 15), 16L), NoOperation.NOOP)),
       List.of(new Accept(new Identifier(new BallotNumber(17, (byte) 18), 19L), NoOperation.NOOP))
     );
@@ -64,8 +64,11 @@ public class TestPickle {
   public void testAcceptNackPickleUnpickle() throws IOException {
     AcceptResponse acceptNack = new AcceptResponse(
       new Vote((byte) 1, new Identifier(new BallotNumber(2, (byte) 3), 4L), true),
-      new Progress(new BallotNumber(6, (byte) 7), new Identifier(new BallotNumber(9, (byte) 10), 11L))
-    );
+      new Progress(
+        new BallotNumber(6, (byte) 7),
+        new Identifier(new BallotNumber(9, (byte) 10), 11L),
+        12L
+      ));
     byte[] pickled = Pickle.write(acceptNack);
     AcceptResponse unpickled = (AcceptResponse) Pickle.read(pickled);
     assertEquals(acceptNack, unpickled);

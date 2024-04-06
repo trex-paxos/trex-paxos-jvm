@@ -9,7 +9,6 @@ import static com.github.trex_paxos.AcceptHandler.*;
 public class TrexNode {
   final byte nodeIdentifier;
   final Journal journal;
-  final Messaging messaging;
 
   final QuorumStrategy quorumStrategy;
 
@@ -20,10 +19,9 @@ public class TrexNode {
 
   Optional<BallotNumber> epoch = Optional.empty();
 
-  public TrexNode(byte nodeIdentifier, Journal journal, Messaging messaging, QuorumStrategy quorumStrategy) {
+  public TrexNode(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal) {
     this.nodeIdentifier = nodeIdentifier;
     this.journal = journal;
-    this.messaging = messaging;
     this.quorumStrategy = quorumStrategy;
     this.progress = journal.loadProgress(nodeIdentifier);
   }
@@ -39,15 +37,21 @@ public class TrexNode {
     };
   }
 
-  public Set<TrexMessage> apply(TrexMessage msg) {
+  private List<TrexMessage> messageToSend = new ArrayList();
+
+  /**
+   * The main entry point for the Trex paxos algorithm.
+   */
+  public List<TrexMessage> paxos(TrexMessage msg) {
     // when testing we can check invariants
     assert invariants() : STR."invariants failed: \{this.role} \{this.epoch} \{this.prepareResponses} \{this.acceptVotesById}";
 
-    // main Trex paxos algorithm
+    messageToSend.clear();
+
     switch (msg) {
       case Accept accept -> {
         if (lowerAccept(progress, accept) || higherAcceptForCommittedSlot(accept.id(), progress)) {
-          messaging.nack(accept);
+          messageToSend.add(nack(accept));
         } else if (equalOrHigherAccept(progress, accept)) {
           // always journal first
           journal.journalAccept(accept);
@@ -59,7 +63,7 @@ public class TrexNode {
             this.progress = updatedProgress;
           }
 
-          messaging.ack(accept); // TODO detect/avoid messages sent to self
+          messageToSend.add(ack(accept)); // TODO detect/avoid messages sent to self
         } else {
           throw new AssertionError(STR."unreachable progress=\{progress}, accept=\{accept}");
         }
@@ -75,18 +79,18 @@ public class TrexNode {
             journal.loadAccept(slot).ifPresent(catchup::add);
           }
           // FIXME add highestAccepted to progress and speculatively send those.
-          messaging.nack(prepare, catchup);
+          messageToSend.add(nack(prepare, catchup));
         } else if (number.greaterThan(progress.highestPromised())) {
           // ack a higher prepare
           final var newProgress = progress.withHighestPromised(prepare.id().number());
           journal.saveProgress(newProgress);
-          messaging.ack(prepare);
+          messageToSend.add(ack(prepare));
           this.progress = newProgress;
           // leader or recoverer should give way to a higher prepare
           if (this.role != TrexRole.FOLLOWER)
             backdown();
         } else if (number.equals(progress.highestPromised())) {
-          messaging.ack(prepare);
+          messageToSend.add(ack(prepare));
         } else {
           throw new AssertionError(STR."unreachable progress=\{progress}, prepare=\{prepare}");
         }
@@ -129,7 +133,7 @@ public class TrexNode {
                     // we have committed
                     this.progress = progress.withHighestCommitted(highestCommitable);
                     // let the cluster know
-                    messaging.send(new Commit(highestCommitable, nodeIdentifier));
+                    messageToSend.add(new Commit(highestCommitable, nodeIdentifier));
                   }
                 }
                 case NO_DECISION -> {
@@ -189,7 +193,8 @@ public class TrexNode {
                     case QUORUM -> {
                       // first issue new prepare messages for higher slots
                       votes.values().stream()
-                        .map(PrepareResponse::highestAcceptedIndex)
+                        .map(PrepareResponse::progress)
+                        .map(Progress::highestAccepted)
                         .max(Long::compareTo)
                         .ifPresent(higherAcceptedSlot -> {
                           final long highestLogIndexProbed = prepareResponses.lastKey().logIndex();
@@ -199,7 +204,7 @@ public class TrexNode {
                                 .forEach(slot -> {
                                   final var slotId = new Identifier(epoch, slot);
                                   prepareResponses.put(slotId, new HashMap<>());
-                                  messaging.prepare(new Prepare(slotId));
+                                  messageToSend.add(new Prepare(slotId));
                                 }));
                           }
                         });
@@ -219,7 +224,7 @@ public class TrexNode {
                       acceptVotesById.put(id, new AcceptVotes(accept));
 
                       // issue the accept messages
-                      messaging.accept(accept);
+                      messageToSend.add(accept);
 
                       // we are no long awaiting the prepare for the current slot
                       prepareResponses.remove(id);
@@ -243,11 +248,54 @@ public class TrexNode {
     return null;
   }
 
-  private void backdown() {
+  void backdown() {
     this.role = TrexRole.FOLLOWER;
     prepareResponses = new TreeMap<>();
     acceptVotesById = new TreeMap<>();
-    // TODO: clear timeouts, heartbeats and drop any in flight commands
-    // TODO must log this event
+  }
+
+  /**
+   * Send a positive vote message to the leader.
+   *
+   * @param accept The accept message to acknowledge.
+   */
+  AcceptResponse ack(Accept accept) {
+    return new AcceptResponse(new Vote(nodeIdentifier, accept.id(), true), progress);
+  }
+
+  /**
+   * Send a negative vote message to the leader.
+   *
+   * @param accept The accept message to reject.
+   */
+  AcceptResponse nack(Accept accept) {
+    return new AcceptResponse(new Vote(nodeIdentifier, accept.id(), false), progress);
+  }
+
+  /**
+   * Send a positive prepare response message to the leader.
+   *
+   * @param prepare The prepare message to acknowledge.
+   */
+  PrepareResponse ack(Prepare prepare) {
+    return new PrepareResponse(
+      new Vote(nodeIdentifier, prepare.id(), true),
+      progress,
+      journal.loadAccept(prepare.id().logIndex()),
+      List.of());
+  }
+
+  /**
+   * Send a negative prepare response message to the leader.
+   *
+   * @param prepare The prepare message to reject.
+   * @param catchup The list of accept messages to send to the leader.
+   */
+  PrepareResponse nack(Prepare prepare, List<Accept> catchup) {
+    return new PrepareResponse(
+      new Vote(nodeIdentifier, prepare.id(), false),
+      progress,
+      journal.loadAccept(prepare.id().logIndex()),
+      catchup);
   }
 }
