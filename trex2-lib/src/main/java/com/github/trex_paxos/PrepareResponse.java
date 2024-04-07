@@ -15,12 +15,8 @@ record PrepareResponse(Vote vote,
     return vote.from();
   }
 
-  Identifier requestId() {
-    return vote.identifier();
-  }
-
   long highestCommittedIndex() {
-    return progress.highestCommitted().logIndex();
+    return progress.highestCommitted();
   }
 
   @Override

@@ -13,11 +13,11 @@ import java.io.IOException;
  * @param highestCommitted
  * @param highestAccepted
  */
-public record Progress(byte nodeIdentifier, BallotNumber highestPromised, Identifier highestCommitted,
+public record Progress(byte nodeIdentifier, BallotNumber highestPromised, long highestCommitted,
                        long highestAccepted) implements JournalRecord {
 
-    public Progress withHighestCommitted(Identifier id) {
-      return new Progress(nodeIdentifier, highestPromised, id, highestAccepted);
+  public Progress withHighestCommitted(long committedLogIndex) {
+    return new Progress(nodeIdentifier, highestPromised, committedLogIndex, highestAccepted);
     }
 
     // Java may get `with` so that we can retire this method.
@@ -28,12 +28,12 @@ public record Progress(byte nodeIdentifier, BallotNumber highestPromised, Identi
     public void writeTo(DataOutputStream dos) throws IOException {
       dos.writeByte(nodeIdentifier);
       highestPromised.writeTo(dos);
-      highestCommitted.writeTo(dos);
+      dos.writeLong(highestCommitted);
       dos.writeLong(highestAccepted);
     }
 
     public static Progress readFrom(DataInputStream dis) throws IOException {
-      return new Progress(dis.readByte(), BallotNumber.readFrom(dis), Identifier.readFrom(dis), dis.readLong());
+      return new Progress(dis.readByte(), BallotNumber.readFrom(dis), dis.readLong(), dis.readLong());
     }
 
     @Override

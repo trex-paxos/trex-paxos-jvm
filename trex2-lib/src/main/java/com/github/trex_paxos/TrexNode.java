@@ -36,12 +36,12 @@ public class TrexNode {
   /**
    * During a recovery we will track all the slots that we are probing to find the highest accepted values.
    */
-  NavigableMap<Identifier, Map<Byte, PrepareResponse>> prepareResponses = new TreeMap<>();
+  NavigableMap<Long, Map<Byte, PrepareResponse>> prepareResponsesByLogIndex = new TreeMap<>();
 
   /**
    * When leading we will track the responses to a stream of accept messages.
    */
-  NavigableMap<Identifier, AcceptVotes> acceptVotesById = new TreeMap<>();
+  NavigableMap<Long, AcceptVotes> acceptVotesByLogIndex = new TreeMap<>();
 
   /**
    * The host application will need to learn that work has been committed.
@@ -64,11 +64,11 @@ public class TrexNode {
   private boolean invariants() {
     return switch (role) {
       case FOLLOW -> // follower is tracking no state and has no epoch
-        epoch.isEmpty() && prepareResponses.isEmpty() && acceptVotesById.isEmpty();
+        epoch.isEmpty() && prepareResponsesByLogIndex.isEmpty() && acceptVotesByLogIndex.isEmpty();
       case RECOVER -> // candidate has an epoch and is tracking some prepare responses and/or some accept votes
-        epoch.isPresent() && (!prepareResponses.isEmpty() || !acceptVotesById.isEmpty());
+        epoch.isPresent() && (!prepareResponsesByLogIndex.isEmpty() || !acceptVotesByLogIndex.isEmpty());
       case LEAD -> // leader has an epoch and is tracking no prepare responses
-        epoch.isPresent() && prepareResponses.isEmpty();
+        epoch.isPresent() && prepareResponsesByLogIndex.isEmpty();
     };
   }
 
@@ -79,20 +79,20 @@ public class TrexNode {
    */
   public List<TrexMessage> paxos(TrexMessage msg) {
     // when testing we can check invariants
-    assert invariants() : STR."invariants failed: \{this.role} \{this.epoch} \{this.prepareResponses} \{this.acceptVotesById}";
+    assert invariants() : STR."invariants failed: \{this.role} \{this.epoch} \{this.prepareResponsesByLogIndex} \{this.acceptVotesByLogIndex}";
 
     messageToSend.clear();
 
     switch (msg) {
       case Accept accept -> {
-        if (lowerAccept(progress, accept) || higherAcceptForCommittedSlot(accept.id(), progress)) {
+        if (lowerAccept(progress, accept) || higherAcceptForCommittedSlot(accept, progress)) {
           messageToSend.add(nack(accept));
         } else if (equalOrHigherAccept(progress, accept)) {
           // always journal first
           journal.journalAccept(accept);
           if (higherAccept(progress, accept)) {
             // we must update promise on a higher accept http://stackoverflow.com/q/29880949/329496
-            Progress updatedProgress = progress.withHighestPromised(accept.id().number());
+            Progress updatedProgress = progress.withHighestPromised(accept.number());
             journal.saveProgress(updatedProgress);
             this.progress = updatedProgress;
           }
@@ -102,13 +102,13 @@ public class TrexNode {
         }
       }
       case Prepare prepare -> {
-        var number = prepare.id().number();
-        if (number.lessThan(progress.highestPromised()) || prepare.id().logIndex() <= progress.highestCommitted().logIndex()) {
+        var number = prepare.number();
+        if (number.lessThan(progress.highestPromised()) || prepare.logIndex() <= progress.highestCommitted()) {
           // nack a low prepare else any prepare for a committed slot sending any accepts they are missing
-          messageToSend.add(nack(prepare, saveCatchup(prepare.id().logIndex())));
+          messageToSend.add(nack(prepare, loadCatchup(prepare.logIndex())));
         } else if (number.greaterThan(progress.highestPromised())) {
           // ack a higher prepare
-          final var newProgress = progress.withHighestPromised(prepare.id().number());
+          final var newProgress = progress.withHighestPromised(prepare.number());
           journal.saveProgress(newProgress);
           messageToSend.add(ack(prepare));
           this.progress = newProgress;
@@ -122,30 +122,28 @@ public class TrexNode {
         }
       }
       case AcceptResponse acceptResponse -> {
-        assert acceptResponse.requestId().number().nodeIdentifier() == nodeIdentifier : "should only receive responses for requests we made";
-        if (FOLLOW != role) {
+        if (FOLLOW != role && acceptResponse.vote().to() == nodeIdentifier) {
           // Both Leader and Recoverer can receive AcceptResponses
-          final var id = acceptResponse.requestId();
-          Optional.ofNullable(this.acceptVotesById.get(id)).ifPresent(acceptVotes -> {
+          final var logIndex = acceptResponse.vote().logIndex();
+          Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex)).ifPresent(acceptVotes -> {
             if (!acceptVotes.chosen()) {
               acceptVotes.responses().put(acceptResponse.from(), acceptResponse);
               Set<Vote> vs = acceptVotes.responses().values().stream()
                 .map(AcceptResponse::vote).collect(Collectors.toSet());
               final var quorumOutcome =
-                quorumStrategy.assessAccepts(acceptResponse.requestId().logIndex(), vs);
+                quorumStrategy.assessAccepts(logIndex, vs);
               switch (quorumOutcome) {
                 case QUORUM -> {
-                  final var acceptId = acceptVotes.accept().id();
-                  acceptVotesById.put(acceptId, AcceptVotes.chosen(acceptVotes.accept()));
-                  Optional<Identifier> highestCommitable = Optional.empty();
-                  List<Identifier> deletable = new ArrayList<>();
+                  acceptVotesByLogIndex.put(logIndex, AcceptVotes.chosen(acceptVotes.accept()));
+                  Optional<Long> highestCommitable = Optional.empty();
+                  List<Long> deletable = new ArrayList<>();
                   List<Long> committedSlots = new ArrayList<>();
                   for (final var votesByIdMapEntry :
-                    acceptVotesById.entrySet()) {
+                    acceptVotesByLogIndex.entrySet()) {
                     if (votesByIdMapEntry.getValue().chosen()) {
                       highestCommitable = Optional.of(votesByIdMapEntry.getKey());
                       deletable.add(votesByIdMapEntry.getKey());
-                      committedSlots.add(votesByIdMapEntry.getKey().logIndex());
+                      committedSlots.add(votesByIdMapEntry.getKey());
                     } else {
                       break;
                     }
@@ -157,7 +155,7 @@ public class TrexNode {
                     }
                     // free the memory
                     for (final var deletableId : deletable) {
-                      acceptVotesById.remove(deletableId);
+                      acceptVotesByLogIndex.remove(deletableId);
                     }
                     // we have committed
                     this.progress = progress.withHighestCommitted(highestCommitable.get());
@@ -165,7 +163,7 @@ public class TrexNode {
                     messageToSend.add(new Commit(highestCommitable.get()));
                   }
                   // if we still have missing votes resend the accepts
-                  for (var entry : acceptVotesById.entrySet().stream().filter(e -> !e.getValue().chosen()).toList()) {
+                  for (var entry : acceptVotesByLogIndex.entrySet().stream().filter(e -> !e.getValue().chosen()).toList()) {
                     // TODO could be point to point rather than broadcast
                     messageToSend.add(entry.getValue().accept());
                   }
@@ -183,28 +181,28 @@ public class TrexNode {
       }
       case PrepareResponse prepareResponse -> {
         if (RECOVER == role) {
-          final var id = prepareResponse.requestId();
           final var catchup = prepareResponse.catchup();
           final long highestCommittedOther = prepareResponse.highestCommittedIndex();
-          final long highestCommitted = progress.highestCommitted().logIndex();
+          final long highestCommitted = progress.highestCommitted();
           if (highestCommitted < highestCommittedOther) {
             // we are behind so now try to catch up
             saveCatchup(highestCommittedOther, catchup);
             // this may be evidence of a new leader so back down
             backdown();
           } else {
-            if (id.number().nodeIdentifier() == nodeIdentifier) {
+            if (prepareResponse.vote().to() == nodeIdentifier) {
               final byte from = prepareResponse.from();
-              Optional.ofNullable(prepareResponses.get(id)).ifPresent(
+              final long logIndex = prepareResponse.vote().logIndex();
+              Optional.ofNullable(prepareResponsesByLogIndex.get(logIndex)).ifPresent(
                 votes -> {
                   votes.put(from, prepareResponse);
                   Set<Vote> vs = votes.values().stream()
                     .map(PrepareResponse::vote).collect(Collectors.toSet());
-                  final var quorumOutcome = quorumStrategy.assessPromises(prepareResponse.requestId().logIndex(), vs);
+                  final var quorumOutcome = quorumStrategy.assessPromises(logIndex, vs);
                   switch (quorumOutcome) {
                     case NO_DECISION ->
                       // do nothing as a quorum has not yet been reached.
-                      prepareResponses.put(id, votes);
+                      prepareResponsesByLogIndex.put(logIndex, votes);
                     case NO_QUORUM ->
                       // we are unable to achieve a quorum, so we must back down
                       backdown();
@@ -215,14 +213,13 @@ public class TrexNode {
                         .map(Progress::highestAccepted)
                         .max(Long::compareTo)
                         .ifPresent(higherAcceptedSlot -> {
-                          final long highestLogIndexProbed = prepareResponses.lastKey().logIndex();
+                          final long highestLogIndexProbed = prepareResponsesByLogIndex.lastKey();
                           if (higherAcceptedSlot > highestLogIndexProbed) {
                             epoch.ifPresent(epoch ->
                               LongStream.range(higherAcceptedSlot + 1, highestLogIndexProbed + 1)
                                 .forEach(slot -> {
-                                  final var slotId = new Identifier(epoch, slot);
-                                  prepareResponses.put(slotId, new HashMap<>());
-                                  messageToSend.add(new Prepare(slotId));
+                                  prepareResponsesByLogIndex.put(slot, new HashMap<>());
+                                  messageToSend.add(new Prepare(slot, epoch));
                                 }));
                           }
                         });
@@ -236,20 +233,22 @@ public class TrexNode {
                         .map(Accept::command)
                         .orElse(NoOperation.NOOP);
 
-                      // use the highest accepted command to issue an Accept
-                      Accept accept = new Accept(id, highestAcceptedCommand);
-                      // issue the accept messages
-                      messageToSend.add(accept);
-                      // create the empty map to track the responses
-                      acceptVotesById.put(accept.id(), new AcceptVotes(accept));
-                      // self vote for the Accept
-                      selfVoteOnAccept(accept);
-                      // we are no long awaiting the prepare for the current slot
-                      prepareResponses.remove(id);
-                      // if we have had no evidence of higher accepted values we can promote
-                      if (prepareResponses.isEmpty()) {
-                        this.role = LEAD;
-                      }
+                      epoch.ifPresent(e -> {
+                        // use the highest accepted command to issue an Accept
+                        Accept accept = new Accept(logIndex, e, highestAcceptedCommand);
+                        // issue the accept messages
+                        messageToSend.add(accept);
+                        // create the empty map to track the responses
+                        acceptVotesByLogIndex.put(logIndex, new AcceptVotes(accept));
+                        // self vote for the Accept
+                        selfVoteOnAccept(accept);
+                        // we are no long awaiting the prepare for the current slot
+                        prepareResponsesByLogIndex.remove(logIndex);
+                        // if we have had no evidence of higher accepted values we can promote
+                        if (prepareResponsesByLogIndex.isEmpty()) {
+                          this.role = LEAD;
+                        }
+                      });
                     }
                   }
                 }
@@ -258,9 +257,9 @@ public class TrexNode {
           }
         }
       }
-      case Commit commit -> journal.committed(nodeIdentifier, commit.identifier().logIndex());
+      case Commit commit -> journal.committed(nodeIdentifier, commit.logIndex());
       case Catchup(final var _, final var highestCommittedOther) ->
-        messageToSend.add(new CatchupResponse(progress.highestCommitted().logIndex(), saveCatchup(highestCommittedOther)));
+        messageToSend.add(new CatchupResponse(progress.highestCommitted(), loadCatchup(highestCommittedOther)));
       case CatchupResponse(final var highestCommittedOther, final var catchup) ->
         saveCatchup(highestCommittedOther, catchup);
     }
@@ -268,24 +267,23 @@ public class TrexNode {
   }
 
   private void selfVoteOnAccept(Accept accept) {
-    if (lowerAccept(progress, accept) || higherAcceptForCommittedSlot(accept.id(), progress)) {
-      acceptVotesById.get(accept.id()).responses().put(nodeIdentifier, nack(accept));
+    if (lowerAccept(progress, accept) || higherAcceptForCommittedSlot(accept, progress)) {
+      acceptVotesByLogIndex.get(accept.logIndex()).responses().put(nodeIdentifier, nack(accept));
     } else if (equalOrHigherAccept(progress, accept)) {
       // always journal first
       journal.journalAccept(accept);
       if (higherAccept(progress, accept)) {
         // we must update promise on a higher accept http://stackoverflow.com/q/29880949/329496
-        Progress updatedProgress = progress.withHighestPromised(accept.id().number());
+        Progress updatedProgress = progress.withHighestPromised(accept.number());
         journal.saveProgress(updatedProgress);
         this.progress = updatedProgress;
       }
     }
-
   }
 
   private void saveCatchup(long highestCommittedOther, List<Accept> catchup) {
     for (Accept accept : catchup) {
-      final var slot = accept.id().logIndex();
+      final var slot = accept.logIndex();
       if (slot <= highestCommittedOther) {
         continue;
       }
@@ -295,7 +293,7 @@ public class TrexNode {
 
         if (higherAccept(progress, accept)) {
           // we must update promise on a higher accept http://stackoverflow.com/q/29880949/329496
-          Progress updatedProgress = progress.withHighestPromised(accept.id().number());
+          Progress updatedProgress = progress.withHighestPromised(accept.number());
           journal.saveProgress(updatedProgress);
           this.progress = updatedProgress;
         }
@@ -303,8 +301,8 @@ public class TrexNode {
     }
   }
 
-  private List<Accept> saveCatchup(long highestCommittedOther) {
-    final long highestCommitted = progress.highestCommitted().logIndex();
+  private List<Accept> loadCatchup(long highestCommittedOther) {
+    final long highestCommitted = progress.highestCommitted();
     List<Accept> catchup = new ArrayList<>();
     for (long slot = highestCommitted + 1; slot < highestCommittedOther; slot++) {
       journal.loadAccept(slot).ifPresent(catchup::add);
@@ -314,8 +312,8 @@ public class TrexNode {
 
   void backdown() {
     this.role = FOLLOW;
-    prepareResponses = new TreeMap<>();
-    acceptVotesById = new TreeMap<>();
+    prepareResponsesByLogIndex = new TreeMap<>();
+    acceptVotesByLogIndex = new TreeMap<>();
     epoch = Optional.empty();
   }
 
@@ -325,7 +323,10 @@ public class TrexNode {
    * @param accept The accept message to acknowledge.
    */
   AcceptResponse ack(Accept accept) {
-    return new AcceptResponse(new Vote(nodeIdentifier, accept.id(), true), progress);
+    return
+      new AcceptResponse(
+        new Vote(nodeIdentifier, accept.number().nodeIdentifier(), accept.logIndex(), true)
+        , progress);
   }
 
   /**
@@ -334,7 +335,9 @@ public class TrexNode {
    * @param accept The accept message to reject.
    */
   AcceptResponse nack(Accept accept) {
-    return new AcceptResponse(new Vote(nodeIdentifier, accept.id(), false), progress);
+    return new AcceptResponse(
+      new Vote(nodeIdentifier, accept.number().nodeIdentifier(), accept.logIndex(), false)
+      , progress);
   }
 
   /**
@@ -344,9 +347,9 @@ public class TrexNode {
    */
   PrepareResponse ack(Prepare prepare) {
     return new PrepareResponse(
-      new Vote(nodeIdentifier, prepare.id(), true),
+      new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), true),
       progress,
-      journal.loadAccept(prepare.id().logIndex()),
+      journal.loadAccept(prepare.logIndex()),
       List.of());
   }
 
@@ -358,9 +361,9 @@ public class TrexNode {
    */
   PrepareResponse nack(Prepare prepare, List<Accept> catchup) {
     return new PrepareResponse(
-      new Vote(nodeIdentifier, prepare.id(), false),
+      new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), false),
       progress,
-      journal.loadAccept(prepare.id().logIndex()),
+      journal.loadAccept(prepare.logIndex()),
       catchup);
   }
 
@@ -373,27 +376,26 @@ public class TrexNode {
   public Optional<Long> startAppendToLog(Command command) {
     if (epoch.isPresent()) {
       final long slot = progress.highestAccepted() + 1;
-      final var accept = new Accept(new Identifier(epoch.get(), slot), command);
+      final var accept = new Accept(slot, epoch.get(), command);
       // FIXME what now?
       return Optional.of(slot);
     } else return Optional.empty();
   }
 
   static boolean equalOrHigherAccept(Progress progress, Accept accept) {
-    return progress.highestPromised().lessThanOrEqualTo(accept.id().number());
+    return progress.highestPromised().lessThanOrEqualTo(accept.number());
   }
 
-  static boolean higherAcceptForCommittedSlot(Identifier accept, Progress progress) {
+  static boolean higherAcceptForCommittedSlot(Accept accept, Progress progress) {
     return accept.number().greaterThan(progress.highestPromised()) &&
-      accept.logIndex() <= progress.highestCommitted().logIndex();
+      accept.logIndex() <= progress.highestCommitted();
   }
 
   static Boolean lowerAccept(Progress progress, Accept accept) {
-    return accept.id().number().lessThan(progress.highestPromised());
+    return accept.number().lessThan(progress.highestPromised());
   }
 
   static Boolean higherAccept(Progress progress, Accept accept) {
-    return accept.id().number().greaterThan(progress.highestPromised());
+    return accept.number().greaterThan(progress.highestPromised());
   }
-
 }

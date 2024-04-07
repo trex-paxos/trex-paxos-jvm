@@ -5,7 +5,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 public record BallotNumber(int counter, byte nodeIdentifier) implements Comparable<BallotNumber> {
-    public static final BallotNumber EMPTY = new BallotNumber(0, (byte) 0);
 
     @Override
     public int compareTo(BallotNumber that) {

@@ -23,7 +23,7 @@ public class LossyJournal implements Journal {
 
   @Override
   public void journalAccept(Accept accept) {
-    acceptMap.put(accept.id().logIndex(), accept);
+    acceptMap.put(accept.logIndex(), accept);
   }
 
   @Override

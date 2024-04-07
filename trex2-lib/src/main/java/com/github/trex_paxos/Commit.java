@@ -2,14 +2,16 @@ package com.github.trex_paxos;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.IOException;
 
-public record Commit(Identifier identifier) implements TrexMessage {
+public record Commit(long logIndex) implements TrexMessage {
 
-    public static Commit readFrom(DataInputStream dis) {
-        throw new AssertionError("Not implemented");
-    }
+  public void writeTo(DataOutputStream dos) throws IOException {
+    dos.writeLong(logIndex);
+  }
 
-    public void writeTo(DataOutputStream dos) {
-        throw new AssertionError("Not implemented");
-    }
+  public static Commit readFrom(DataInputStream dis)
+    throws java.io.IOException {
+    return new Commit(dis.readLong());
+  }
 }

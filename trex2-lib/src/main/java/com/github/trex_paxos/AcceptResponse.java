@@ -7,18 +7,11 @@ import java.io.IOException;
 record AcceptResponse(Vote vote, Progress progress) implements TrexMessage {
 
   /**
-     * @return the request identifier of the request that this response is for
-     */
-  Identifier requestId() {
-    return vote.identifier();
+   * @return the proposer that sent the request
+   */
+  byte from() {
+    return vote.from();
   }
-
-    /**
-     * @return the proposer that sent the request
-     */
-    byte from() {
-      return vote.from();
-    }
 
 
   @Override

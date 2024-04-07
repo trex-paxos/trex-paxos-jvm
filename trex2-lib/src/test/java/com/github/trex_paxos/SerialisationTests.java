@@ -15,7 +15,7 @@ public class SerialisationTests {
 
     @Test
     public void testAccept() throws IOException {
-        Accept accept = new Accept(new Identifier(new BallotNumber(2, (byte) 3), 4L), NoOperation.NOOP);
+      Accept accept = new Accept(4L, new BallotNumber(2, (byte) 3), NoOperation.NOOP);
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dataOutputStream = new DataOutputStream(bos);
         accept.writeTo(dataOutputStream);
@@ -28,7 +28,7 @@ public class SerialisationTests {
 
     @Test
     public void testPrepare() throws IOException {
-        Prepare prepare = new Prepare(new Identifier(new BallotNumber(2, (byte) 3), 4L));
+      Prepare prepare = new Prepare(4L, new BallotNumber(2, (byte) 3));
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dataOutputStream = new DataOutputStream(bos);
         prepare.writeTo(dataOutputStream);

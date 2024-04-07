@@ -4,13 +4,15 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public record Accept(Identifier id, AbstractCommand command) implements TrexMessage, JournalRecord {
+public record Accept(long logIndex, BallotNumber number,
+                     AbstractCommand command) implements TrexMessage, JournalRecord {
 
     final static byte NOOP = 1;
     final static byte COMMAND = 2;
 
     public void writeTo(DataOutputStream dataStream) throws IOException {
-        id.writeTo(dataStream);
+      dataStream.writeLong(logIndex);
+      number.writeTo(dataStream);
         if (command instanceof NoOperation) {
             dataStream.writeByte(NOOP);
         } else {
@@ -20,15 +22,22 @@ public record Accept(Identifier id, AbstractCommand command) implements TrexMess
     }
 
     public static Accept readFrom(DataInputStream dataInputStream) throws IOException {
-        Identifier id = Identifier.readFrom(dataInputStream);
+      final long logIndex = dataInputStream.readLong();
+      final BallotNumber number = BallotNumber.readFrom(dataInputStream);
         byte type = dataInputStream.readByte();
         if( type == NOOP )
-            return new Accept(id, NoOperation.NOOP);
+          return new Accept(logIndex, number, NoOperation.NOOP);
         else
-            return new Accept(id, Command.readFrom(dataInputStream));
+          return new Accept(logIndex, number, Command.readFrom(dataInputStream));
     }
 
     public int compareTo(Accept accept) {
-        return id.compareTo(accept.id());
+      if (logIndex < accept.logIndex) {
+        return -1;
+      } else if (logIndex > accept.logIndex) {
+        return 1;
+      } else {
+        return number.compareTo(accept.number);
+      }
     }
 }

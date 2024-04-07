@@ -4,17 +4,19 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public record Vote(byte from, Identifier identifier, boolean vote) {
+public record Vote(byte from, byte to, long logIndex, boolean vote) {
   public static Vote readFrom(DataInputStream dis) throws IOException {
     byte from = dis.readByte();
-    Identifier identifier = Identifier.readFrom(dis);
+    byte to = dis.readByte();
+    long logIndex = dis.readLong();
     boolean vote = dis.readBoolean();
-    return new Vote(from, identifier, vote);
+    return new Vote(from, to, logIndex, vote);
   }
 
   public void writeTo(DataOutputStream dos) throws IOException {
     dos.writeByte(from);
-    identifier.writeTo(dos);
+    dos.writeByte(to);
+    dos.writeLong(logIndex);
     dos.writeBoolean(vote);
   }
 }
