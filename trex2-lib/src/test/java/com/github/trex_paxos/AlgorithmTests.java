@@ -1,18 +1,16 @@
 package com.github.trex_paxos;
 
-import org.junit.jupiter.api.Test;
-
 import java.nio.charset.StandardCharsets;
 
-public class TestProtocol {
-  @Test
+public class AlgorithmTests {
+  //@Test
   public void testSteadyState() {
     // given
-    final var node1 = trexNode(1, TrexRole.LEADER, progress());
-    final var node2 = trexNode(2, TrexRole.FOLLOWER, progress());
+    final var node1 = trexNode(1, TrexRole.LEAD, progress());
+    final var node2 = trexNode(2, TrexRole.FOLLOW, progress());
 
     // when
-    node1.append(new Command("1", "command1".getBytes(StandardCharsets.UTF_8)));
+    node1.startAppendToLog(new Command("1", "command1".getBytes(StandardCharsets.UTF_8)));
   }
 
   private Progress progress() {

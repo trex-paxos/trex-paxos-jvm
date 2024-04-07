@@ -1,36 +1,73 @@
 package com.github.trex_paxos;
 
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
+import static com.github.trex_paxos.TrexRole.*;
+
 public class TrexNode {
+  /**
+   * The current node identifier. This must be globally unique.
+   */
   final byte nodeIdentifier;
+
+  /**
+   * The durable storage and durable log.
+   */
   final Journal journal;
 
+  /**
+   * The quorum strategy that may be a simple majority, or FPaxos or UPaxos
+   */
   final QuorumStrategy quorumStrategy;
 
-  private TrexRole role = TrexRole.FOLLOWER;
+  /**
+   * If we have rebooted then we are a follower.
+   */
+  private TrexRole role = FOLLOW;
+
+  /**
+   * The initial progress must be loaded from the journal. TA fresh node the journal must be pre-initialised.
+   */
   Progress progress;
+
+  /**
+   * During a recovery we will track all the slots that we are probing to find the highest accepted values.
+   */
   NavigableMap<Identifier, Map<Byte, PrepareResponse>> prepareResponses = new TreeMap<>();
+
+  /**
+   * When leading we will track the responses to a stream of accept messages.
+   */
   NavigableMap<Identifier, AcceptVotes> acceptVotesById = new TreeMap<>();
 
+  /**
+   * The host application will need to learn that work has been committed.
+   */
+  final Consumer<Long> endAppendToLog;
+
+  /**
+   * When we are leader we need to now the highest ballot number to use.
+   */
   Optional<BallotNumber> epoch = Optional.empty();
 
-  public TrexNode(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal) {
+  public TrexNode(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal, Consumer<Long> endAppendToLog) {
     this.nodeIdentifier = nodeIdentifier;
     this.journal = journal;
     this.quorumStrategy = quorumStrategy;
+    this.endAppendToLog = endAppendToLog;
     this.progress = journal.loadProgress(nodeIdentifier);
   }
-
+  
   private boolean invariants() {
     return switch (role) {
-      case FOLLOWER -> // follower is tracking no state and has no epoch
+      case FOLLOW -> // follower is tracking no state and has no epoch
         epoch.isEmpty() && prepareResponses.isEmpty() && acceptVotesById.isEmpty();
-      case CANIDATE -> // candidate has an epoch and is tracking some prepare responses and/or some accept votes
+      case RECOVER -> // candidate has an epoch and is tracking some prepare responses and/or some accept votes
         epoch.isPresent() && (!prepareResponses.isEmpty() || !acceptVotesById.isEmpty());
-      case LEADER -> // leader has an epoch and is tracking no prepare responses
+      case LEAD -> // leader has an epoch and is tracking no prepare responses
         epoch.isPresent() && prepareResponses.isEmpty();
     };
   }
@@ -59,7 +96,6 @@ public class TrexNode {
             journal.saveProgress(updatedProgress);
             this.progress = updatedProgress;
           }
-          // TODO detect/avoid messages sent to self
           messageToSend.add(ack(accept));
         } else {
           throw new AssertionError(STR."unreachable progress=\{progress}, accept=\{accept}");
@@ -77,7 +113,7 @@ public class TrexNode {
           messageToSend.add(ack(prepare));
           this.progress = newProgress;
           // leader or recoverer should give way to a higher prepare
-          if (this.role != TrexRole.FOLLOWER)
+          if (this.role != FOLLOW)
             backdown();
         } else if (number.equals(progress.highestPromised())) {
           messageToSend.add(ack(prepare));
@@ -87,9 +123,8 @@ public class TrexNode {
       }
       case AcceptResponse acceptResponse -> {
         assert acceptResponse.requestId().number().nodeIdentifier() == nodeIdentifier : "should only receive responses for requests we made";
-
-        if (TrexRole.FOLLOWER != role) {
-          // Both Leader and Candidate can receive AcceptResponses
+        if (FOLLOW != role) {
+          // Both Leader and Recoverer can receive AcceptResponses
           final var id = acceptResponse.requestId();
           Optional.ofNullable(this.acceptVotesById.get(id)).ifPresent(acceptVotes -> {
             if (!acceptVotes.chosen()) {
@@ -102,35 +137,44 @@ public class TrexNode {
                 case QUORUM -> {
                   final var acceptId = acceptVotes.accept().id();
                   acceptVotesById.put(acceptId, AcceptVotes.chosen(acceptVotes.accept()));
-                  // out of order messages mean we must scan to find all chosen accepts
-                  if (acceptId.equals(acceptVotesById.firstKey())) {
-                    Identifier highestCommitable = acceptId;
-                    List<Identifier> deletable = new ArrayList<>();
-                    for (final var votesByIdMapEntry :
-                      acceptVotesById.headMap(acceptId, true).entrySet()) {
-                      // FIXME is this correct?
-                      if (votesByIdMapEntry.getValue().chosen()) {
-                        highestCommitable = votesByIdMapEntry.getKey();
-                        deletable.add(votesByIdMapEntry.getKey());
-                      } else {
-                        break;
-                      }
+                  Optional<Identifier> highestCommitable = Optional.empty();
+                  List<Identifier> deletable = new ArrayList<>();
+                  List<Long> committedSlots = new ArrayList<>();
+                  for (final var votesByIdMapEntry :
+                    acceptVotesById.entrySet()) {
+                    if (votesByIdMapEntry.getValue().chosen()) {
+                      highestCommitable = Optional.of(votesByIdMapEntry.getKey());
+                      deletable.add(votesByIdMapEntry.getKey());
+                      committedSlots.add(votesByIdMapEntry.getKey().logIndex());
+                    } else {
+                      break;
+                    }
+                  }
+                  if (highestCommitable.isPresent()) {
+                    // run the callback
+                    for (var slot : committedSlots) {
+                      endAppendToLog.accept(slot);
                     }
                     // free the memory
                     for (final var deletableId : deletable) {
                       acceptVotesById.remove(deletableId);
                     }
                     // we have committed
-                    this.progress = progress.withHighestCommitted(highestCommitable);
+                    this.progress = progress.withHighestCommitted(highestCommitable.get());
                     // let the cluster know
-                    messageToSend.add(new Commit(highestCommitable));
+                    messageToSend.add(new Commit(highestCommitable.get()));
+                  }
+                  // if we still have missing votes resend the accepts
+                  for (var entry : acceptVotesById.entrySet().stream().filter(e -> !e.getValue().chosen()).toList()) {
+                    // TODO could be point to point rather than broadcast
+                    messageToSend.add(entry.getValue().accept());
                   }
                 }
                 case NO_DECISION -> {
                   // do nothing as a quorum has not yet been reached.
                 }
                 case NO_QUORUM ->
-                  // we are unable to achieve a quorum, so we must back down
+                  // we are unable to achieve a quorum, so we must back down as to another leader
                   backdown();
               }
             }
@@ -138,12 +182,12 @@ public class TrexNode {
         }
       }
       case PrepareResponse prepareResponse -> {
-        if (TrexRole.CANIDATE == role ) {
+        if (RECOVER == role) {
           final var id = prepareResponse.requestId();
           final var catchup = prepareResponse.catchup();
           final long highestCommittedOther = prepareResponse.highestCommittedIndex();
           final long highestCommitted = progress.highestCommitted().logIndex();
-          if (highestCommitted < highestCommittedOther)  {
+          if (highestCommitted < highestCommittedOther) {
             // we are behind so now try to catch up
             saveCatchup(highestCommittedOther, catchup);
             // this may be evidence of a new leader so back down
@@ -203,8 +247,8 @@ public class TrexNode {
                       // we are no long awaiting the prepare for the current slot
                       prepareResponses.remove(id);
                       // if we have had no evidence of higher accepted values we can promote
-                      if( prepareResponses.isEmpty() ){
-                        this.role = TrexRole.LEADER;
+                      if (prepareResponses.isEmpty()) {
+                        this.role = LEAD;
                       }
                     }
                   }
@@ -269,9 +313,10 @@ public class TrexNode {
   }
 
   void backdown() {
-    this.role = TrexRole.FOLLOWER;
+    this.role = FOLLOW;
     prepareResponses = new TreeMap<>();
     acceptVotesById = new TreeMap<>();
+    epoch = Optional.empty();
   }
 
   /**
@@ -319,10 +364,20 @@ public class TrexNode {
       catchup);
   }
 
-  public boolean append(Command command) {
-    throw new AssertionError("Implement me!");
+  /**
+   * Client request to append a command to the log.
+   *
+   * @param command The command to append.
+   * @return The possible log index of the appended command.
+   */
+  public Optional<Long> startAppendToLog(Command command) {
+    if (epoch.isPresent()) {
+      final long slot = progress.highestAccepted() + 1;
+      final var accept = new Accept(new Identifier(epoch.get(), slot), command);
+      // FIXME what now?
+      return Optional.of(slot);
+    } else return Optional.empty();
   }
-
 
   static boolean equalOrHigherAccept(Progress progress, Accept accept) {
     return progress.highestPromised().lessThanOrEqualTo(accept.id().number());

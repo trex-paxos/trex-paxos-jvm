@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Unit test for simple App.
  */
-public class TestSerialisation {
+public class SerialisationTests {
 
 
     @Test
