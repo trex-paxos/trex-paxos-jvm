@@ -40,4 +40,8 @@ public record Accept(long logIndex, BallotNumber number,
         return number.compareTo(accept.number);
       }
     }
+
+  public byte from() {
+    return number.nodeIdentifier();
+  }
 }

@@ -16,4 +16,8 @@ public record Prepare(long logIndex, BallotNumber number) implements TrexMessage
       dataOutputStream.writeLong(logIndex);
       number.writeTo(dataOutputStream);
     }
+
+  public byte from() {
+    return number.nodeIdentifier();
+  }
 }

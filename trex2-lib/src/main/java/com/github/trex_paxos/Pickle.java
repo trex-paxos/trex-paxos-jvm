@@ -2,6 +2,7 @@ package com.github.trex_paxos;
 
 import java.io.*;
 
+// FIXME move all the DataInputStream and DataOutputStream usage into the Pickle class.
 public class Pickle {
   public static TrexMessage read(byte[] bytes) {
     ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
