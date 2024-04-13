@@ -1,6 +1,9 @@
 package com.github.trex_paxos;
 
+/**
+ * A callback for when a value is committed.
+ */
 @FunctionalInterface
-public interface UpCall<T> {
-  void committed(T t);
+public interface UpCall {
+  void committed(long t);
 }

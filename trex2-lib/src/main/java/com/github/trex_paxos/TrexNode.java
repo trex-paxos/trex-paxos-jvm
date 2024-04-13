@@ -27,6 +27,11 @@ public class TrexNode {
    */
   private TrexRole role = FOLLOW;
 
+  @SuppressWarnings("unused")
+  public TrexRole currentRole() {
+    return role;
+  }
+
   /**
    * The initial progress must be loaded from the journal. TA fresh node the journal must be pre-initialised.
    */
@@ -43,31 +48,31 @@ public class TrexNode {
   NavigableMap<Long, AcceptVotes> acceptVotesByLogIndex = new TreeMap<>();
 
   /**
-   * The host application will need to learn that work an log index has been chosen.
+   * The host application will need to learn that a log index has been chosen.
    */
-  final UpCall<Long> endAppendToLog;
+  final UpCall upCall;
 
   /**
    * When we are leader we need to now the highest ballot number to use.
    */
-  Optional<BallotNumber> epoch = Optional.empty();
+  Optional<BallotNumber> term = Optional.empty(); // FIXME this should be renamed to Term
 
-  public TrexNode(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal, UpCall<Long> endAppendToLog) {
+  public TrexNode(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal, UpCall upCall) {
     this.nodeIdentifier = nodeIdentifier;
     this.journal = journal;
     this.quorumStrategy = quorumStrategy;
-    this.endAppendToLog = endAppendToLog;
+    this.upCall = upCall;
     this.progress = journal.loadProgress(nodeIdentifier);
   }
 
   private boolean invariants() {
     return switch (role) {
       case FOLLOW -> // follower is tracking no state and has no epoch
-          epoch.isEmpty() && prepareResponsesByLogIndex.isEmpty() && acceptVotesByLogIndex.isEmpty();
+          term.isEmpty() && prepareResponsesByLogIndex.isEmpty() && acceptVotesByLogIndex.isEmpty();
       case RECOVER -> // candidate has an epoch and is tracking some prepare responses and/or some accept votes
-          epoch.isPresent() && (!prepareResponsesByLogIndex.isEmpty() || !acceptVotesByLogIndex.isEmpty());
+          term.isPresent() && (!prepareResponsesByLogIndex.isEmpty() || !acceptVotesByLogIndex.isEmpty());
       case LEAD -> // leader has an epoch and is tracking no prepare responses
-          epoch.isPresent() && prepareResponsesByLogIndex.isEmpty();
+          term.isPresent() && prepareResponsesByLogIndex.isEmpty();
     };
   }
 
@@ -81,7 +86,7 @@ public class TrexNode {
    */
   public void paxos(TrexMessage input, Network network, Set<Byte> members) {
     // when testing we can check invariants
-    assert invariants() : STR."invariants failed: \{this.role} \{this.epoch} \{this.prepareResponsesByLogIndex} \{this.acceptVotesByLogIndex}";
+    assert invariants() : STR."invariants failed: \{this.role} \{this.term} \{this.prepareResponsesByLogIndex} \{this.acceptVotesByLogIndex}";
 
     switch (input) {
       case Accept accept -> {
@@ -151,7 +156,7 @@ public class TrexNode {
                   if (highestCommitable.isPresent()) {
                     // run the callback
                     for (var slot : committedSlots) {
-                      endAppendToLog.committed(slot);
+                      upCall.committed(slot);
                     }
                     // free the memory
                     for (final var deletableId : deletable) {
@@ -218,7 +223,7 @@ public class TrexNode {
                             .ifPresent(higherAcceptedSlot -> {
                               final long highestLogIndexProbed = prepareResponsesByLogIndex.lastKey();
                               if (higherAcceptedSlot > highestLogIndexProbed) {
-                                epoch.ifPresent(epoch ->
+                                term.ifPresent(epoch ->
                                     LongStream.range(higherAcceptedSlot + 1, highestLogIndexProbed + 1)
                                         .forEach(slot -> {
                                           prepareResponsesByLogIndex.put(slot, new HashMap<>());
@@ -236,7 +241,7 @@ public class TrexNode {
                             .map(Accept::command)
                             .orElse(NoOperation.NOOP);
 
-                        epoch.ifPresent(e -> {
+                        term.ifPresent(e -> {
                           // use the highest accepted command to issue an Accept
                           Accept accept = new Accept(logIndex, e, highestAcceptedCommand);
                           // issue the accept messages
@@ -316,7 +321,7 @@ public class TrexNode {
     this.role = FOLLOW;
     prepareResponsesByLogIndex = new TreeMap<>();
     acceptVotesByLogIndex = new TreeMap<>();
-    epoch = Optional.empty();
+    term = Optional.empty();
   }
 
   /**
@@ -376,9 +381,9 @@ public class TrexNode {
    * @return The possible log index of the appended command.
    */
   public Optional<Long> startAppendToLog(Command command) {
-    if (epoch.isPresent()) {
+    if (term.isPresent()) {
       final long slot = progress.highestAccepted() + 1;
-      final var accept = new Accept(slot, epoch.get(), command);
+      final var accept = new Accept(slot, term.get(), command);
       // FIXME what now?
       return Optional.of(slot);
     } else return Optional.empty();
