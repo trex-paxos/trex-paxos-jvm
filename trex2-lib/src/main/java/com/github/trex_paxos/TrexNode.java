@@ -156,7 +156,13 @@ public class TrexNode {
                   if (highestCommitable.isPresent()) {
                     // run the callback
                     for (var slot : committedSlots) {
-                      upCall.committed(slot);
+                      final var accept = journal.loadAccept(slot).orElseThrow();
+                      switch (accept) {
+                        case Accept(_, _, NoOperation _) -> {
+                          // NOOP
+                        }
+                        case Accept(_, _, Command(final var msgId, final var op)) -> upCall.committed(msgId, op);
+                      }
                     }
                     // free the memory
                     for (final var deletableId : deletable) {

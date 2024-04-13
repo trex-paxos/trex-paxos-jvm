@@ -5,5 +5,5 @@ package com.github.trex_paxos;
  */
 @FunctionalInterface
 public interface UpCall {
-  void committed(long t);
+  void committed(String msgId, byte[] op);
 }
