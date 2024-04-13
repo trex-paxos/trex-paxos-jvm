@@ -1,7 +1,6 @@
 package com.github.trex_paxos;
 
 import java.util.*;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
@@ -44,16 +43,16 @@ public class TrexNode {
   NavigableMap<Long, AcceptVotes> acceptVotesByLogIndex = new TreeMap<>();
 
   /**
-   * The host application will need to learn that work has been committed.
+   * The host application will need to learn that work an log index has been chosen.
    */
-  final Consumer<Long> endAppendToLog;
+  final UpCall<Long> endAppendToLog;
 
   /**
    * When we are leader we need to now the highest ballot number to use.
    */
   Optional<BallotNumber> epoch = Optional.empty();
 
-  public TrexNode(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal, Consumer<Long> endAppendToLog) {
+  public TrexNode(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal, UpCall<Long> endAppendToLog) {
     this.nodeIdentifier = nodeIdentifier;
     this.journal = journal;
     this.quorumStrategy = quorumStrategy;
@@ -134,7 +133,7 @@ public class TrexNode {
               final var quorumOutcome =
                   quorumStrategy.assessAccepts(logIndex, vs);
               switch (quorumOutcome) {
-                case QUORUM -> {
+                case WIN -> {
                   acceptVotesByLogIndex.put(logIndex, AcceptVotes.chosen(acceptVotes.accept()));
                   Optional<Long> highestCommitable = Optional.empty();
                   List<Long> deletable = new ArrayList<>();
@@ -152,7 +151,7 @@ public class TrexNode {
                   if (highestCommitable.isPresent()) {
                     // run the callback
                     for (var slot : committedSlots) {
-                      endAppendToLog.accept(slot);
+                      endAppendToLog.committed(slot);
                     }
                     // free the memory
                     for (final var deletableId : deletable) {
@@ -172,10 +171,10 @@ public class TrexNode {
                     resendNodes.forEach(node -> network.send(node, ack(entry.getValue().accept())));
                   }
                 }
-                case NO_DECISION -> {
+                case WAIT -> {
                   // do nothing as a quorum has not yet been reached.
                 }
-                case NO_QUORUM ->
+                case LOSE ->
                   // we are unable to achieve a quorum, so we must back down as to another leader
                     backdown();
               }
@@ -204,13 +203,13 @@ public class TrexNode {
                         .map(PrepareResponse::vote).collect(Collectors.toSet());
                     final var quorumOutcome = quorumStrategy.assessPromises(logIndex, vs);
                     switch (quorumOutcome) {
-                      case NO_DECISION ->
+                      case WAIT ->
                         // do nothing as a quorum has not yet been reached.
                           prepareResponsesByLogIndex.put(logIndex, votes);
-                      case NO_QUORUM ->
+                      case LOSE ->
                         // we are unable to achieve a quorum, so we must back down
                           backdown();
-                      case QUORUM -> {
+                      case WIN -> {
                         // first issue new prepare messages for higher slots
                         votes.values().stream()
                             .map(PrepareResponse::progress)

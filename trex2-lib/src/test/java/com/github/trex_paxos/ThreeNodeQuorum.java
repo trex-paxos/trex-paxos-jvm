@@ -14,12 +14,12 @@ public class ThreeNodeQuorum implements QuorumStrategy {
 
   private static QuorumOutcome simpleMajority(Set<Vote> promises) {
     if (promises.size() < 2) {
-      return QuorumOutcome.NO_DECISION;
+      return QuorumOutcome.WAIT;
     }
     Map<Boolean, List<Vote>> count = promises.stream().collect(Collectors.partitioningBy(Vote::vote));
     int yesVotes = count.get(true).size();
     int noVotes = count.get(false).size();
-    return (yesVotes > noVotes) ? QuorumOutcome.QUORUM : QuorumOutcome.NO_QUORUM;
+    return (yesVotes > noVotes) ? QuorumOutcome.WIN : QuorumOutcome.LOSE;
   }
 
   @Override
