@@ -77,21 +77,28 @@ public class TrexNode {
   }
 
   /**
-   * The main entry point for the Trex paxos algorithm.
+   * The main entry point for the Trex paxos algorithm. This method will recurse without returning when we need to
+   * send a message to ourselves. As a side effect the progress record will be updated and the journal will be updated.
+   * <p>
+   * After this method returns the application must first commit both the updated progress and the updated log to disk
+   * using an `fsync` or equivalent which is FileDescriptor::sync in Java. Only after the kernel has flushed any disk
+   * buffers and confirmed that the updated state is on disk the application can send the messages out to the cluster.
+   * <p>
+   * As an optimisation the leader can prepend a fresh commit message to the outbound messages.
    *
    * @param input   The message to process.
-   * @param network The network to send messages out via.
-   * @param members The set of all members in the cluster.
+   * @return A list of messages to send out to the cluster.
    * @throws AssertionError If the algorithm is in an invalid state.
    */
-  public void paxos(TrexMessage input, Network network, Set<Byte> members) {
+  public List<TrexMessage> paxos(TrexMessage input) {
+    List<TrexMessage> messages = new ArrayList<>();
     // when testing we can check invariants
     assert invariants() : STR."invariants failed: \{this.role} \{this.term} \{this.prepareResponsesByLogIndex} \{this.acceptVotesByLogIndex}";
 
     switch (input) {
       case Accept accept -> {
         if (lowerAccept(progress, accept) || higherAcceptForCommittedSlot(accept, progress)) {
-          network.send(accept.from(), nack(accept));
+          messages.add(accept.from(), nack(accept));
         } else if (equalOrHigherAccept(progress, accept)) {
           // always journal first
           journal.journalAccept(accept);
@@ -101,7 +108,7 @@ public class TrexNode {
             journal.saveProgress(updatedProgress);
             this.progress = updatedProgress;
           }
-          network.send(accept.from(), accept);
+          messages.add(ack(accept));
         } else {
           throw new AssertionError(STR."unreachable progress=\{progress}, accept=\{accept}");
         }
@@ -110,18 +117,18 @@ public class TrexNode {
         var number = prepare.number();
         if (number.lessThan(progress.highestPromised()) || prepare.logIndex() <= progress.highestCommitted()) {
           // nack a low prepare else any prepare for a committed slot sending any accepts they are missing
-          network.send(prepare.from(), nack(prepare, loadCatchup(prepare.logIndex())));
+          messages.add(prepare.from(), nack(prepare, loadCatchup(prepare.logIndex())));
         } else if (number.greaterThan(progress.highestPromised())) {
           // ack a higher prepare
           final var newProgress = progress.withHighestPromised(prepare.number());
           journal.saveProgress(newProgress);
-          network.send(prepare.from(), ack(prepare));
+          messages.add(prepare.from(), ack(prepare));
           this.progress = newProgress;
           // leader or recoverer should give way to a higher prepare
           if (this.role != FOLLOW)
             backdown();
         } else if (number.equals(progress.highestPromised())) {
-          network.send(prepare.from(), ack(prepare));
+          messages.add(prepare.from(), ack(prepare));
         } else {
           throw new AssertionError(STR."unreachable progress=\{progress}, prepare=\{prepare}");
         }
@@ -171,15 +178,7 @@ public class TrexNode {
                     // we have committed
                     this.progress = progress.withHighestCommitted(highestCommitable.get());
                     // let the cluster know
-                    network.broadcast(new Commit(highestCommitable.get()));
-                  }
-                  // if we still have missing votes resend the accepts
-                  for (var entry : acceptVotesByLogIndex.entrySet().stream()
-                      .filter(e -> !e.getValue().chosen()).toList()) {
-                    final var responded = entry.getValue().responses().keySet();
-                    final var resendNodes = new HashSet<>(members);
-                    resendNodes.removeAll(responded);
-                    resendNodes.forEach(node -> network.send(node, ack(entry.getValue().accept())));
+                    messages.add(new Commit(highestCommitable.get()));
                   }
                 }
                 case WAIT -> {
@@ -233,7 +232,7 @@ public class TrexNode {
                                     LongStream.range(higherAcceptedSlot + 1, highestLogIndexProbed + 1)
                                         .forEach(slot -> {
                                           prepareResponsesByLogIndex.put(slot, new HashMap<>());
-                                          network.broadcast(new Prepare(slot, epoch));
+                                          messages.add(new Prepare(slot, epoch));
                                         }));
                               }
                             });
@@ -251,7 +250,7 @@ public class TrexNode {
                           // use the highest accepted command to issue an Accept
                           Accept accept = new Accept(logIndex, e, highestAcceptedCommand);
                           // issue the accept messages
-                          network.broadcast(accept);
+                          messages.add(accept);
                           // create the empty map to track the responses
                           acceptVotesByLogIndex.put(logIndex, new AcceptVotes(accept));
                           // self vote for the Accept
@@ -273,10 +272,11 @@ public class TrexNode {
       }
       case Commit commit -> journal.committed(nodeIdentifier, commit.logIndex());
       case Catchup(final var from, final var highestCommittedOther) ->
-          network.send(from, new CatchupResponse(progress.highestCommitted(), loadCatchup(highestCommittedOther)));
+          messages.add(from, new CatchupResponse(progress.highestCommitted(), loadCatchup(highestCommittedOther)));
       case CatchupResponse(final var highestCommittedOther, final var catchup) ->
           saveCatchup(highestCommittedOther, catchup);
     }
+    return messages;
   }
 
   private void selfVoteOnAccept(Accept accept) {
@@ -384,15 +384,24 @@ public class TrexNode {
    * Client request to append a command to the log.
    *
    * @param command The command to append.
-   * @return The possible log index of the appended command.
+   * @return An accept for the next unassigned slot in the log at this leader.
    */
-  public Optional<Long> startAppendToLog(Command command) {
+  public Optional<Accept> startAppendToLog(Command command) {
+    assert role == LEAD : STR."role=\{role}";
     if (term.isPresent()) {
       final long slot = progress.highestAccepted() + 1;
       final var accept = new Accept(slot, term.get(), command);
-      // FIXME what now?
-      return Optional.of(slot);
-    } else return Optional.empty();
+      // this could self accept else self reject
+      final var actOrNack = this.paxos(accept);
+      assert actOrNack.size() == 1 : STR."accept response should be a single messages=\{actOrNack}";
+      // update state on the self accept or reject
+      final var updated = this.paxos(actOrNack.getFirst());
+      // we should not have any messages to send as we have not sent out the message to get a commit.
+      assert updated.isEmpty() : STR."updated should be empty=\{updated}";
+      // return the Accept which should be sent out to the cluster.
+      return Optional.of(accept);
+    } else
+      return Optional.empty();
   }
 
   static boolean equalOrHigherAccept(Progress progress, Accept accept) {

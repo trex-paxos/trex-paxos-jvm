@@ -10,7 +10,8 @@ public class AlgorithmTests {
     final var node2 = trexNode(2, TrexRole.FOLLOW, progress());
 
     // when
-    node1.startAppendToLog(new Command("1", "command1".getBytes(StandardCharsets.UTF_8)));
+    final var accept = node1.startAppendToLog(new Command("1", "command1".getBytes(StandardCharsets.UTF_8)));
+    
   }
 
   private Progress progress() {
