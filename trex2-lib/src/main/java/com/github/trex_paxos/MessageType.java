@@ -58,8 +58,8 @@ public enum MessageType {
    * Host applications may want to use this map to convert message classes to ordinal values for custom serialization.
    */
   @SuppressWarnings("unused")
-  public static byte classFromMessageType(MessageType messageType) {
-    return CLASS_TO_ORDINAL_MAP.get(messageType.getClass());
+  public static byte idFromMessageTypeClass(Class<? extends TrexMessage> classType) {
+    return CLASS_TO_ORDINAL_MAP.get(classType);
   }
 
   /**
