@@ -5,6 +5,10 @@ import java.util.Optional;
 /**
  * The journal is the storage layer of the Paxos Algorithm. It is also used as the replicated log for the state machine.
  * This API is designed to be simple and easy to implement via a NavigableMap interface such as a BTreeMap or MVStore.
+ * <p>
+ * Only when an empty node is created the journal must have a `NoOperation.NOOP` accept journaled at log index 0.
+ * It must also have the nodes progress saved as `new Progress(noteIdentifier)`. When a cold cluster is started up the
+ * nodes will attempt to prepare the slot 1.
  */
 public interface Journal {
   /**
@@ -34,11 +38,4 @@ public interface Journal {
    * @param logIndex The log slot to load the accept record for.
    */
   Optional<Accept> loadAccept(long logIndex);
-
-  /**
-   * Commit the log up to the given index. This method must force the disk.
-   *
-   * @param l The log index to commit up to.
-   */
-  void committed(byte nodeIdentifier, long l);
 }

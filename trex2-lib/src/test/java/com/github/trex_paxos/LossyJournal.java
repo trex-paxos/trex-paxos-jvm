@@ -33,8 +33,4 @@ public class LossyJournal implements Journal {
 
   final Map<Byte, Long> committedMap = new HashMap<>();
 
-  @Override
-  public void committed(byte nodeIdentifier, long l) {
-    committedMap.put(nodeIdentifier, l);
-  }
 }
