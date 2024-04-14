@@ -16,6 +16,16 @@ import java.io.IOException;
 public record Progress(byte nodeIdentifier, BallotNumber highestPromised, long highestCommitted,
                        long highestAccepted) implements JournalRecord {
 
+  /**
+   * When an application initializes an empty journal it has to have a NIL value.
+   *
+   * @param nodeIdentifier The current node identifier.
+   */
+  @SuppressWarnings("unused")
+  public Progress(byte nodeIdentifier) {
+    this(nodeIdentifier, BallotNumber.MIN, 0, 0);
+  }
+
   public Progress withHighestCommitted(long committedLogIndex) {
     return new Progress(nodeIdentifier, highestPromised, committedLogIndex, highestAccepted);
     }

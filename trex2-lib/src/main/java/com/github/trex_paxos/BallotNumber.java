@@ -5,7 +5,9 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 public record BallotNumber(int counter, byte nodeIdentifier) implements Comparable<BallotNumber> {
-    @Override
+  public static final BallotNumber MIN = new BallotNumber(Integer.MIN_VALUE, Byte.MIN_VALUE);
+
+  @Override
     public int compareTo(BallotNumber that) {
         if (this == that) {
             return 0;
