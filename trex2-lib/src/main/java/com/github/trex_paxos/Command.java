@@ -4,14 +4,22 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-@SuppressWarnings("unused")
-public record Command(String clientMsgUuid, byte[] values) implements AbstractCommand {
+/**
+ * A client command to be executed by the state machine. As this library is neutral to the application, the command is
+ * completely opaque to the library. The application is responsible for encoding and decoding the commands.
+ *
+ * @param clientMsgUuid  the client message UUID used to respond to the client who issued the command. The application is
+ *                       responsible for ensuring that this UUID is unique. In the real world, this UUID would be generated.
+ *                       In a test environment, the UUID could be a simple counter appended to a trivial client ID string.
+ * @param operationBytes the application specific binary encoding of the application command to apply to the application state machine.
+ */
+public record Command(String clientMsgUuid, byte[] operationBytes) implements AbstractCommand {
 
     @Override
     public void writeTo(DataOutputStream dataStream) throws IOException {
       dataStream.writeUTF(clientMsgUuid);
-        dataStream.writeInt(values.length);
-        dataStream.write(values);
+      dataStream.writeInt(operationBytes.length);
+      dataStream.write(operationBytes);
     }
 
     public static Command readFrom(DataInputStream dataInputStream) throws IOException {
@@ -42,18 +50,18 @@ public record Command(String clientMsgUuid, byte[] values) implements AbstractCo
             }
       } else if (!clientMsgUuid.equals(other.clientMsgUuid)) {
             return false;
-        }
-        if (values == null) {
-            return other.values == null;
+      }
+      if (operationBytes == null) {
+        return other.operationBytes == null;
         } else {
-            if (other.values == null) {
+        if (other.operationBytes == null) {
                 return false;
-            }
-            if (values.length != other.values.length) {
+        }
+        if (operationBytes.length != other.operationBytes.length) {
                 return false;
-            }
-            for (int i = 0; i < values.length; i++) {
-                if (values[i] != other.values[i]) {
+        }
+        for (int i = 0; i < operationBytes.length; i++) {
+          if (operationBytes[i] != other.operationBytes[i]) {
                     return false;
                 }
             }

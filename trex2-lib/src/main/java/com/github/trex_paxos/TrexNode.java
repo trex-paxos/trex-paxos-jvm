@@ -38,7 +38,7 @@ public class TrexNode {
   Progress progress;
 
   /**
-   * During a recovery we will track all the slots that we are probing to find the highest accepted values.
+   * During a recovery we will track all the slots that we are probing to find the highest accepted operationBytes.
    */
   NavigableMap<Long, Map<Byte, PrepareResponse>> prepareResponsesByLogIndex = new TreeMap<>();
 
@@ -258,7 +258,7 @@ public class TrexNode {
                           selfVoteOnAccept(accept);
                           // we are no long awaiting the prepare for the current slot
                           prepareResponsesByLogIndex.remove(logIndex);
-                          // if we have had no evidence of higher accepted values we can promote
+                          // if we have had no evidence of higher accepted operationBytes we can promote
                           if (prepareResponsesByLogIndex.isEmpty()) {
                             this.role = LEAD;
                           }
