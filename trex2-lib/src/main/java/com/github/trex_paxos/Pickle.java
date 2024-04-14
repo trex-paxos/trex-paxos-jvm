@@ -2,27 +2,32 @@ package com.github.trex_paxos;
 
 import java.io.*;
 
-// FIXME move all the DataInputStream and DataOutputStream usage into the Pickle class.
+/**
+ * Pickle is a utility class for serializing and deserializing `TrexMessage`s or the `Progress` as binary data.
+ * For the algorithm to work correctly only the `Progress` and `Accept` messages need to be durable on disk.
+ * This means that Trex itself only uses the Pickle class to serialize and deserialize the `JournalRecord` interface.
+ * You may choose to use the Pickle class to serialize and deserialize other messages as well. Alternatively your
+ * application can use a different serialization mechanism as your wire format such as JSON.
+ */
 public class Pickle {
+  // TODO consider moving the DataInputStream and DataOutputStream usage into the Pickle class.
   public static TrexMessage readTrexMessage(byte[] bytes) {
     ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
     DataInputStream dis = new DataInputStream(bis);
     try {
       MessageType messageType = MessageType.fromId(dis.readByte());
-      switch (messageType) {
-        case MessageType.Prepare:
-          return Prepare.readFrom(dis);
-        case MessageType.PrepareResponse:
-          return PrepareResponse.readFrom(dis);
-        case MessageType.Accept:
-          return Accept.readFrom(dis);
-        case MessageType.AcceptResponse:
-          return AcceptResponse.readFrom(dis);
-      }
+      return switch (messageType) {
+        case MessageType.Prepare -> Prepare.readFrom(dis);
+        case MessageType.PrepareResponse -> PrepareResponse.readFrom(dis);
+        case MessageType.Accept -> Accept.readFrom(dis);
+        case MessageType.AcceptResponse -> AcceptResponse.readFrom(dis);
+        case MessageType.Commit -> Commit.readFrom(dis);
+        case MessageType.Catchup -> Catchup.readFrom(dis);
+        case MessageType.CatchupResponse -> CatchupResponse.readFrom(dis);
+      };
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-    throw new AssertionError("unreachable as the switch statement is exhaustive");
   }
 
   public static byte[] write(TrexMessage message) throws IOException {

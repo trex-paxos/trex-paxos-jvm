@@ -5,11 +5,11 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 @SuppressWarnings("unused")
-public record Command(String msgUuid, byte[] values) implements AbstractCommand {
+public record Command(String clientMsgUuid, byte[] values) implements AbstractCommand {
 
     @Override
     public void writeTo(DataOutputStream dataStream) throws IOException {
-        dataStream.writeUTF(msgUuid);
+      dataStream.writeUTF(clientMsgUuid);
         dataStream.writeInt(values.length);
         dataStream.write(values);
     }
@@ -36,11 +36,11 @@ public record Command(String msgUuid, byte[] values) implements AbstractCommand 
             return false;
         }
         Command other = (Command) arg0;
-        if (msgUuid == null) {
-            if (other.msgUuid != null) {
+      if (clientMsgUuid == null) {
+        if (other.clientMsgUuid != null) {
                 return false;
             }
-        } else if (!msgUuid.equals(other.msgUuid)) {
+      } else if (!clientMsgUuid.equals(other.clientMsgUuid)) {
             return false;
         }
         if (values == null) {

@@ -73,4 +73,31 @@ public class PickleTests {
     Progress unpickled = (Progress) Pickle.readProgress(pickled);
     assertEquals(progress, unpickled);
   }
+
+  @Test
+  public void testPickCommit() throws Exception {
+    Commit commit = new Commit(4L);
+    byte[] pickled = Pickle.write(commit);
+    Commit unpickled = (Commit) Pickle.readTrexMessage(pickled);
+    assertEquals(commit, unpickled);
+  }
+
+  @Test
+  public void testPickleCatchup() throws Exception {
+    Catchup catchup = new Catchup((byte) 4, 5L);
+    byte[] pickled = Pickle.write(catchup);
+    Catchup unpickled = (Catchup) Pickle.readTrexMessage(pickled);
+    assertEquals(catchup, unpickled);
+  }
+
+  @Test
+  public void testPickleCatchupResponse() throws Exception {
+    CatchupResponse catchupResponse = new CatchupResponse(4L, List.of(
+        new Accept(5L, new BallotNumber(6, (byte) 7), NoOperation.NOOP),
+        new Accept(8L, new BallotNumber(9, (byte) 10), NoOperation.NOOP)
+    ));
+    byte[] pickled = Pickle.write(catchupResponse);
+    CatchupResponse unpickled = (CatchupResponse) Pickle.readTrexMessage(pickled);
+    assertEquals(catchupResponse, unpickled);
+  }
 }

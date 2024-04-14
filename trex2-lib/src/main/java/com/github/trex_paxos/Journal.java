@@ -10,7 +10,7 @@ public interface Journal {
   /**
    * Save the progress record to durable storage. This method must force the disk.
    *
-   * @param progress The hightest promised, committed and accepted values.
+   * @param progress The highest promised, committed and accepted values.
    */
   void saveProgress(Progress progress);
 

@@ -5,7 +5,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 public record BallotNumber(int counter, byte nodeIdentifier) implements Comparable<BallotNumber> {
-
     @Override
     public int compareTo(BallotNumber that) {
         if (this == that) {

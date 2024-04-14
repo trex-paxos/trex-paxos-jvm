@@ -168,7 +168,7 @@ public class TrexNode {
                         case Accept(_, _, NoOperation _) -> {
                           // NOOP
                         }
-                        case Accept(_, _, Command(final var msgId, final var op)) -> upCall.committed(msgId, op);
+                        case Accept(_, _, final var command) -> upCall.committed((Command) command);
                       }
                     }
                     // free the memory

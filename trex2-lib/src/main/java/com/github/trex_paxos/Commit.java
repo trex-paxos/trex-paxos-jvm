@@ -4,7 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-// FIXME commit should say who is the leader to make proxying easier.
+// TODO commit could say who is the leader to make proxying easier.
 public record Commit(long logIndex) implements TrexMessage {
 
   public void writeTo(DataOutputStream dos) throws IOException {

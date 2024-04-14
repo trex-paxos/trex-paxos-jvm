@@ -8,7 +8,6 @@ public record Catchup(byte from, long highestCommittedIndex) implements TrexMess
   public static Catchup readFrom(DataInputStream dis) throws IOException {
     return new Catchup(dis.readByte(), dis.readLong());
   }
-
   public void writeTo(DataOutputStream dos) throws IOException {
     dos.writeByte(from);
     dos.writeLong(highestCommittedIndex);
