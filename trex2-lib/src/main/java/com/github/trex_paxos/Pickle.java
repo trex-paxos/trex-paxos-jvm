@@ -15,7 +15,7 @@ public class Pickle {
     ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
     DataInputStream dis = new DataInputStream(bis);
     try {
-      MessageType messageType = MessageType.fromId(dis.readByte());
+      MessageType messageType = MessageType.fromMessageId(dis.readByte());
       return switch (messageType) {
         case MessageType.Prepare -> Prepare.readFrom(dis);
         case MessageType.PrepareResponse -> PrepareResponse.readFrom(dis);
