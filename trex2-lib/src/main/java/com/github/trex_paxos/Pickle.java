@@ -11,7 +11,7 @@ import java.io.*;
  */
 public class Pickle {
   // TODO consider moving the DataInputStream and DataOutputStream usage into the Pickle class.
-  public static TrexMessage readTrexMessage(byte[] bytes) {
+  public static TrexMessage readMessage(byte[] bytes) {
     ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
     DataInputStream dis = new DataInputStream(bis);
     try {
@@ -30,7 +30,7 @@ public class Pickle {
     }
   }
 
-  public static byte[] write(TrexMessage message) throws IOException {
+  public static byte[] writeMessage(TrexMessage message) throws IOException {
     ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(byteArrayOutputStream);
     dos.writeByte(MessageType.fromPaxosMessage(message).id());
@@ -39,7 +39,7 @@ public class Pickle {
     return byteArrayOutputStream.toByteArray();
   }
 
-  public static byte[] write(Progress progress) throws IOException {
+  public static byte[] writeProgress(Progress progress) throws IOException {
     ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(byteArrayOutputStream);
     progress.writeTo(dos);
@@ -47,13 +47,9 @@ public class Pickle {
     return byteArrayOutputStream.toByteArray();
   }
 
-  public static Object readProgress(byte[] pickled) {
+  public static Progress readProgress(byte[] pickled) throws IOException {
     ByteArrayInputStream bis = new ByteArrayInputStream(pickled);
     DataInputStream dis = new DataInputStream(bis);
-    try {
-      return Progress.readFrom(dis);
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
+    return Progress.readFrom(dis);
   }
 }
