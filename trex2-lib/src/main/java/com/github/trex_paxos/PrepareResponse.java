@@ -8,8 +8,12 @@ import java.util.Optional;
 record PrepareResponse(Vote vote,
                        Optional<Accept> highestUncommitted,
                        Optional<CatchupResponse> catchupResponse) implements TrexMessage {
-  byte from() {
+  public byte from() {
     return vote.from();
+  }
+
+  public byte to() {
+    return vote.to();
   }
 
   Optional<Long> highestCommittedIndex() {

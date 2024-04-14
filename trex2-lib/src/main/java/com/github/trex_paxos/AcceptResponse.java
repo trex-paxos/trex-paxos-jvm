@@ -9,10 +9,13 @@ record AcceptResponse(Vote vote, Progress progress) implements TrexMessage {
   /**
    * @return the proposer that sent the request
    */
-  byte from() {
+  public byte from() {
     return vote.from();
   }
 
+  public byte to() {
+    return vote.to();
+  }
 
   @Override
   public void writeTo(DataOutputStream dos) throws IOException {

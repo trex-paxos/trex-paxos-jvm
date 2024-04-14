@@ -4,15 +4,16 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-// TODO commit could say who is the leader to make proxying easier.
-public record Commit(long logIndex) implements TrexMessage {
+public record Commit(byte from, long logIndex) implements TrexMessage {
 
   public void writeTo(DataOutputStream dos) throws IOException {
+    dos.writeByte(from);
     dos.writeLong(logIndex);
   }
 
   public static Commit readFrom(DataInputStream dis)
     throws java.io.IOException {
-    return new Commit(dis.readLong());
+    final byte from = dis.readByte();
+    return new Commit(from, dis.readLong());
   }
 }

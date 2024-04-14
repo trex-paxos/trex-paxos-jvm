@@ -165,10 +165,10 @@ public class TrexNode {
                     for (var slot : committedSlots) {
                       final var accept = journal.loadAccept(slot).orElseThrow();
                       switch (accept) {
-                        case Accept(_, _, NoOperation _) -> {
+                        case Accept(_, _, _, NoOperation _) -> {
                           // NOOP
                         }
-                        case Accept(_, _, final var command) -> upCall.committed((Command) command);
+                        case Accept(_, _, _, final var command) -> upCall.committed((Command) command);
                       }
                     }
                     // free the memory
@@ -178,7 +178,7 @@ public class TrexNode {
                     // we have committed
                     this.progress = progress.withHighestCommitted(highestCommitable.get());
                     // let the cluster know
-                    messages.add(new Commit(highestCommitable.get()));
+                    messages.add(new Commit(nodeIdentifier, highestCommitable.get()));
                   }
                 }
                 case WAIT -> {
@@ -233,7 +233,7 @@ public class TrexNode {
                                     LongStream.range(higherAcceptedSlot + 1, highestLogIndexProbed + 1)
                                         .forEach(slot -> {
                                           prepareResponsesByLogIndex.put(slot, new HashMap<>());
-                                          messages.add(new Prepare(slot, epoch));
+                                          messages.add(new Prepare(nodeIdentifier, slot, epoch));
                                         }));
                               }
                             });
@@ -249,7 +249,7 @@ public class TrexNode {
 
                         term.ifPresent(e -> {
                           // use the highest accepted command to issue an Accept
-                          Accept accept = new Accept(logIndex, e, highestAcceptedCommand);
+                          Accept accept = new Accept(nodeIdentifier, logIndex, e, highestAcceptedCommand);
                           // issue the accept messages
                           messages.add(accept);
                           // create the empty map to track the responses
@@ -271,10 +271,15 @@ public class TrexNode {
           }
         }
       }
-      case Commit commit -> journal.committed(nodeIdentifier, commit.logIndex());
-      case Catchup(final var from, final var highestCommittedOther) ->
-          messages.add(from, new CatchupResponse(progress.highestCommitted(), loadCatchup(highestCommittedOther)));
-      case CatchupResponse(_, _) -> saveCatchup((CatchupResponse) input);
+      case Commit(_, final var logIndex) -> journal.committed(nodeIdentifier, logIndex);
+      case Catchup(final var replyTo, final var to, final var highestCommittedOther) -> {
+        if (to == nodeIdentifier)
+          messages.add(new CatchupResponse(nodeIdentifier, replyTo, progress.highestCommitted(), loadCatchup(highestCommittedOther)));
+      }
+      case CatchupResponse(_, final var to, _, _) -> {
+        if (to == nodeIdentifier)
+          saveCatchup((CatchupResponse) input);
+      }
     }
     return messages;
   }
@@ -375,7 +380,7 @@ public class TrexNode {
     return new PrepareResponse(
         new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), false),
         journal.loadAccept(prepare.logIndex()),
-        Optional.of(new CatchupResponse(progress.highestCommitted(), catchup)));
+        Optional.of(new CatchupResponse(nodeIdentifier, prepare.from(), progress.highestCommitted(), catchup)));
   }
 
   /**
@@ -388,7 +393,7 @@ public class TrexNode {
     assert role == LEAD : STR."role=\{role}";
     if (term.isPresent()) {
       final long slot = progress.highestAccepted() + 1;
-      final var accept = new Accept(slot, term.get(), command);
+      final var accept = new Accept(nodeIdentifier, slot, term.get(), command);
       // this could self accept else self reject
       final var actOrNack = this.paxos(accept);
       assert actOrNack.size() == 1 : STR."accept response should be a single messages=\{actOrNack}";
