@@ -4,7 +4,7 @@ import java.io.*;
 
 // FIXME move all the DataInputStream and DataOutputStream usage into the Pickle class.
 public class Pickle {
-  public static TrexMessage read(byte[] bytes) {
+  public static TrexMessage readTrexMessage(byte[] bytes) {
     ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
     DataInputStream dis = new DataInputStream(bis);
     try {
@@ -32,5 +32,23 @@ public class Pickle {
     message.writeTo(dos);
     dos.close();
     return byteArrayOutputStream.toByteArray();
+  }
+
+  public static byte[] write(Progress progress) throws IOException {
+    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+    DataOutputStream dos = new DataOutputStream(byteArrayOutputStream);
+    progress.writeTo(dos);
+    dos.close();
+    return byteArrayOutputStream.toByteArray();
+  }
+
+  public static Object readProgress(byte[] pickled) {
+    ByteArrayInputStream bis = new ByteArrayInputStream(pickled);
+    DataInputStream dis = new DataInputStream(bis);
+    try {
+      return Progress.readFrom(dis);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

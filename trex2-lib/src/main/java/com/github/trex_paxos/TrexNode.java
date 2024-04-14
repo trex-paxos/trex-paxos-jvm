@@ -86,7 +86,7 @@ public class TrexNode {
    * <p>
    * As an optimisation the leader can prepend a fresh commit message to the outbound messages.
    *
-   * @param input   The message to process.
+   * @param input The message to process.
    * @return A list of messages to send out to the cluster.
    * @throws AssertionError If the algorithm is in an invalid state.
    */
@@ -194,16 +194,17 @@ public class TrexNode {
       }
       case PrepareResponse prepareResponse -> {
         if (RECOVER == role) {
-          final var catchup = prepareResponse.catchup();
-          final long highestCommittedOther = prepareResponse.highestCommittedIndex();
-          final long highestCommitted = progress.highestCommitted();
-          if (highestCommitted < highestCommittedOther) {
-            // we are behind so now try to catch up
-            saveCatchup(highestCommittedOther, catchup);
-            // this may be evidence of a new leader so back down
-            backdown();
-          } else {
-            if (prepareResponse.vote().to() == nodeIdentifier) {
+          if (prepareResponse.catchupResponse().isPresent()) {
+            if (prepareResponse.highestUncommitted().isPresent()) {
+              final long highestCommittedOther = prepareResponse.highestCommittedIndex().get();
+              final long highestCommitted = progress.highestCommitted();
+              if (highestCommitted < highestCommittedOther) {
+                // we are behind so now try to catch up
+                saveCatchup(prepareResponse.catchupResponse().get());
+                // this may be evidence of a new leader so back down
+                backdown();
+              }
+            } else if (prepareResponse.vote().to() == nodeIdentifier) {
               final byte from = prepareResponse.from();
               final long logIndex = prepareResponse.vote().logIndex();
               Optional.ofNullable(prepareResponsesByLogIndex.get(logIndex)).ifPresent(
@@ -222,8 +223,8 @@ public class TrexNode {
                       case WIN -> {
                         // first issue new prepare messages for higher slots
                         votes.values().stream()
-                            .map(PrepareResponse::progress)
-                            .map(Progress::highestAccepted)
+                            .filter(p -> p.highestCommittedIndex().isPresent())
+                            .map(p -> p.highestCommittedIndex().get())
                             .max(Long::compareTo)
                             .ifPresent(higherAcceptedSlot -> {
                               final long highestLogIndexProbed = prepareResponsesByLogIndex.lastKey();
@@ -273,8 +274,7 @@ public class TrexNode {
       case Commit commit -> journal.committed(nodeIdentifier, commit.logIndex());
       case Catchup(final var from, final var highestCommittedOther) ->
           messages.add(from, new CatchupResponse(progress.highestCommitted(), loadCatchup(highestCommittedOther)));
-      case CatchupResponse(final var highestCommittedOther, final var catchup) ->
-          saveCatchup(highestCommittedOther, catchup);
+      case CatchupResponse(_, _) -> saveCatchup((CatchupResponse) input);
     }
     return messages;
   }
@@ -294,10 +294,10 @@ public class TrexNode {
     }
   }
 
-  private void saveCatchup(long highestCommittedOther, List<Accept> catchup) {
-    for (Accept accept : catchup) {
+  private void saveCatchup(CatchupResponse catchupResponse) {
+    for (Accept accept : catchupResponse.catchup()) {
       final var slot = accept.logIndex();
-      if (slot <= highestCommittedOther) {
+      if (slot <= catchupResponse.highestCommittedIndex()) {
         continue;
       }
       if (equalOrHigherAccept(progress, accept)) {
@@ -361,9 +361,8 @@ public class TrexNode {
   PrepareResponse ack(Prepare prepare) {
     return new PrepareResponse(
         new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), true),
-        progress,
         journal.loadAccept(prepare.logIndex()),
-        List.of());
+        Optional.empty());
   }
 
   /**
@@ -375,9 +374,8 @@ public class TrexNode {
   PrepareResponse nack(Prepare prepare, List<Accept> catchup) {
     return new PrepareResponse(
         new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), false),
-        progress,
         journal.loadAccept(prepare.logIndex()),
-        catchup);
+        Optional.of(new CatchupResponse(progress.highestCommitted(), catchup)));
   }
 
   /**
