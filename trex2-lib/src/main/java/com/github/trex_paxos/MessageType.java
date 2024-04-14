@@ -36,6 +36,10 @@ public enum MessageType {
     return ORDINAL_TO_TYPE_MAP.get(id);
   }
 
+  /**
+   * Host applications may want to use this map to convert ordinal values to message classes for custom serialization.
+   */
+  @SuppressWarnings("unused")
   public static final Map<Byte, Class<? extends TrexMessage>> ORDINAL_TO_CLASS_MAP = Map.of(
       (byte) 0, Prepare.class,
       (byte) 1, PrepareResponse.class,
@@ -46,6 +50,9 @@ public enum MessageType {
       (byte) 6, CatchupResponse.class
   );
 
+  /**
+   * Host applications may want to use this map to convert ordinal values to message types for custom serialization.
+   */
   public static MessageType fromPaxosMessage(TrexMessage trexMessage) {
     return switch (trexMessage) {
       case Prepare _ -> Prepare;
