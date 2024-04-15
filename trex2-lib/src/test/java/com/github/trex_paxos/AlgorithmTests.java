@@ -11,7 +11,7 @@ public class AlgorithmTests {
 
     // when
     final var accept = node1.startAppendToLog(new Command("1", "command1".getBytes(StandardCharsets.UTF_8)));
-    
+
   }
 
   private Progress progress() {

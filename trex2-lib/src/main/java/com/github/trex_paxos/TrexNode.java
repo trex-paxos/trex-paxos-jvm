@@ -50,36 +50,35 @@ public class TrexNode {
   /**
    * The host application will need to learn that a log index has been chosen.
    */
-  final UpCall upCall;
+  final HostApplication hostApplication;
 
   /**
    * When we are leader we need to now the highest ballot number to use.
    */
   Optional<BallotNumber> term = Optional.empty();
 
-  public TrexNode(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal, UpCall upCall) {
+  /**
+   * Create a new TrexNode that will load the current progress from the journal. The journal must have been pre-initialised.
+   *
+   * @param nodeIdentifier  The unique node identifier. This must be unique across the cluster and across enough time for prior messages to have been forgotten.
+   * @param quorumStrategy  The quorum strategy that may be a simple majority, else things like FPaxos or UPaxos
+   * @param journal         The durable storage and durable log. This must be pre-initialised.
+   * @param hostApplication The host application that will be called back when a command is chosen or deal with heartbeats and timeouts.
+   */
+  public TrexNode(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal, HostApplication hostApplication) {
     this.nodeIdentifier = nodeIdentifier;
     this.journal = journal;
     this.quorumStrategy = quorumStrategy;
-    this.upCall = upCall;
+    this.hostApplication = hostApplication;
     this.progress = journal.loadProgress(nodeIdentifier);
   }
 
   /**
-   * The main entry point for the Trex paxos algorithm. This method will recurse without returning when we need to
-   * send a message to ourselves. As a side effect the progress record will be updated and the journal will be updated.
-   * <p>
-   * After this method returns the application must first commit both the updated progress and the updated log to disk
-   * using an `fsync` or equivalent which is FileDescriptor::sync in Java. Only after the kernel has flushed any disk
-   * buffers and confirmed that the updated state is on disk the application can send the messages out to the cluster.
-   * <p>
-   * As an optimisation the leader can prepend a fresh commit message to the outbound messages.
-   *
+   * This is the main Paxos Algorithm. It is not public as the timeout logic needs to first intercept Commit messages.
    * @param input The message to process.
    * @return A list of messages to send out to the cluster.
-   * @throws AssertionError If the algorithm is in an invalid state.
    */
-  public List<TrexMessage> paxos(TrexMessage input) {
+  List<TrexMessage> paxos(TrexMessage input) {
     List<TrexMessage> messages = new ArrayList<>();
     switch (input) {
       case Accept accept -> {
@@ -154,7 +153,7 @@ public class TrexNode {
                         case Accept(_, _, _, NoOperation _) -> {
                           // NOOP
                         }
-                        case Accept(_, _, _, final var command) -> upCall.committed((Command) command);
+                        case Accept(_, _, _, final var command) -> hostApplication.upCall((Command) command);
                       }
                     }
                     // free the memory
@@ -279,7 +278,7 @@ public class TrexNode {
               case Accept(final var logIndex, _, _, NoOperation _) -> newHighestCommitted = logIndex;
               case Accept(final var logIndex, _, _, final var command) -> {
                 newHighestCommitted = logIndex;
-                upCall.committed((Command) command);
+                hostApplication.upCall((Command) command);
               }
             }
           }
@@ -405,12 +404,12 @@ public class TrexNode {
   }
 
   /**
-   * Client request to append a command to the log.
+   * Client request to append a command to the log. TODO is this needed?
    *
    * @param command The command to append.
    * @return An accept for the next unassigned slot in the log at this leader.
    */
-  public Optional<Accept> startAppendToLog(Command command) {
+  Optional<Accept> startAppendToLog(Command command) {
     assert role == LEAD : STR."role=\{role}";
     if (term.isPresent()) {
       final long slot = progress.highestAccepted() + 1;
@@ -455,21 +454,23 @@ public class TrexNode {
     return nodeIdentifier;
   }
 
-  @SuppressWarnings("unused")
-  public List<TrexMessage> timeout() {
-    List<TrexMessage> messages = new ArrayList<>();
+  Optional<Prepare> timeout() {
     if (role == FOLLOW) {
       role = RECOVER;
       term = Optional.of(new BallotNumber(progress.highestPromised().counter() + 1, nodeIdentifier));
-      prepareResponsesByLogIndex.clear();
-      acceptVotesByLogIndex.clear();
-      term.ifPresent(epoch -> {
-        final var prepare = new Prepare(nodeIdentifier, progress.highestCommitted() + 1, epoch);
-        final var selfPrepare = paxos(prepare);
-        assert selfPrepare.size() == 1 : STR."selfPrepare=\{selfPrepare}";
-        messages.add(selfPrepare.getFirst());
-      });
+      final var prepare = new Prepare(nodeIdentifier, progress.highestCommitted() + 1, term.get());
+      final var selfPrepareResponse = paxos(prepare);
+      assert selfPrepareResponse.size() == 1 : STR."selfPrepare=\{selfPrepareResponse}";
+      return Optional.of(prepare);
     }
-    return messages;
+    return Optional.empty();
+  }
+
+  public boolean isLeader() {
+    return role.equals(LEAD);
+  }
+
+  Commit heartbeatCommit() {
+    return new Commit(nodeIdentifier, progress.highestCommitted());
   }
 }
