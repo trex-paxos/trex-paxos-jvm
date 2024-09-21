@@ -1,5 +1,9 @@
 package com.github.trex_paxos;
 
+import com.github.trex_paxos.msg.Command;
+import com.github.trex_paxos.msg.Commit;
+import com.github.trex_paxos.msg.Prepare;
+
 public interface HostApplication {
   /**
    * A callback for when a value is committed. This functional interface is called with the chosen command in the log

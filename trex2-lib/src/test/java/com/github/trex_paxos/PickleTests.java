@@ -1,5 +1,6 @@
 package com.github.trex_paxos;
 
+import com.github.trex_paxos.msg.*;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

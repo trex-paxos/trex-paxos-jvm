@@ -1,10 +1,12 @@
-package com.github.trex_paxos;
+package com.github.trex_paxos.msg;
+
+import com.github.trex_paxos.Vote;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-record AcceptResponse(Vote vote, Progress progress) implements TrexMessage {
+public record AcceptResponse(Vote vote, Progress progress) implements TrexMessage {
 
   /**
    * @return the proposer that sent the request

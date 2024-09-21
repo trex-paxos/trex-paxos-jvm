@@ -1,4 +1,4 @@
-package com.github.trex_paxos;
+package com.github.trex_paxos.msg;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -48,6 +48,6 @@ public record Progress(byte nodeIdentifier, BallotNumber highestPromised, long h
 
     @Override
     public String toString() {
-      return STR."P(p=\{highestPromised},c=\{highestCommitted},a=\{highestAccepted})";
+      return "P(p={" + highestPromised + "},c={" + highestCommitted + "},a={" + highestAccepted + "})";
     }
 }

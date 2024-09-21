@@ -1,5 +1,7 @@
 package com.github.trex_paxos;
 
+import com.github.trex_paxos.msg.*;
+
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
@@ -95,7 +97,7 @@ public class TrexNode {
           }
           messages.add(ack(accept));
         } else {
-          throw new AssertionError(STR."unreachable progress=\{progress}, accept=\{accept}");
+          throw new AssertionError("unreachable progress={" + progress + "}, accept={" + accept + "}");
         }
       }
       case Prepare prepare -> {
@@ -115,7 +117,7 @@ public class TrexNode {
         } else if (number.equals(progress.highestPromised())) {
           messages.add(prepare.from(), ack(prepare));
         } else {
-          throw new AssertionError(STR."unreachable progress=\{progress}, prepare=\{prepare}");
+          throw new AssertionError("unreachable progress={" + progress + "}, prepare={" + prepare + "}");
         }
       }
       case AcceptResponse acceptResponse -> {
@@ -410,17 +412,17 @@ public class TrexNode {
    * @return An accept for the next unassigned slot in the log at this leader.
    */
   Optional<Accept> startAppendToLog(Command command) {
-    assert role == LEAD : STR."role=\{role}";
+    assert role == LEAD : "role={" + role + "}";
     if (term.isPresent()) {
       final long slot = progress.highestAccepted() + 1;
       final var accept = new Accept(nodeIdentifier, slot, term.get(), command);
       // this could self accept else self reject
       final var actOrNack = this.paxos(accept);
-      assert actOrNack.size() == 1 : STR."accept response should be a single messages=\{actOrNack}";
+      assert actOrNack.size() == 1 : "accept response should be a single messages={" + actOrNack + "}";
       // update state on the self accept or reject
       final var updated = this.paxos(actOrNack.getFirst());
       // we should not have any messages to send as we have not sent out the message to get a commit.
-      assert updated.isEmpty() : STR."updated should be empty=\{updated}";
+      assert updated.isEmpty() : "updated should be empty={" + updated + "}";
       // return the Accept which should be sent out to the cluster.
       return Optional.of(accept);
     } else
@@ -460,7 +462,7 @@ public class TrexNode {
       term = Optional.of(new BallotNumber(progress.highestPromised().counter() + 1, nodeIdentifier));
       final var prepare = new Prepare(nodeIdentifier, progress.highestCommitted() + 1, term.get());
       final var selfPrepareResponse = paxos(prepare);
-      assert selfPrepareResponse.size() == 1 : STR."selfPrepare=\{selfPrepareResponse}";
+      assert selfPrepareResponse.size() == 1 : "selfPrepare={" + selfPrepareResponse + "}";
       return Optional.of(prepare);
     }
     return Optional.empty();

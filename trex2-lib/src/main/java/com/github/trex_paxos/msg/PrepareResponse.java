@@ -1,13 +1,15 @@
-package com.github.trex_paxos;
+package com.github.trex_paxos.msg;
+
+import com.github.trex_paxos.Vote;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Optional;
 
-record PrepareResponse(Vote vote,
-                       Optional<Accept> highestUncommitted,
-                       Optional<CatchupResponse> catchupResponse) implements TrexMessage {
+public record PrepareResponse(Vote vote,
+                              Optional<Accept> highestUncommitted,
+                              Optional<CatchupResponse> catchupResponse) implements TrexMessage {
   public byte from() {
     return vote.from();
   }
@@ -16,7 +18,7 @@ record PrepareResponse(Vote vote,
     return vote.to();
   }
 
-  Optional<Long> highestCommittedIndex() {
+  public Optional<Long> highestCommittedIndex() {
     return catchupResponse.stream().map(CatchupResponse::highestCommittedIndex).findFirst();
   }
 

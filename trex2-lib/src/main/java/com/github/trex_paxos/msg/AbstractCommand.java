@@ -1,4 +1,4 @@
-package com.github.trex_paxos;
+package com.github.trex_paxos.msg;
 
 import java.io.DataOutputStream;
 import java.io.IOException;

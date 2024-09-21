@@ -1,19 +1,13 @@
 package com.github.trex_paxos;
 
-import java.security.SecureRandom;
+import com.github.trex_paxos.msg.Commit;
+import com.github.trex_paxos.msg.TrexMessage;
+
 import java.util.List;
 
 @SuppressWarnings("unused")
-public class TrexEngine {
+public abstract class TrexEngine {
   final TrexNode trexNode;
-
-  final long heartbeatPeriod;
-
-  final long minTimeout;
-
-  final long maxTimeout;
-
-  final SecureRandom random = new SecureRandom();
 
   /**
    * Create a new TrexEngine which uses virtual threads for timeouts, heartbeats and TODO retries.
@@ -22,40 +16,46 @@ public class TrexEngine {
    * @param minTimeout The minimum timeout in milliseconds. This should be greater than 2x time max latency plush 2x disk fsych time.
    * @param maxTimeout The maximum timeout in milliseconds. The actual timeout will be a random value between minTimeout and maxTimeout.
    */
-  public TrexEngine(TrexNode trexNode, Long heartbeatPeriod, long minTimeout, long maxTimeout) {
+  public TrexEngine(TrexNode trexNode) {
     this.trexNode = trexNode;
-    this.heartbeatPeriod = heartbeatPeriod;
-    this.minTimeout = minTimeout;
-    this.maxTimeout = maxTimeout;
   }
 
-  Thread timeoutThread;
+//  Thread timeoutThread;
+//
+//  Thread heartbeatThread;
 
-  Thread heartbeatThread;
+//  public synchronized void start() {
+//    heartbeatThread = Thread.ofVirtual().start(() -> {
+//      try {
+//        Thread.sleep(heartbeatPeriod);
+//        if (trexNode.isLeader())
+//          trexNode.hostApplication.heartbeat(trexNode.heartbeatCommit());
+//      } catch (InterruptedException e) {
+//        Thread.currentThread().interrupt();
+//      }
+//    });
+//    setRandomTimeout();
+//  }
 
-  public synchronized void start() {
-    heartbeatThread = Thread.ofVirtual().start(() -> {
-      try {
-        Thread.sleep(heartbeatPeriod);
-        if (trexNode.isLeader())
-          trexNode.hostApplication.heartbeat(trexNode.heartbeatCommit());
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
-    });
-    setRandomTimeout();
-  }
+  abstract void setRandomTimeout();
 
-  private synchronized void setRandomTimeout() {
-    timeoutThread = Thread.ofVirtual().start(() -> {
-      try {
-        Thread.sleep(random.nextInt((int) (maxTimeout - minTimeout)) + minTimeout);
-        trexNode.timeout().ifPresent(trexNode.hostApplication::timeout);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
-    });
-  }
+  abstract void resetTimeout();
+
+//  void resetTimeout() {
+//    timeoutThread.interrupt();
+//    setRandomTimeout();
+//  }
+
+//  private synchronized void setRandomTimeout() {
+//    timeoutThread = Thread.ofVirtual().start(() -> {
+//      try {
+//        Thread.sleep(random.nextInt((int) (maxTimeout - minTimeout)) + minTimeout);
+//        trexNode.timeout().ifPresent(trexNode.hostApplication::timeout);
+//      } catch (InterruptedException e) {
+//        Thread.currentThread().interrupt();
+//      }
+//    });
+//  }
 
   /**
    * The main entry point for the Trex paxos algorithm. This method will recurse without returning when we need to
@@ -75,9 +75,9 @@ public class TrexEngine {
    */
   public synchronized List<TrexMessage> paxos(TrexMessage input) {
     // check our invariants
-    assert input != null;
-    assert timeoutThread != null;
-    assert heartbeatThread != null && heartbeatThread.isAlive();
+//    assert input != null;
+//    assert timeoutThread != null;
+//    assert heartbeatThread != null && heartbeatThread.isAlive();
     /*
      * If we are not the leader. And we receive a commit message from another node. And the log index is greater than
      * our current progress. We interrupt the timeout thread to stop the timeout and recreate it.
@@ -87,18 +87,17 @@ public class TrexEngine {
         && from != trexNode.nodeIdentifier()
         && logIndex > trexNode.highestCommitted()
     ) {
-      timeoutThread.interrupt();
-      setRandomTimeout();
+      resetTimeout();
     }
     return trexNode.paxos(input);
   }
 
-  public void stop() {
-    timeoutThread.interrupt();
-    heartbeatThread.interrupt();
-  }
-
-  public void join() throws InterruptedException {
-    heartbeatThread.join();
-  }
+//  public void stop() {
+//    timeoutThread.interrupt();
+//    heartbeatThread.interrupt();
+//  }
+//
+//  public void join() throws InterruptedException {
+//    heartbeatThread.join();
+//  }
 }

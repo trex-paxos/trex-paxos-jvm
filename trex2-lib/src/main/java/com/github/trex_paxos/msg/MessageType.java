@@ -1,4 +1,4 @@
-package com.github.trex_paxos;
+package com.github.trex_paxos.msg;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -35,11 +35,11 @@ public enum MessageType {
   static final Map<Byte, Class<? extends TrexMessage>> ORDINAL_TO_CLASS_MAP = Map.of(
       (byte) 0, Prepare.class,
       (byte) 1, PrepareResponse.class,
-      (byte) 2, Accept.class,
-      (byte) 3, AcceptResponse.class,
-      (byte) 4, Commit.class,
-      (byte) 5, Catchup.class,
-      (byte) 6, CatchupResponse.class
+      (byte) 2, com.github.trex_paxos.msg.Accept.class,
+      (byte) 3, com.github.trex_paxos.msg.AcceptResponse.class,
+      (byte) 4, com.github.trex_paxos.msg.Commit.class,
+      (byte) 5, com.github.trex_paxos.msg.Catchup.class,
+      (byte) 6, com.github.trex_paxos.msg.CatchupResponse.class
   );
 
   /**

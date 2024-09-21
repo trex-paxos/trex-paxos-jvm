@@ -1,5 +1,8 @@
 package com.github.trex_paxos;
 
+import com.github.trex_paxos.msg.Accept;
+import com.github.trex_paxos.msg.Progress;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableMap;

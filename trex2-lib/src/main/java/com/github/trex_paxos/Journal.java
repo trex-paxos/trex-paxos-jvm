@@ -1,5 +1,8 @@
 package com.github.trex_paxos;
 
+import com.github.trex_paxos.msg.Accept;
+import com.github.trex_paxos.msg.Progress;
+
 import java.util.Optional;
 
 /**
@@ -28,7 +31,8 @@ public interface Journal {
   /**
    * Load the progress record from durable storage.
    *
-   * @param nodeIdentifier The node identifier to load the progress record for.
+   * @param nodeIdentifier The node identifier to load the progress record for. To avoid accidentally loading the wrong
+   *                       history when moving nodes between servers we require the node identifier. This is only a safety feature.
    */
   Progress loadProgress(byte nodeIdentifier);
 
