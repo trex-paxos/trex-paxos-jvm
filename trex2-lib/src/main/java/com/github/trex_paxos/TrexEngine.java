@@ -1,9 +1,11 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.Commit;
+import com.github.trex_paxos.msg.Prepare;
 import com.github.trex_paxos.msg.TrexMessage;
 
 import java.util.List;
+import java.util.Optional;
 
 @SuppressWarnings("unused")
 public abstract class TrexEngine {
@@ -20,42 +22,9 @@ public abstract class TrexEngine {
     this.trexNode = trexNode;
   }
 
-//  Thread timeoutThread;
-//
-//  Thread heartbeatThread;
-
-//  public synchronized void start() {
-//    heartbeatThread = Thread.ofVirtual().start(() -> {
-//      try {
-//        Thread.sleep(heartbeatPeriod);
-//        if (trexNode.isLeader())
-//          trexNode.hostApplication.heartbeat(trexNode.heartbeatCommit());
-//      } catch (InterruptedException e) {
-//        Thread.currentThread().interrupt();
-//      }
-//    });
-//    setRandomTimeout();
-//  }
-
   abstract void setRandomTimeout();
 
   abstract void resetTimeout();
-
-//  void resetTimeout() {
-//    timeoutThread.interrupt();
-//    setRandomTimeout();
-//  }
-
-//  private synchronized void setRandomTimeout() {
-//    timeoutThread = Thread.ofVirtual().start(() -> {
-//      try {
-//        Thread.sleep(random.nextInt((int) (maxTimeout - minTimeout)) + minTimeout);
-//        trexNode.timeout().ifPresent(trexNode.hostApplication::timeout);
-//      } catch (InterruptedException e) {
-//        Thread.currentThread().interrupt();
-//      }
-//    });
-//  }
 
   /**
    * The main entry point for the Trex paxos algorithm. This method will recurse without returning when we need to
@@ -70,14 +39,10 @@ public abstract class TrexEngine {
    * This method is synchronized as we should only process a single Paxos message. It also recreates the timeout thread.
    *
    * @param input The message to process.
-   * @return A list of messages to send out to the cluster.
+   * @return A list of messages to send out to the cluster. Normally it will be one message yet recovery will prepare many slots.
    * @throws AssertionError If the algorithm is in an invalid state.
    */
   public synchronized List<TrexMessage> paxos(TrexMessage input) {
-    // check our invariants
-//    assert input != null;
-//    assert timeoutThread != null;
-//    assert heartbeatThread != null && heartbeatThread.isAlive();
     /*
      * If we are not the leader. And we receive a commit message from another node. And the log index is greater than
      * our current progress. We interrupt the timeout thread to stop the timeout and recreate it.
@@ -92,12 +57,15 @@ public abstract class TrexEngine {
     return trexNode.paxos(input);
   }
 
-//  public void stop() {
-//    timeoutThread.interrupt();
-//    heartbeatThread.interrupt();
-//  }
-//
-//  public void join() throws InterruptedException {
-//    heartbeatThread.join();
-//  }
+  public void start() {
+    setRandomTimeout();
+  }
+
+  public Optional<Prepare> timeout() {
+    return trexNode.timeout();
+  }
+
+  public List<TrexMessage> receive(TrexMessage p) {
+    return trexNode.paxos(p);
+  }
 }

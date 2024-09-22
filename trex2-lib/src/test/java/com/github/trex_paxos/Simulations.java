@@ -2,13 +2,15 @@ package com.github.trex_paxos;
 
 
 import com.github.trex_paxos.msg.*;
+import org.assertj.core.api.Assert;
 
 import java.util.*;
 import java.util.random.RandomGenerator;
 import java.util.random.RandomGeneratorFactory;
+import java.util.stream.IntStream;
 
 
-public class Simulations {
+public class  Simulations {
 
   private final RandomGenerator rng;
   private final long maxTimeout;
@@ -22,15 +24,18 @@ public class Simulations {
     RandomGeneratorFactory<RandomGenerator> factory = RandomGeneratorFactory.of("L64X128MixRandom");
     // Create a seeded random generator using the factory
     RandomGenerator rng = factory.create(1234);
-    new Simulations(rng, 30).run();
+    new Simulations(rng, 30).run(100);
   }
 
   Map<Byte,Long> nodeTimeouts = new HashMap<>();
 
-  sealed interface Event permits Timeout {
+  sealed interface Event permits Timeout, Send {
   }
 
   record Timeout(byte nodeIdentifier) implements Event {
+  }
+
+  record Send(byte from, TrexMessage message) implements Event {
   }
 
   NavigableMap<Long,List<Event>> eventQueue = new TreeMap<>();
@@ -44,28 +49,96 @@ public class Simulations {
     }));
   }
 
+  long now = 0;
+
+  private long now() {
+    return now;
+  }
+
+  private void tick(long now) {
+    this.now = now;
+  }
+
   private void setRandomTimeout(byte nodeIdentifier) {
     final var timeout = rng.nextInt((int) maxTimeout);
-    final var now = eventQueue.isEmpty() ? 0 : eventQueue.firstEntry().getKey();
-    final var when = now + timeout;
+    //final var now = eventQueue.isEmpty() ? 0 : eventQueue.firstEntry().getKey();
+    final var when = now() + timeout;
     nodeTimeouts.put(nodeIdentifier, when);
     final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
     events.add(new Timeout(nodeIdentifier));
-  }
-
-  private void send(TrexMessage msg) {
-    throw new AssertionError("not implemented");
   }
 
   private void upCall(Command chosenCommand) {
     throw new AssertionError("not implemented");
   }
 
-  private void run() {
-    TrexEngine trexEngine1 = trexEngine((byte) 1);
-    TrexEngine trexEngine2 = trexEngine((byte) 2);
-    TrexEngine trexEngine3 = trexEngine((byte) 3);
+  final TrexEngine trexEngine1 = trexEngine((byte) 1);
+  final TrexEngine trexEngine2 = trexEngine((byte) 2);
+  final TrexEngine trexEngine3 = trexEngine((byte) 3);
 
+  final Map<Byte, TrexEngine> engines = Map.of(
+      (byte) 1, trexEngine1,
+      (byte) 2, trexEngine2,
+      (byte) 3, trexEngine3
+  );
+
+  private void run(int iterations) {
+
+    // start will launch some timeouts into the event queue
+    trexEngine1.start();
+    trexEngine2.start();
+    trexEngine3.start();
+
+    IntStream.range(0, iterations).forEach(_ -> {
+      // grab the events at the next time spot
+      final var  timeWithEvents = eventQueue.pollFirstEntry();
+
+      // advance the clock
+      tick(timeWithEvents.getKey());
+
+      // grab the events at this time
+      final var events = timeWithEvents.getValue();
+
+      // for what is in the queue of events at thit time
+      final var newMessages = events.stream().flatMap(event -> {
+        if (event instanceof Timeout timeout) {
+          // if it is a timeout collect the message
+          final var prepare = switch (timeout.nodeIdentifier) {
+            case 1 -> trexEngine1.timeout();
+            case 2 -> trexEngine2.timeout();
+            case 3 -> trexEngine3.timeout();
+            default -> throw new IllegalStateException("Unexpected value: " + timeout.nodeIdentifier);
+          };
+          return prepare.stream();
+        }
+        // if it is a message that has arrived run paxos
+        else if (event instanceof Send send) {
+          return switch (send.message()) {
+            case Prepare m ->
+                engines.values().stream().flatMap(engine -> engine.paxos(m).stream());
+            case Accept m ->
+                engines.values().stream().flatMap(engine -> engine.paxos(m).stream());
+            case Commit m ->
+                engines.values().stream().flatMap(engine -> engine.paxos(m).stream());
+            case PrepareResponse m ->
+                engines.get(m.to()).paxos(m).stream();
+            case AcceptResponse m ->
+                engines.get(m.to()).paxos(m).stream();
+            case Catchup m ->
+                engines.get(m.to()).paxos(m).stream();
+            case CatchupResponse m ->
+                engines.get(m.to()).paxos(m).stream();
+          };
+        }
+        throw new AssertionError("unexpected event: "+event);
+      });
+      // messages sent in the cluster will arrive after 1 time unit
+      final var nextTime = now() + 1;
+      // we add the messages to the event queue at that time
+      this.eventQueue.getOrDefault(nextTime, new ArrayList<>())
+          .addAll(newMessages.map(m -> new Send(m.from(), m))
+              .toList());
+    });
   }
 
   private TestablePaxosEngine trexEngine(byte nodeIdentifier) {
@@ -122,7 +195,7 @@ public class Simulations {
     }
   }
 
-  class TestableHostApplication implements HostApplication {
+  static class TestableHostApplication implements HostApplication {
 
     final byte nodeIdentifier;
 
@@ -139,13 +212,13 @@ public class Simulations {
 
     @Override
     public void heartbeat(Commit commit) {
-      Simulations.this.send(commit);
+      throw new AssertionError("not implemented");
     }
 
     @Override
     public void timeout(Prepare prepare) {
-      Simulations.this.send(prepare);
+      throw new AssertionError("not implemented");
     }
   }
-
 }
+

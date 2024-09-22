@@ -85,7 +85,7 @@ public class TrexNode {
     switch (input) {
       case Accept accept -> {
         if (lowerAccept(progress, accept) || higherAcceptForCommittedSlot(accept, progress)) {
-          messages.add(accept.from(), nack(accept));
+          messages.add(nack(accept));
         } else if (equalOrHigherAccept(progress, accept)) {
           // always journal first
           journal.journalAccept(accept);
@@ -109,13 +109,13 @@ public class TrexNode {
           // ack a higher prepare
           final var newProgress = progress.withHighestPromised(prepare.number());
           journal.saveProgress(newProgress);
-          messages.add(prepare.from(), ack(prepare));
+          messages.add(ack(prepare));
           this.progress = newProgress;
           // leader or recoverer should give way to a higher prepare
           if (this.role != FOLLOW)
             backdown();
         } else if (number.equals(progress.highestPromised())) {
-          messages.add(prepare.from(), ack(prepare));
+          messages.add(ack(prepare));
         } else {
           throw new AssertionError("unreachable progress={" + progress + "}, prepare={" + prepare + "}");
         }
@@ -475,4 +475,5 @@ public class TrexNode {
   Commit heartbeatCommit() {
     return new Commit(nodeIdentifier, progress.highestCommitted());
   }
+
 }
