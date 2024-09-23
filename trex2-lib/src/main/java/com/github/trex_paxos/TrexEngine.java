@@ -6,11 +6,18 @@ import com.github.trex_paxos.msg.TrexMessage;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Semaphore;
+import java.util.logging.Logger;
 
 @SuppressWarnings("unused")
 public abstract class TrexEngine {
+  static final Logger LOGGER = Logger.getLogger(TrexEngine.class.getName());
+
   final TrexNode trexNode;
 
+  TrexNode trexNode() {
+    return trexNode;
+  }
   /**
    * Create a new TrexEngine which uses virtual threads for timeouts, heartbeats and TODO retries.
    *
@@ -25,6 +32,8 @@ public abstract class TrexEngine {
   abstract void setRandomTimeout();
 
   abstract void resetTimeout();
+
+  Semaphore mutex = new Semaphore(1);
 
   /**
    * The main entry point for the Trex paxos algorithm. This method will recurse without returning when we need to
@@ -42,7 +51,21 @@ public abstract class TrexEngine {
    * @return A list of messages to send out to the cluster. Normally it will be one message yet recovery will prepare many slots.
    * @throws AssertionError If the algorithm is in an invalid state.
    */
-  public synchronized List<TrexMessage> paxos(TrexMessage input) {
+  public List<TrexMessage> paxos(TrexMessage input) {
+    try {
+      mutex.acquire();
+      try {
+        return paxosSingleThread(input);
+      } finally {
+        mutex.release();
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException("Interrupted");
+    }
+  }
+
+  List<TrexMessage> paxosSingleThread(TrexMessage input) {
     /*
      * If we are not the leader. And we receive a commit message from another node. And the log index is greater than
      * our current progress. We interrupt the timeout thread to stop the timeout and recreate it.
@@ -62,10 +85,20 @@ public abstract class TrexEngine {
   }
 
   public Optional<Prepare> timeout() {
-    return trexNode.timeout();
+    var oldRole = trexNode.getRole();
+    var result = trexNode.timeout();
+    var newRole = trexNode.getRole();
+    LOGGER.info(trexNode.nodeIdentifier() + " " + trexNode.getRole());
+    return result;
   }
 
   public List<TrexMessage> receive(TrexMessage p) {
-    return trexNode.paxos(p);
+    var oldRole = trexNode.getRole();
+    var result = trexNode.paxos(p);
+    var newRole = trexNode.getRole();
+    if( oldRole != newRole ){
+      LOGGER.info(trexNode.nodeIdentifier() + " " + newRole);
+    }
+    return result;
   }
 }

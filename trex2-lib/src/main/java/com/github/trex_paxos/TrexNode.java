@@ -104,7 +104,7 @@ public class TrexNode {
         var number = prepare.number();
         if (number.lessThan(progress.highestPromised()) || prepare.logIndex() <= progress.highestCommitted()) {
           // nack a low prepare else any prepare for a committed slot sending any accepts they are missing
-          messages.add(prepare.from(), nack(prepare, loadCatchup(prepare.logIndex())));
+          messages.add(nack(prepare, loadCatchup(prepare.logIndex())));
         } else if (number.greaterThan(progress.highestPromised())) {
           // ack a higher prepare
           final var newProgress = progress.withHighestPromised(prepare.number());
@@ -112,7 +112,7 @@ public class TrexNode {
           messages.add(ack(prepare));
           this.progress = newProgress;
           // leader or recoverer should give way to a higher prepare
-          if (this.role != FOLLOW)
+          if (prepare.number().nodeIdentifier() != nodeIdentifier && role != FOLLOW)
             backdown();
         } else if (number.equals(progress.highestPromised())) {
           messages.add(ack(prepare));
@@ -476,4 +476,7 @@ public class TrexNode {
     return new Commit(nodeIdentifier, progress.highestCommitted());
   }
 
+  public TrexRole getRole() {
+    return role;
+  }
 }
