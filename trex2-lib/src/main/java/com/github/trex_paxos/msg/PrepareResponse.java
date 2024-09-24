@@ -9,7 +9,7 @@ import java.util.Optional;
 
 public record PrepareResponse(Vote vote,
                               Optional<Accept> highestUncommitted,
-                              Optional<CatchupResponse> catchupResponse) implements TrexMessage {
+                              Optional<CatchupResponse> catchupResponse) implements TrexMessage, DirectMessage {
   public byte from() {
     return vote.from();
   }

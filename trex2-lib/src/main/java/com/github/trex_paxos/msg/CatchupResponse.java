@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public record CatchupResponse(byte from, byte to, long highestCommittedIndex,
-                              List<Accept> catchup) implements TrexMessage {
+                              List<Accept> catchup) implements TrexMessage, DirectMessage {
   public static CatchupResponse readFrom(DataInputStream dis) throws IOException {
     final byte from = dis.readByte();
     final byte to = dis.readByte();

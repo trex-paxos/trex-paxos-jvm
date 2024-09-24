@@ -4,6 +4,7 @@ import com.github.trex_paxos.msg.Commit;
 import com.github.trex_paxos.msg.Prepare;
 import com.github.trex_paxos.msg.TrexMessage;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
@@ -39,19 +40,23 @@ public abstract class TrexEngine {
    * The main entry point for the Trex paxos algorithm. This method will recurse without returning when we need to
    * send a message to ourselves. As a side effect the progress record will be updated and the journal will be updated.
    * <p>
-   * After this method returns the application must first commit both the updated progress and the updated log to disk
-   * using an `fsync` or equivalent which is FileDescriptor::sync in Java. Only after the kernel has flushed any disk
-   * buffers and confirmed that the updated state is on disk the application can send the messages out to the cluster.
+   * After this method returns the application must first commit both the updated progress and the updated log to durable
+   * storage using something like `fsync` or equivalent which is FileDescriptor::sync in Java. Only after the kernel has
+   * the durable storage and confirmed that the state survives a crash can we send the returned messages.
    * <p>
-   * As an optimisation the leader can prepend a fresh commit message to the outbound messages.
+   * As an optimisation the leader can choose to prepend a fresh commit message to the outbound messages.
    * <p>
-   * This method is synchronized as we should only process a single Paxos message. It also recreates the timeout thread.
+   * This method uses a mutex as we should only process a single Paxos message and update durable storage one at a time.
    *
    * @param input The message to process.
-   * @return A list of messages to send out to the cluster. Normally it will be one message yet recovery will prepare many slots.
+   * @return A list of messages to send out to the cluster. Typically, a single message yet recovery may prepare many slots.
    * @throws AssertionError If the algorithm is in an invalid state.
    */
   public List<TrexMessage> paxos(TrexMessage input) {
+    // if we are using broadcast technology we should ignore messages sent from the same node.
+    if (input.from() == trexNode.nodeIdentifier()) {
+      return Collections.emptyList();
+    }
     try {
       mutex.acquire();
       try {
@@ -65,7 +70,12 @@ public abstract class TrexEngine {
     }
   }
 
+  /**
+   * This method is not public as it is not thread safe. It is called from the public paxos method which is protected
+   * by a mutex.
+   */
   List<TrexMessage> paxosSingleThread(TrexMessage input) {
+
     /*
      * If we are not the leader. And we receive a commit message from another node. And the log index is greater than
      * our current progress. We interrupt the timeout thread to stop the timeout and recreate it.

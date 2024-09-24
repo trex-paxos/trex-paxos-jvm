@@ -4,7 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public record Prepare(byte from, long logIndex, BallotNumber number) implements TrexMessage {
+public record Prepare(byte from, long logIndex, BallotNumber number) implements TrexMessage, BroadcastMessage {
 
     public static Prepare readFrom(DataInputStream dataInputStream) throws IOException {
       final byte from = dataInputStream.readByte();

@@ -42,12 +42,12 @@ public class TrexNode {
   /**
    * During a recovery we will track all the slots that we are probing to find the highest accepted operationBytes.
    */
-  NavigableMap<Long, Map<Byte, PrepareResponse>> prepareResponsesByLogIndex = new TreeMap<>();
+  final NavigableMap<Long, Map<Byte, PrepareResponse>> prepareResponsesByLogIndex = new TreeMap<>();
 
   /**
    * When leading we will track the responses to a stream of accept messages.
    */
-  NavigableMap<Long, AcceptVotes> acceptVotesByLogIndex = new TreeMap<>();
+  final NavigableMap<Long, AcceptVotes> acceptVotesByLogIndex = new TreeMap<>();
 
   /**
    * The host application will need to learn that a log index has been chosen.
@@ -182,7 +182,9 @@ public class TrexNode {
       case PrepareResponse prepareResponse -> {
         if (RECOVER == role) {
           if (prepareResponse.catchupResponse().isPresent()) {
-            if (prepareResponse.highestUncommitted().isPresent()) {
+            // FIXME we should handle this
+          }
+          if (prepareResponse.highestUncommitted().isPresent()) {
               //noinspection OptionalGetWithoutIsPresent
               final long highestCommittedOther = prepareResponse.highestCommittedIndex().get();
               final long highestCommitted = progress.highestCommitted();
@@ -192,70 +194,67 @@ public class TrexNode {
                 // this may be evidence of a new leader so back down
                 backdown();
               }
-            } else if (prepareResponse.vote().to() == nodeIdentifier) {
-              final byte from = prepareResponse.from();
-              final long logIndex = prepareResponse.vote().logIndex();
-              Optional.ofNullable(prepareResponsesByLogIndex.get(logIndex)).ifPresent(
-                  votes -> {
-                    votes.put(from, prepareResponse);
-                    Set<Vote> vs = votes.values().stream()
-                        .map(PrepareResponse::vote).collect(Collectors.toSet());
-                    final var quorumOutcome = quorumStrategy.assessPromises(logIndex, vs);
-                    switch (quorumOutcome) {
-                      case WAIT ->
-                        // do nothing as a quorum has not yet been reached.
-                          prepareResponsesByLogIndex.put(logIndex, votes);
-                      case LOSE ->
-                        // we are unable to achieve a quorum, so we must back down
-                          backdown();
-                      case WIN -> {
-                        // first issue new prepare messages for higher slots
-                        //noinspection OptionalGetWithoutIsPresent
-                        votes.values().stream()
-                            .filter(p -> p.highestCommittedIndex().isPresent())
-                            .map(p -> p.highestCommittedIndex().get())
-                            .max(Long::compareTo)
-                            .ifPresent(higherAcceptedSlot -> {
-                              final long highestLogIndexProbed = prepareResponsesByLogIndex.lastKey();
-                              if (higherAcceptedSlot > highestLogIndexProbed) {
-                                term.ifPresent(epoch ->
-                                    LongStream.range(higherAcceptedSlot + 1, highestLogIndexProbed + 1)
-                                        .forEach(slot -> {
-                                          prepareResponsesByLogIndex.put(slot, new HashMap<>());
-                                          messages.add(new Prepare(nodeIdentifier, slot, epoch));
-                                        }));
-                              }
-                            });
+          } else if (prepareResponse.vote().to() == nodeIdentifier) {
+            final byte from = prepareResponse.from();
+            final long logIndex = prepareResponse.vote().logIndex();
 
-                        // find the highest accepted command if any
-                        AbstractCommand highestAcceptedCommand = votes.values().stream()
-                            .map(PrepareResponse::highestUncommitted)
-                            .filter(Optional::isPresent)
-                            .map(Optional::get)
-                            .max(Accept::compareTo)
-                            .map(Accept::command)
-                            .orElse(NoOperation.NOOP);
-
-                        term.ifPresent(e -> {
-                          // use the highest accepted command to issue an Accept
-                          Accept accept = new Accept(nodeIdentifier, logIndex, e, highestAcceptedCommand);
-                          // issue the accept messages
-                          messages.add(accept);
-                          // create the empty map to track the responses
-                          acceptVotesByLogIndex.put(logIndex, new AcceptVotes(accept));
-                          // self vote for the Accept
-                          selfVoteOnAccept(accept);
-                          // we are no long awaiting the prepare for the current slot
-                          prepareResponsesByLogIndex.remove(logIndex);
-                          // if we have had no evidence of higher accepted operationBytes we can promote
-                          if (prepareResponsesByLogIndex.isEmpty()) {
-                            this.role = LEAD;
-                          }
-                        });
+            final var votes = prepareResponsesByLogIndex.computeIfAbsent(logIndex, _ -> new HashMap<>());
+            votes.put(from, prepareResponse);
+            Set<Vote> vs = votes.values().stream()
+                .map(PrepareResponse::vote).collect(Collectors.toSet());
+            final var quorumOutcome = quorumStrategy.assessPromises(logIndex, vs);
+            switch (quorumOutcome) {
+              case WAIT ->
+                // do nothing as a quorum has not yet been reached.
+                  prepareResponsesByLogIndex.put(logIndex, votes);
+              case LOSE ->
+                // we are unable to achieve a quorum, so we must back down
+                  backdown();
+              case WIN -> {
+                // first issue new prepare messages for higher slots
+                //noinspection OptionalGetWithoutIsPresent
+                votes.values().stream()
+                    .filter(p -> p.highestCommittedIndex().isPresent())
+                    .map(p -> p.highestCommittedIndex().get())
+                    .max(Long::compareTo)
+                    .ifPresent(higherAcceptedSlot -> {
+                      final long highestLogIndexProbed = prepareResponsesByLogIndex.lastKey();
+                      if (higherAcceptedSlot > highestLogIndexProbed) {
+                        term.ifPresent(epoch ->
+                            LongStream.range(higherAcceptedSlot + 1, highestLogIndexProbed + 1)
+                                .forEach(slot -> {
+                                  prepareResponsesByLogIndex.put(slot, new HashMap<>());
+                                  messages.add(new Prepare(nodeIdentifier, slot, epoch));
+                                }));
                       }
-                    }
+                    });
+
+                // find the highest accepted command if any
+                AbstractCommand highestAcceptedCommand = votes.values().stream()
+                    .map(PrepareResponse::highestUncommitted)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .max(Accept::compareTo)
+                    .map(Accept::command)
+                    .orElse(NoOperation.NOOP);
+
+                term.ifPresent(e -> {
+                  // use the highest accepted command to issue an Accept
+                  Accept accept = new Accept(nodeIdentifier, logIndex, e, highestAcceptedCommand);
+                  // issue the accept messages
+                  messages.add(accept);
+                  // create the empty map to track the responses
+                  acceptVotesByLogIndex.put(logIndex, new AcceptVotes(accept));
+                  // self vote for the Accept
+                  selfVoteOnAccept(accept);
+                  // we are no long awaiting the prepare for the current slot
+                  prepareResponsesByLogIndex.remove(logIndex);
+                  // if we have had no evidence of higher accepted operationBytes we can promote
+                  if (prepareResponsesByLogIndex.isEmpty()) {
+                    this.role = LEAD;
                   }
-              );
+                });
+              }
             }
           }
         }
@@ -352,8 +351,8 @@ public class TrexNode {
 
   void backdown() {
     this.role = FOLLOW;
-    prepareResponsesByLogIndex = new TreeMap<>();
-    acceptVotesByLogIndex = new TreeMap<>();
+    prepareResponsesByLogIndex.clear();
+    acceptVotesByLogIndex.clear();
     term = Optional.empty();
   }
 

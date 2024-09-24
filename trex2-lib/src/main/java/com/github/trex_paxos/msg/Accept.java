@@ -7,7 +7,7 @@ import java.io.IOException;
 public record Accept(byte from,
                      long logIndex,
                      BallotNumber number,
-                     AbstractCommand command) implements TrexMessage, JournalRecord {
+                     AbstractCommand command) implements TrexMessage, BroadcastMessage, JournalRecord {
 
     final static byte NOOP = 1;
     final static byte COMMAND = 2;

@@ -1,20 +1,15 @@
 package com.github.trex_paxos;
 
-
 import com.github.trex_paxos.msg.*;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
-import java.util.logging.ConsoleHandler;
-import java.util.logging.LogRecord;
-import java.util.logging.SimpleFormatter;
+import java.util.logging.Logger;
 import java.util.random.RandomGenerator;
 import java.util.random.RandomGeneratorFactory;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,11 +21,6 @@ class Simulation {
   public Simulation(RandomGenerator rng, long maxTimeout) {
     this.maxTimeout = maxTimeout;
     this.rng = rng;
-  }
-
-  public static void main(String[] args) {
-    RandomGenerator rng = repeatableRandomGenerator(1234);
-    new Simulation(rng, 30).run(100);
   }
 
   static RandomGenerator repeatableRandomGenerator(long seed) {
@@ -76,7 +66,6 @@ class Simulation {
 
   private void setRandomTimeout(byte nodeIdentifier) {
     final var timeout = rng.nextInt((int) maxTimeout);
-    //final var now = eventQueue.isEmpty() ? 0 : eventQueue.firstEntry().getKey();
     final var when = now() + timeout;
     nodeTimeouts.put(nodeIdentifier, when);
     final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
@@ -98,13 +87,12 @@ class Simulation {
   );
 
   void run(int iterations) {
-
     // start will launch some timeouts into the event queue
     trexEngine1.start();
     trexEngine2.start();
     trexEngine3.start();
 
-    IntStream.range(0, iterations).forEach(_ -> {
+    final var _ = IntStream.range(0, iterations).anyMatch(_ -> {
       Optional.ofNullable(eventQueue.pollFirstEntry()).ifPresent(timeWithEvents -> {
 
         // advance the clock
@@ -129,13 +117,8 @@ class Simulation {
           // if it is a message that has arrived run paxos
           else if (event instanceof Send send) {
             return switch (send.message()) {
-              case Prepare m -> engines.values().stream().flatMap(engine -> engine.paxos(m).stream());
-              case Accept m -> engines.values().stream().flatMap(engine -> engine.paxos(m).stream());
-              case Commit m -> engines.values().stream().flatMap(engine -> engine.paxos(m).stream());
-              case PrepareResponse m -> engines.get(m.to()).paxos(m).stream();
-              case AcceptResponse m -> engines.get(m.to()).paxos(m).stream();
-              case Catchup m -> engines.get(m.to()).paxos(m).stream();
-              case CatchupResponse m -> engines.get(m.to()).paxos(m).stream();
+              case BroadcastMessage m -> engines.values().stream().flatMap(engine -> engine.paxos(m).stream());
+              case DirectMessage m -> engines.get(m.to()).paxos(m).stream();
             };
           }
           throw new AssertionError("unexpected event: " + event);
@@ -153,6 +136,8 @@ class Simulation {
           nextTimeList.addAll(newMessages.stream().map(m -> new Send(m.from(), m)).toList());
         }
       });
+      // if the event queue is empty we are done
+      return this.eventQueue.isEmpty();
     });
   }
 
@@ -192,11 +177,11 @@ class Simulation {
       this.progress = progress;
     }
 
-    List<Accept> fakeJournal = new ArrayList<>(100);
+    NavigableMap<Long, Accept> fakeJournal = new TreeMap<>();
 
     @Override
     public void journalAccept(Accept accept) {
-      fakeJournal.set((int) accept.logIndex(), accept);
+      fakeJournal.put(accept.logIndex(), accept);
     }
 
     @Override

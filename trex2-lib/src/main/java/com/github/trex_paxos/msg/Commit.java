@@ -4,7 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public record Commit(byte from, long logIndex) implements TrexMessage {
+public record Commit(byte from, long logIndex) implements TrexMessage, BroadcastMessage {
 
   public void writeTo(DataOutputStream dos) throws IOException {
     dos.writeByte(from);

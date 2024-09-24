@@ -4,7 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public record Catchup(byte from, byte to, long highestCommittedIndex) implements TrexMessage {
+public record Catchup(byte from, byte to, long highestCommittedIndex) implements TrexMessage, DirectMessage {
   public static Catchup readFrom(DataInputStream dis) throws IOException {
     return new Catchup(dis.readByte(), dis.readByte(), dis.readLong());
   }

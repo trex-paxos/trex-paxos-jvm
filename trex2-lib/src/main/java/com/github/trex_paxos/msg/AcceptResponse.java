@@ -6,7 +6,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public record AcceptResponse(Vote vote, Progress progress) implements TrexMessage {
+public record AcceptResponse(Vote vote, Progress progress) implements TrexMessage, DirectMessage {
 
   /**
    * @return the proposer that sent the request
