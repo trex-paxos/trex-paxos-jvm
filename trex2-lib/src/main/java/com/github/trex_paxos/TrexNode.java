@@ -181,18 +181,16 @@ public class TrexNode {
       }
       case PrepareResponse prepareResponse -> {
         if (RECOVER == role) {
-          if (prepareResponse.catchupResponse().isPresent()) {
-            // FIXME we should handle this
-          }
-          if (prepareResponse.highestUncommitted().isPresent()) {
-              //noinspection OptionalGetWithoutIsPresent
+          if (prepareResponse.highestUncommitted().isPresent() && prepareResponse.highestCommittedIndex().isPresent()) {
               final long highestCommittedOther = prepareResponse.highestCommittedIndex().get();
               final long highestCommitted = progress.highestCommitted();
               if (highestCommitted < highestCommittedOther) {
                 // we are behind so now try to catch up
-                saveCatchup(prepareResponse.catchupResponse().get());
-                // this may be evidence of a new leader so back down
-                backdown();
+                prepareResponse.catchupResponse().ifPresent(catchupResponse -> {
+                  saveCatchup(catchupResponse);
+                  // this is evidence of a new leader so back down
+                  backdown();
+                });
               }
           } else if (prepareResponse.vote().to() == nodeIdentifier) {
             final byte from = prepareResponse.from();

@@ -191,7 +191,7 @@ class Simulation {
 
     @Override
     public Optional<Accept> loadAccept(long logIndex) {
-      return logIndex >= fakeJournal.size() ? Optional.empty() : Optional.ofNullable(fakeJournal.get((int) logIndex));
+      return Optional.ofNullable(fakeJournal.get(logIndex));
     }
   }
 
