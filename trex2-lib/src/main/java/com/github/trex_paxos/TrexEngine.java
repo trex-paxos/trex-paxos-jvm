@@ -4,8 +4,6 @@ import com.github.trex_paxos.msg.Commit;
 import com.github.trex_paxos.msg.Prepare;
 import com.github.trex_paxos.msg.TrexMessage;
 
-import java.util.Collections;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
 import java.util.logging.Logger;
@@ -22,9 +20,7 @@ public abstract class TrexEngine {
   /**
    * Create a new TrexEngine which uses virtual threads for timeouts, heartbeats and TODO retries.
    *
-   * @param trexNode   The underlying TrexNode.
-   * @param minTimeout The minimum timeout in milliseconds. This should be greater than 2x time max latency plush 2x disk fsych time.
-   * @param maxTimeout The maximum timeout in milliseconds. The actual timeout will be a random value between minTimeout and maxTimeout.
+   * @param trexNode  The underlying TrexNode.
    */
   public TrexEngine(TrexNode trexNode) {
     this.trexNode = trexNode;
@@ -33,6 +29,8 @@ public abstract class TrexEngine {
   abstract void setRandomTimeout();
 
   abstract void resetTimeout();
+
+  abstract void setHeatbeat();
 
   Semaphore mutex = new Semaphore(1);
 
@@ -49,18 +47,18 @@ public abstract class TrexEngine {
    * This method uses a mutex as we should only process a single Paxos message and update durable storage one at a time.
    *
    * @param input The message to process.
-   * @return A list of messages to send out to the cluster. Typically, a single message yet recovery may prepare many slots.
+   * @return A list of messages to send out to the cluster and/or a list of selected Commands.
    * @throws AssertionError If the algorithm is in an invalid state.
    */
-  public List<TrexMessage> paxos(TrexMessage input) {
-    // if we are using broadcast technology we should ignore messages sent from the same node.
+  public TrexResult paxos(TrexMessage input) {
+    // we should ignore messages sent from ourselves.
     if (input.from() == trexNode.nodeIdentifier()) {
-      return Collections.emptyList();
+      return TrexResult.noResult();
     }
     try {
       mutex.acquire();
       try {
-        return paxosSingleThread(input);
+        return paxosNotThreadSafe(input);
       } finally {
         mutex.release();
       }
@@ -73,13 +71,14 @@ public abstract class TrexEngine {
   /**
    * This method is not public as it is not thread safe. It is called from the public paxos method which is protected
    * by a mutex.
+   * <p>
+   * If we are not the leader. And we receive a commit message from another node. And the log index is greater than
+   * our current progress. We interrupt the timeout thread to stop the timeout and recreate it.
+   * <p>
+   * We then run our paxos algorithm and if we are the leader we set the heartbeat. If we are not the leader we set
+   * a new timeout.
    */
-  List<TrexMessage> paxosSingleThread(TrexMessage input) {
-
-    /*
-     * If we are not the leader. And we receive a commit message from another node. And the log index is greater than
-     * our current progress. We interrupt the timeout thread to stop the timeout and recreate it.
-     */
+  TrexResult paxosNotThreadSafe(TrexMessage input) {
     if (input instanceof Commit(final var from, final var logIndex)
         && !trexNode.isLeader()
         && from != trexNode.nodeIdentifier()
@@ -87,7 +86,13 @@ public abstract class TrexEngine {
     ) {
       resetTimeout();
     }
-    return trexNode.paxos(input);
+    final var result = trexNode.paxos(input);
+    if (trexNode.isLeader()) {
+      setHeatbeat();
+    } else {
+      resetTimeout();
+    }
+    return result;
   }
 
   public void start() {
@@ -95,20 +100,26 @@ public abstract class TrexEngine {
   }
 
   public Optional<Prepare> timeout() {
-    var oldRole = trexNode.getRole();
     var result = trexNode.timeout();
-    var newRole = trexNode.getRole();
-    LOGGER.info(trexNode.nodeIdentifier() + " " + trexNode.getRole());
+    LOGGER.info("timeout: " + trexNode.nodeIdentifier() + " " + trexNode.getRole());
+    setRandomTimeout();
     return result;
   }
 
-  public List<TrexMessage> receive(TrexMessage p) {
+  public TrexResult receive(TrexMessage p) {
     var oldRole = trexNode.getRole();
     var result = trexNode.paxos(p);
     var newRole = trexNode.getRole();
     if( oldRole != newRole ){
       LOGGER.info(trexNode.nodeIdentifier() + " " + newRole);
     }
+    return result;
+  }
+
+  public Optional<Commit> hearbeat() {
+    var result = trexNode.heartbeat();
+    LOGGER.info("heartbeat: " + trexNode.nodeIdentifier() + " " + trexNode.getRole());
+    setHeatbeat();
     return result;
   }
 }

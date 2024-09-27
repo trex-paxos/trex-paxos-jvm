@@ -8,7 +8,24 @@ import java.util.stream.LongStream;
 
 import static com.github.trex_paxos.TrexRole.*;
 
+/// A TrexNode is a single node in a Paxos cluster. It is responsible for managing the Paxos algorithm. It requires
+/// two collaborating classes:
+/// *  A [Journal] which must be crash durable storage.
 public class TrexNode {
+  /**
+   * Create a new TrexNode that will load the current progress from the journal. The journal must have been pre-initialised.
+   *
+   * @param nodeIdentifier The unique node identifier. This must be unique across the cluster and across enough time for prior messages to have been forgotten.
+   * @param quorumStrategy The quorum strategy that may be a simple majority, else things like FPaxos or UPaxos
+   * @param journal        The durable storage and durable log. This must be pre-initialised.
+   */
+  public TrexNode(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal) {
+    this.nodeIdentifier = nodeIdentifier;
+    this.journal = journal;
+    this.quorumStrategy = quorumStrategy;
+    this.progress = journal.loadProgress(nodeIdentifier);
+  }
+
   /**
    * The current node identifier. This must be globally unique.
    */
@@ -50,38 +67,19 @@ public class TrexNode {
   final NavigableMap<Long, AcceptVotes> acceptVotesByLogIndex = new TreeMap<>();
 
   /**
-   * The host application will need to learn that a log index has been chosen.
-   */
-  final HostApplication hostApplication;
-
-  /**
    * When we are leader we need to now the highest ballot number to use.
    */
-  Optional<BallotNumber> term = Optional.empty();
-
-  /**
-   * Create a new TrexNode that will load the current progress from the journal. The journal must have been pre-initialised.
-   *
-   * @param nodeIdentifier  The unique node identifier. This must be unique across the cluster and across enough time for prior messages to have been forgotten.
-   * @param quorumStrategy  The quorum strategy that may be a simple majority, else things like FPaxos or UPaxos
-   * @param journal         The durable storage and durable log. This must be pre-initialised.
-   * @param hostApplication The host application that will be called back when a command is chosen or deal with heartbeats and timeouts.
-   */
-  public TrexNode(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal, HostApplication hostApplication) {
-    this.nodeIdentifier = nodeIdentifier;
-    this.journal = journal;
-    this.quorumStrategy = quorumStrategy;
-    this.hostApplication = hostApplication;
-    this.progress = journal.loadProgress(nodeIdentifier);
-  }
+  BallotNumber term = null;
 
   /**
    * This is the main Paxos Algorithm. It is not public as the timeout logic needs to first intercept Commit messages.
    * @param input The message to process.
-   * @return A list of messages to send out to the cluster.
+   * @return A list of messages to send out to the cluster and/or a list of chosen commands to up-call to the host
+   * application.
    */
-  List<TrexMessage> paxos(TrexMessage input) {
+  TrexResult paxos(TrexMessage input) {
     List<TrexMessage> messages = new ArrayList<>();
+    List<Command> commands = new ArrayList<>();
     switch (input) {
       case Accept accept -> {
         if (lowerAccept(progress, accept) || higherAcceptForCommittedSlot(accept, progress)) {
@@ -155,7 +153,7 @@ public class TrexNode {
                         case Accept(_, _, _, NoOperation _) -> {
                           // NOOP
                         }
-                        case Accept(_, _, _, final var command) -> hostApplication.upCall((Command) command);
+                        case Accept(_, _, _, final Command command) -> commands.add(command);
                       }
                     }
                     // free the memory
@@ -210,7 +208,6 @@ public class TrexNode {
                   backdown();
               case WIN -> {
                 // first issue new prepare messages for higher slots
-                //noinspection OptionalGetWithoutIsPresent
                 votes.values().stream()
                     .filter(p -> p.highestCommittedIndex().isPresent())
                     .map(p -> p.highestCommittedIndex().get())
@@ -218,7 +215,7 @@ public class TrexNode {
                     .ifPresent(higherAcceptedSlot -> {
                       final long highestLogIndexProbed = prepareResponsesByLogIndex.lastKey();
                       if (higherAcceptedSlot > highestLogIndexProbed) {
-                        term.ifPresent(epoch ->
+                        Optional.ofNullable(term).ifPresent(epoch ->
                             LongStream.range(higherAcceptedSlot + 1, highestLogIndexProbed + 1)
                                 .forEach(slot -> {
                                   prepareResponsesByLogIndex.put(slot, new HashMap<>());
@@ -236,7 +233,7 @@ public class TrexNode {
                     .map(Accept::command)
                     .orElse(NoOperation.NOOP);
 
-                term.ifPresent(e -> {
+                Optional.ofNullable(term).ifPresent(e -> {
                   // use the highest accepted command to issue an Accept
                   Accept accept = new Accept(nodeIdentifier, logIndex, e, highestAcceptedCommand);
                   // issue the accept messages
@@ -261,7 +258,6 @@ public class TrexNode {
         final var lastCommittedIndex = progress.highestCommitted();
         if (maxSlotCommittable > lastCommittedIndex) {
           // we may have gaps, so we must find the ones that we have in the log
-          //noinspection OptionalGetWithoutIsPresent
           final var commitableAccepts =
               LongStream.range(lastCommittedIndex + 1, maxSlotCommittable + 1)
                   .mapToObj(journal::loadAccept)
@@ -275,9 +271,9 @@ public class TrexNode {
           for (var accept : commitableAccepts) {
             switch (accept) {
               case Accept(final var logIndex, _, _, NoOperation _) -> newHighestCommitted = logIndex;
-              case Accept(final var logIndex, _, _, final var command) -> {
+              case Accept(final var logIndex, _, _, final Command command) -> {
                 newHighestCommitted = logIndex;
-                hostApplication.upCall((Command) command);
+                commands.add(command);
               }
             }
           }
@@ -300,7 +296,7 @@ public class TrexNode {
           saveCatchup((CatchupResponse) input);
       }
     }
-    return messages;
+    return new TrexResult(messages, commands);
   }
 
   private void selfVoteOnAccept(Accept accept) {
@@ -351,7 +347,7 @@ public class TrexNode {
     this.role = FOLLOW;
     prepareResponsesByLogIndex.clear();
     acceptVotesByLogIndex.clear();
-    term = Optional.empty();
+    term = null;
   }
 
   /**
@@ -410,16 +406,16 @@ public class TrexNode {
    */
   Optional<Accept> startAppendToLog(Command command) {
     assert role == LEAD : "role={" + role + "}";
-    if (term.isPresent()) {
+    if (term != null) {
       final long slot = progress.highestAccepted() + 1;
-      final var accept = new Accept(nodeIdentifier, slot, term.get(), command);
+      final var accept = new Accept(nodeIdentifier, slot, term, command);
       // this could self accept else self reject
       final var actOrNack = this.paxos(accept);
-      assert actOrNack.size() == 1 : "accept response should be a single messages={" + actOrNack + "}";
+      assert actOrNack.messages().size() == 1 : "accept response should be a single messages={" + actOrNack + "}";
       // update state on the self accept or reject
-      final var updated = this.paxos(actOrNack.getFirst());
+      final var updated = this.paxos(actOrNack.messages().getFirst());
       // we should not have any messages to send as we have not sent out the message to get a commit.
-      assert updated.isEmpty() : "updated should be empty={" + updated + "}";
+      assert updated.messages().isEmpty() : "updated should be empty={" + updated + "}";
       // return the Accept which should be sent out to the cluster.
       return Optional.of(accept);
     } else
@@ -456,10 +452,10 @@ public class TrexNode {
   Optional<Prepare> timeout() {
     if (role == FOLLOW) {
       role = RECOVER;
-      term = Optional.of(new BallotNumber(progress.highestPromised().counter() + 1, nodeIdentifier));
-      final var prepare = new Prepare(nodeIdentifier, progress.highestCommitted() + 1, term.get());
+      term = new BallotNumber(progress.highestPromised().counter() + 1, nodeIdentifier);
+      final var prepare = new Prepare(nodeIdentifier, progress.highestCommitted() + 1, term);
       final var selfPrepareResponse = paxos(prepare);
-      assert selfPrepareResponse.size() == 1 : "selfPrepare={" + selfPrepareResponse + "}";
+      assert selfPrepareResponse.messages().size() == 1 : "selfPrepare={" + selfPrepareResponse + "}";
       return Optional.of(prepare);
     }
     return Optional.empty();
@@ -469,11 +465,12 @@ public class TrexNode {
     return role.equals(LEAD);
   }
 
-  Commit heartbeatCommit() {
-    return new Commit(nodeIdentifier, progress.highestCommitted());
-  }
-
   public TrexRole getRole() {
     return role;
+  }
+
+  public Optional<Commit> heartbeat() {
+    final var commit = role == LEAD ? new Commit(nodeIdentifier, progress.highestCommitted()) : null;
+    return Optional.ofNullable(commit);
   }
 }

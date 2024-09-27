@@ -17,10 +17,14 @@ class Simulation {
   static final Logger LOGGER = Logger.getLogger(Simulation.class.getName());
   private final RandomGenerator rng;
   private final long maxTimeout;
+  private final long halfTimeout;
 
   public Simulation(RandomGenerator rng, long maxTimeout) {
     this.maxTimeout = maxTimeout;
     this.rng = rng;
+    halfTimeout = maxTimeout / 2;
+    assert this.maxTimeout > 1;
+    assert this.halfTimeout > 0 && this.halfTimeout < this.maxTimeout;
   }
 
   static RandomGenerator repeatableRandomGenerator(long seed) {
@@ -33,13 +37,16 @@ class Simulation {
 
   Map<Byte,Long> nodeTimeouts = new HashMap<>();
 
-  sealed interface Event permits Timeout, Send {
+  sealed interface Event permits Heartbeat, Send, Timeout {
   }
 
   record Timeout(byte nodeIdentifier) implements Event {
   }
 
   record Send(byte from, TrexMessage message) implements Event {
+  }
+
+  record Heartbeat(byte nodeIdentifier) implements Event {
   }
 
   NavigableMap<Long,List<Event>> eventQueue = new TreeMap<>();
@@ -72,8 +79,10 @@ class Simulation {
     events.add(new Timeout(nodeIdentifier));
   }
 
-  private void upCall(Command chosenCommand) {
-    throw new AssertionError("not implemented");
+  private void setHeartbeat(byte nodeIdentifier) {
+    final var when = now() + halfTimeout;
+    final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
+    events.add(new Heartbeat(nodeIdentifier));
   }
 
   final TrexEngine trexEngine1 = trexEngine((byte) 1);
@@ -92,7 +101,7 @@ class Simulation {
     trexEngine2.start();
     trexEngine3.start();
 
-    final var _ = IntStream.range(0, iterations).anyMatch(_ -> {
+    final var _ = IntStream.range(0, iterations).anyMatch(i -> {
       Optional.ofNullable(eventQueue.pollFirstEntry()).ifPresent(timeWithEvents -> {
 
         // advance the clock
@@ -104,24 +113,39 @@ class Simulation {
         // for what is in the queue of events at this time
         final List<TrexMessage> newMessages = events.stream().flatMap(event -> {
           LOGGER.info("\tevent: " + event);
-          if (event instanceof Timeout timeout) {
-            // if it is a timeout collect the message
-            final var prepare = switch (timeout.nodeIdentifier) {
-              case 1 -> trexEngine1.timeout();
-              case 2 -> trexEngine2.timeout();
-              case 3 -> trexEngine3.timeout();
-              default -> throw new IllegalStateException("Unexpected value: " + timeout.nodeIdentifier);
-            };
-            return prepare.stream();
+          switch (event) {
+            case Timeout timeout -> {
+              // if it is a timeout collect the prepare message if the node is still a follower at this time
+              final var prepare = switch (timeout.nodeIdentifier) {
+                case 1 -> trexEngine1.timeout();
+                case 2 -> trexEngine2.timeout();
+                case 3 -> trexEngine3.timeout();
+                default ->
+                    throw new IllegalStateException("Unexpected node identifier for timeout: " + timeout.nodeIdentifier);
+              };
+              return prepare.stream();
+            }
+
+            // if it is a message that has arrived run paxos
+            case Send send -> {
+              return switch (send.message()) {
+                case BroadcastMessage m ->
+                    engines.values().stream().flatMap(engine -> engine.paxos(m).messages().stream());
+                case DirectMessage m -> engines.get(m.to()).paxos(m).messages().stream();
+              };
+            }
+            case Heartbeat heartbeat -> {
+              // if it is a timeout collect the prepare message if the node is still a follower at this time
+              final var commit = switch (heartbeat.nodeIdentifier) {
+                case 1 -> trexEngine1.hearbeat();
+                case 2 -> trexEngine2.hearbeat();
+                case 3 -> trexEngine3.hearbeat();
+                default ->
+                    throw new IllegalStateException("Unexpected node identifier for heartbeat: " + heartbeat.nodeIdentifier);
+              };
+              return commit.stream();
+            }
           }
-          // if it is a message that has arrived run paxos
-          else if (event instanceof Send send) {
-            return switch (send.message()) {
-              case BroadcastMessage m -> engines.values().stream().flatMap(engine -> engine.paxos(m).stream());
-              case DirectMessage m -> engines.get(m.to()).paxos(m).stream();
-            };
-          }
-          throw new AssertionError("unexpected event: " + event);
         }).toList();
 
         if( !newMessages.isEmpty() ){
@@ -137,21 +161,24 @@ class Simulation {
         }
       });
       // if the event queue is empty we are done
-      return this.eventQueue.isEmpty();
+      final var finished = this.eventQueue.isEmpty();
+      if (finished) {
+        LOGGER.info("finished on iteration: " + i);
+      }
+      return finished;
     });
   }
 
   private TestablePaxosEngine trexEngine(byte nodeIdentifier) {
     return new TestablePaxosEngine(nodeIdentifier,
         QuorumStrategy.SIMPLE_MAJORITY,
-        new TransparentJournal(nodeIdentifier),
-        new TestableHostApplication(nodeIdentifier));
+        new TransparentJournal(nodeIdentifier));
   }
 
   class TestablePaxosEngine extends TrexEngine {
 
-    public TestablePaxosEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal, HostApplication hostApplication) {
-      super(new TrexNode(nodeIdentifier, quorumStrategy, journal, hostApplication));
+    public TestablePaxosEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal) {
+      super(new TrexNode(nodeIdentifier, quorumStrategy, journal));
     }
 
     @Override
@@ -161,7 +188,12 @@ class Simulation {
 
     @Override
     void resetTimeout() {
-      Simulation.this.resetTimeout(trexNode.nodeIdentifier());
+      Simulation.this.resetTimeout(trexNode.nodeIdentifier);
+    }
+
+    @Override
+    void setHeatbeat() {
+      Simulation.this.setHeartbeat(trexNode.nodeIdentifier);
     }
   }
 
@@ -194,32 +226,6 @@ class Simulation {
       return Optional.ofNullable(fakeJournal.get(logIndex));
     }
   }
-
-  static class TestableHostApplication implements HostApplication {
-
-    final byte nodeIdentifier;
-
-    TestableHostApplication(byte nodeIdentifier) {
-      this.nodeIdentifier = nodeIdentifier;
-    }
-
-    List<Command> chosenCommands = new ArrayList<>(100);
-
-    @Override
-    public void upCall(Command chosenCommand) {
-      chosenCommands.add(chosenCommand);
-    }
-
-    @Override
-    public void heartbeat(Commit commit) {
-      throw new AssertionError("not implemented");
-    }
-
-    @Override
-    public void timeout(Prepare prepare) {
-      throw new AssertionError("not implemented");
-    }
-  }
 }
 
 public class SimulationTest {
@@ -231,14 +237,20 @@ public class SimulationTest {
 
   @Test
   public void testSimulations() {
+    // given a repeatable test setup
     RandomGenerator rng = Simulation.repeatableRandomGenerator(1234);
     final var simulation = new Simulation(rng, 30);
+
+    // when we run for a maximum of 100 iterations
     simulation.run(100);
+
+    // then we should have a single leader and the rest followers
     final var roles = simulation.engines.values().stream()
         .map(TrexEngine::trexNode)
         .map(TrexNode::currentRole)
         .toList();
+
     assertThat(roles).containsOnly(TrexRole.FOLLOW, TrexRole.LEAD);
-    Simulation.LOGGER.info("done");
+    assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
   }
 }
