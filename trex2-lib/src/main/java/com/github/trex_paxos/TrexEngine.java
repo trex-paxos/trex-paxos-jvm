@@ -30,7 +30,7 @@ public abstract class TrexEngine {
 
   abstract void resetTimeout();
 
-  abstract void setHeatbeat();
+  abstract void setHeartbeat();
 
   Semaphore mutex = new Semaphore(1);
 
@@ -88,7 +88,7 @@ public abstract class TrexEngine {
     }
     final var result = trexNode.paxos(input);
     if (trexNode.isLeader()) {
-      setHeatbeat();
+      setHeartbeat();
     } else {
       resetTimeout();
     }
@@ -101,8 +101,10 @@ public abstract class TrexEngine {
 
   public Optional<Prepare> timeout() {
     var result = trexNode.timeout();
-    LOGGER.info("timeout: " + trexNode.nodeIdentifier() + " " + trexNode.getRole());
-    setRandomTimeout();
+    if (result.isPresent()) {
+      LOGGER.info("timeout: " + trexNode.nodeIdentifier() + " " + trexNode.getRole());
+      setRandomTimeout();
+    }
     return result;
   }
 
@@ -119,7 +121,7 @@ public abstract class TrexEngine {
   public Optional<Commit> hearbeat() {
     var result = trexNode.heartbeat();
     LOGGER.info("heartbeat: " + trexNode.nodeIdentifier() + " " + trexNode.getRole());
-    setHeatbeat();
+    setHeartbeat();
     return result;
   }
 }

@@ -11,10 +11,12 @@ import java.util.random.RandomGeneratorFactory;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static com.github.trex_paxos.Simulation.LOGGER;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class Simulation {
   static final Logger LOGGER = Logger.getLogger(Simulation.class.getName());
+
   private final RandomGenerator rng;
   private final long maxTimeout;
   private final long halfTimeout;
@@ -95,11 +97,13 @@ class Simulation {
       (byte) 3, trexEngine3
   );
 
-  void run(int iterations) {
+  ArrayList<TrexMessage> run(int iterations) {
     // start will launch some timeouts into the event queue
     trexEngine1.start();
     trexEngine2.start();
     trexEngine3.start();
+
+    final var allMessages = new ArrayList<TrexMessage>();
 
     final var _ = IntStream.range(0, iterations).anyMatch(i -> {
       Optional.ofNullable(eventQueue.pollFirstEntry()).ifPresent(timeWithEvents -> {
@@ -148,6 +152,7 @@ class Simulation {
           }
         }).toList();
 
+        // the message arrive in the next time unit
         if( !newMessages.isEmpty() ){
           LOGGER.info("\t\tnewMessages: " + newMessages.stream()
               .map(Object::toString)
@@ -159,14 +164,18 @@ class Simulation {
           final var nextTimeList = this.eventQueue.computeIfAbsent(nextTime, _ -> new ArrayList<>());
           nextTimeList.addAll(newMessages.stream().map(m -> new Send(m.from(), m)).toList());
         }
+
+        // add the messages to the all messages list
+        allMessages.addAll(newMessages);
       });
       // if the event queue is empty we are done
-      final var finished = this.eventQueue.isEmpty();
+      var finished = this.eventQueue.isEmpty();
       if (finished) {
-        LOGGER.info("finished on iteration: " + i);
+        LOGGER.info("finished as no on iteration: " + i);
       }
       return finished;
     });
+    return allMessages;
   }
 
   private TestablePaxosEngine trexEngine(byte nodeIdentifier) {
@@ -192,8 +201,19 @@ class Simulation {
     }
 
     @Override
-    void setHeatbeat() {
+    void setHeartbeat() {
       Simulation.this.setHeartbeat(trexNode.nodeIdentifier);
+    }
+
+    @Override
+    public TrexResult paxos(TrexMessage input) {
+      final var oldRole = trexNode.getRole();
+      final var result = super.paxos(input);
+      final var newRole = trexNode.getRole();
+      if (oldRole != newRole) {
+        LOGGER.info("Role change: " + trexNode.nodeIdentifier() + " " + oldRole + " -> " + newRole);
+      }
+      return result;
     }
   }
 
@@ -236,13 +256,23 @@ public class SimulationTest {
   }
 
   @Test
-  public void testSimulations() {
-    // given a repeatable test setup
+  public void testStableLeader100() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(1234);
+    IntStream.range(0, 1000).forEach(i -> {
+          LOGGER.info("\n --------------- \nstarting iteration: " + i);
+          testStableLeader(rng);
+        }
+    );
+  }
+
+  public void testStableLeader(RandomGenerator rng) {
+
+
+    // given a repeatable test setup
     final var simulation = new Simulation(rng, 30);
 
-    // when we run for a maximum of 100 iterations
-    simulation.run(100);
+    // when we run for a maximum of 10 iterations
+    final var messages = simulation.run(10);
 
     // then we should have a single leader and the rest followers
     final var roles = simulation.engines.values().stream()
@@ -250,7 +280,19 @@ public class SimulationTest {
         .map(TrexNode::currentRole)
         .toList();
 
+    // assert that we ended with only one leader
     assertThat(roles).containsOnly(TrexRole.FOLLOW, TrexRole.LEAD);
     assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
+
+    // we are heartbeating at half the rate of the time. so if we have no other leader or recoverer in the last three
+    // commits it we would be a stable leader
+    final var lastCommits = messages.reversed()
+        .stream()
+        .takeWhile(m -> m instanceof Commit)
+        .toList();
+
+    LOGGER.info("lastCommits.size(): " + lastCommits.size());
+
+    assertThat(lastCommits).hasSizeGreaterThan(2);
   }
 }
