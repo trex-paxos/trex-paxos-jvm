@@ -107,11 +107,17 @@ public class TrexNode {
           // ack a higher prepare
           final var newProgress = progress.withHighestPromised(prepare.number());
           journal.saveProgress(newProgress);
-          messages.add(ack(prepare));
+          final var ack = ack(prepare);
+          messages.add(ack);
           this.progress = newProgress;
           // leader or recoverer should give way to a higher prepare
-          if (prepare.number().nodeIdentifier() != nodeIdentifier && role != FOLLOW)
+          if (prepare.number().nodeIdentifier() != nodeIdentifier && role != FOLLOW) {
             backdown();
+          }
+          // we vote for ourself
+          if (prepare.number().nodeIdentifier() == nodeIdentifier) {
+            paxos(ack);
+          }
         } else if (number.equals(progress.highestPromised())) {
           messages.add(ack(prepare));
         } else {

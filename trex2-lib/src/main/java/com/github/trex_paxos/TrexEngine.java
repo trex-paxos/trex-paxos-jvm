@@ -72,13 +72,14 @@ public abstract class TrexEngine {
    * This method is not public as it is not thread safe. It is called from the public paxos method which is protected
    * by a mutex.
    * <p>
-   * If we are not the leader. And we receive a commit message from another node. And the log index is greater than
-   * our current progress. We interrupt the timeout thread to stop the timeout and recreate it.
-   * <p>
-   * We then run our paxos algorithm and if we are the leader we set the heartbeat. If we are not the leader we set
-   * a new timeout.
+   * This method will run our paxos algorithm and set or reset timeouts and heartbeats as required.
    */
   TrexResult paxosNotThreadSafe(TrexMessage input) {
+    //final var sufficentEvidence = this.
+
+    // if our input is a commit and it proves that a leader is making progress we will reset our timeout.
+    // if we only see the same commit then we will timeout yet we should issue a lowball prepare.
+    // if the cluster size is five or more the leader must hearbeat noops into slots to ensure it gets higher commits.
     if (input instanceof Commit(final var from, final var logIndex)
         && !trexNode.isLeader()
         && from != trexNode.nodeIdentifier()
@@ -86,10 +87,17 @@ public abstract class TrexEngine {
     ) {
       resetTimeout();
     }
+
     final var result = trexNode.paxos(input);
+
     if (trexNode.isLeader()) {
+      // this line says we must always see our own heartbeat to set a new heartbeat.
       setHeartbeat();
+      // TODO what if we are a recover we should heartbeat prepares until the network is stable.
     } else {
+      // here we reset the timeout if we see real work by a leader
+      // FIXME this says that if we saw a message from the leader we should reset the timeout.
+      // yet it will lead to interupt. We should only reset the timeout if we see a message from the leader
       resetTimeout();
     }
     return result;

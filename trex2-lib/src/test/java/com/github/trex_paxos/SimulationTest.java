@@ -87,9 +87,11 @@ class Simulation {
     events.add(new Heartbeat(nodeIdentifier));
   }
 
-  final TrexEngine trexEngine1 = trexEngine((byte) 1);
-  final TrexEngine trexEngine2 = trexEngine((byte) 2);
-  final TrexEngine trexEngine3 = trexEngine((byte) 3);
+  final QuorumStrategy threeNodeQuorum = new FixedQuorumStrategy(3);
+
+  final TrexEngine trexEngine1 = trexEngine((byte) 1, threeNodeQuorum);
+  final TrexEngine trexEngine2 = trexEngine((byte) 2, threeNodeQuorum);
+  final TrexEngine trexEngine3 = trexEngine((byte) 3, threeNodeQuorum);
 
   final Map<Byte, TrexEngine> engines = Map.of(
       (byte) 1, trexEngine1,
@@ -97,12 +99,14 @@ class Simulation {
       (byte) 3, trexEngine3
   );
 
-  ArrayList<TrexMessage> run(int iterations) {
-    // start will launch some timeouts into the event queue
+  // start will launch some timeouts into the event queue
+  void coldStart() {
     trexEngine1.start();
     trexEngine2.start();
     trexEngine3.start();
+  }
 
+  ArrayList<TrexMessage> run(int iterations) {
     final var allMessages = new ArrayList<TrexMessage>();
 
     final var _ = IntStream.range(0, iterations).anyMatch(i -> {
@@ -178,10 +182,11 @@ class Simulation {
     return allMessages;
   }
 
-  private TestablePaxosEngine trexEngine(byte nodeIdentifier) {
+  private TestablePaxosEngine trexEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy) {
     return new TestablePaxosEngine(nodeIdentifier,
-        QuorumStrategy.SIMPLE_MAJORITY,
-        new TransparentJournal(nodeIdentifier));
+        quorumStrategy,
+        new TransparentJournal(nodeIdentifier)
+    );
   }
 
   class TestablePaxosEngine extends TrexEngine {
@@ -256,23 +261,24 @@ public class SimulationTest {
   }
 
   @Test
-  public void testStableLeader100() {
+  public void testLeaderElection1000() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(1234);
     IntStream.range(0, 1000).forEach(i -> {
           LOGGER.info("\n --------------- \nstarting iteration: " + i);
-          testStableLeader(rng);
+      testLeaderElection(rng);
         }
     );
   }
 
-  public void testStableLeader(RandomGenerator rng) {
-
-
+  public void testLeaderElection(RandomGenerator rng) {
     // given a repeatable test setup
     final var simulation = new Simulation(rng, 30);
 
+    // we do a cold cluster start with no prior leader in the journals
+    simulation.coldStart();
+
     // when we run for a maximum of 10 iterations
-    final var messages = simulation.run(10);
+    final var messages = simulation.run(15);
 
     // then we should have a single leader and the rest followers
     final var roles = simulation.engines.values().stream()
@@ -294,5 +300,60 @@ public class SimulationTest {
     LOGGER.info("lastCommits.size(): " + lastCommits.size());
 
     assertThat(lastCommits).hasSizeGreaterThan(2);
+  }
+
+  @Test
+  public void testClientWork() {
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(456789L);
+
+    // given a repeatable test setup
+    final var simulation = new Simulation(rng, 30);
+
+    // no code start rather we will make a leader
+    makeLeader(simulation);
+
+    // when we run for a maximum of 10 iterations
+    final var messages = simulation.run(9);
+
+    // then we should have a single leader and the rest followers
+    final var roles = simulation.engines.values().stream()
+        .map(TrexEngine::trexNode)
+        .map(TrexNode::currentRole)
+        .toList();
+
+    // assert that we ended with only one leader
+    assertThat(roles).containsOnly(TrexRole.FOLLOW, TrexRole.LEAD);
+    assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
+
+    // we are heartbeating at half the rate of the time. so if we have no other leader or recoverer in the last three
+    // commits it we would be a stable leader
+    final var lastCommits = messages.reversed()
+        .stream()
+        .takeWhile(m -> m instanceof Commit)
+        .toList();
+
+    LOGGER.info("lastCommits.size(): " + lastCommits.size());
+
+    assertThat(lastCommits).hasSizeGreaterThan(2);
+
+  }
+
+  private void makeLeader(Simulation simulation) {
+
+    final var leader = simulation.trexEngine1;
+
+    // timing out the leader will set its timeout so no need to call start here
+    simulation.trexEngine2.start();
+    simulation.trexEngine3.start();
+
+    // when we call timeout it will make a new prepare and self-promise to become Recoverer
+    leader.timeout().ifPresent(p -> {
+      // in a three node cluster we need only one other node to be reachable to become leader
+      final var r2 = simulation.trexEngine2.paxos(p);
+      final var lm = leader.paxos(r2.messages().getFirst());
+      // we need to send accept messages to the other nodes
+      simulation.trexEngine2.paxos(lm.messages().getFirst());
+      simulation.trexEngine3.paxos(lm.messages().getFirst());
+    });
   }
 }
