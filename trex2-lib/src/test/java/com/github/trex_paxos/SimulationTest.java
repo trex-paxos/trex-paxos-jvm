@@ -39,16 +39,19 @@ class Simulation {
 
   Map<Byte,Long> nodeTimeouts = new HashMap<>();
 
-  sealed interface Event permits Heartbeat, Send, Timeout {
+  sealed interface Event permits Heartbeat, Send, Timeout, ClientCommand {
   }
 
   record Timeout(byte nodeIdentifier) implements Event {
   }
 
-  record Send(byte from, TrexMessage message) implements Event {
+  record Send(Message message) implements Event {
   }
 
   record Heartbeat(byte nodeIdentifier) implements Event {
+  }
+
+  record ClientCommand() implements Event {
   }
 
   NavigableMap<Long,List<Event>> eventQueue = new TreeMap<>();
@@ -68,9 +71,10 @@ class Simulation {
     return now;
   }
 
-  private void tick(long now) {
+  private long tick(long now) {
     this.now = now;
     LOGGER.info("\ttick: " + now);
+    return now;
   }
 
   private void setRandomTimeout(byte nodeIdentifier) {
@@ -89,11 +93,11 @@ class Simulation {
 
   final QuorumStrategy threeNodeQuorum = new FixedQuorumStrategy(3);
 
-  final TrexEngine trexEngine1 = trexEngine((byte) 1, threeNodeQuorum);
-  final TrexEngine trexEngine2 = trexEngine((byte) 2, threeNodeQuorum);
-  final TrexEngine trexEngine3 = trexEngine((byte) 3, threeNodeQuorum);
+  final TestablePaxosEngine trexEngine1 = trexEngine((byte) 1, threeNodeQuorum);
+  final TestablePaxosEngine trexEngine2 = trexEngine((byte) 2, threeNodeQuorum);
+  final TestablePaxosEngine trexEngine3 = trexEngine((byte) 3, threeNodeQuorum);
 
-  final Map<Byte, TrexEngine> engines = Map.of(
+  final Map<Byte, TestablePaxosEngine> engines = Map.of(
       (byte) 1, trexEngine1,
       (byte) 2, trexEngine2,
       (byte) 3, trexEngine3
@@ -106,14 +110,18 @@ class Simulation {
     trexEngine3.start();
   }
 
-  ArrayList<TrexMessage> run(int iterations) {
-    final var allMessages = new ArrayList<TrexMessage>();
+  ArrayList<Message> run(int iterations, boolean clientData) {
+    final var allMessages = new ArrayList<Message>();
+
+    if (clientData) {
+      makeClientDataEvents(iterations, eventQueue);
+    }
 
     final var _ = IntStream.range(0, iterations).anyMatch(i -> {
       Optional.ofNullable(eventQueue.pollFirstEntry()).ifPresent(timeWithEvents -> {
 
         // advance the clock
-        tick(timeWithEvents.getKey());
+        final var now = tick(timeWithEvents.getKey());
 
         // grab the events at this time
         final var events = timeWithEvents.getValue();
@@ -137,36 +145,47 @@ class Simulation {
             // if it is a message that has arrived run paxos
             case Send send -> {
               return switch (send.message()) {
-                case BroadcastMessage m ->
-                    engines.values().stream().flatMap(engine -> engine.paxos(m).messages().stream());
+                case BroadcastMessage m -> engines.values().stream()
+                    .flatMap(engine -> engine.paxos(m).messages().stream());
                 case DirectMessage m -> engines.get(m.to()).paxos(m).messages().stream();
+                case AbstractCommand abstractCommand ->
+                    throw new AssertionError("Unexpected command message: " + abstractCommand);
               };
             }
             case Heartbeat heartbeat -> {
               // if it is a timeout collect the prepare message if the node is still a follower at this time
               final var commit = switch (heartbeat.nodeIdentifier) {
-                case 1 -> trexEngine1.hearbeat();
-                case 2 -> trexEngine2.hearbeat();
-                case 3 -> trexEngine3.hearbeat();
+                case 1 -> trexEngine1.heartbeat();
+                case 2 -> trexEngine2.heartbeat();
+                case 3 -> trexEngine3.heartbeat();
                 default ->
                     throw new IllegalStateException("Unexpected node identifier for heartbeat: " + heartbeat.nodeIdentifier);
               };
               return commit.stream();
+            }
+            case ClientCommand _ -> {
+              return engines.entrySet().stream()
+                  .flatMap(e -> {
+                    final var data = now + ":" + e.getKey();
+                    final var msg = e.getValue().command(
+                        new Command(data, data.getBytes()));
+                    return msg.stream();
+                  });
             }
           }
         }).toList();
 
         // the message arrive in the next time unit
         if( !newMessages.isEmpty() ){
-          LOGGER.info("\t\tnewMessages: " + newMessages.stream()
+          LOGGER.info("\t\tnewMessages:\n\t" + newMessages.stream()
               .map(Object::toString)
-              .collect(Collectors.joining(",")));
+              .collect(Collectors.joining("\n\t")));
 
           // messages sent in the cluster will arrive after 1 time unit
           final var nextTime = now() + 1;
           // we add the messages to the event queue at that time
           final var nextTimeList = this.eventQueue.computeIfAbsent(nextTime, _ -> new ArrayList<>());
-          nextTimeList.addAll(newMessages.stream().map(m -> new Send(m.from(), m)).toList());
+          nextTimeList.addAll(newMessages.stream().map(Send::new).toList());
         }
 
         // add the messages to the all messages list
@@ -182,6 +201,14 @@ class Simulation {
     return allMessages;
   }
 
+  private void makeClientDataEvents(int iterations, NavigableMap<Long, List<Event>> eventQueue) {
+    IntStream.range(0, iterations).forEach(i -> {
+      if (rng.nextBoolean()) {
+        eventQueue.put((long) i, new ArrayList<>(List.of(new ClientCommand())));
+      }
+    });
+  }
+
   private TestablePaxosEngine trexEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy) {
     return new TestablePaxosEngine(nodeIdentifier,
         quorumStrategy,
@@ -191,8 +218,11 @@ class Simulation {
 
   class TestablePaxosEngine extends TrexEngine {
 
-    public TestablePaxosEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal) {
+    final TransparentJournal journal;
+
+    public TestablePaxosEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy, TransparentJournal journal) {
       super(new TrexNode(nodeIdentifier, quorumStrategy, journal));
+      this.journal = journal;
     }
 
     @Override
@@ -278,7 +308,7 @@ public class SimulationTest {
     simulation.coldStart();
 
     // when we run for a maximum of 10 iterations
-    final var messages = simulation.run(15);
+    final var messages = simulation.run(10, false);
 
     // then we should have a single leader and the rest followers
     final var roles = simulation.engines.values().stream()
@@ -312,8 +342,8 @@ public class SimulationTest {
     // no code start rather we will make a leader
     makeLeader(simulation);
 
-    // when we run for a maximum of 10 iterations
-    final var messages = simulation.run(9);
+    // when we run for 15 iterations with client data
+    simulation.run(15, true);
 
     // then we should have a single leader and the rest followers
     final var roles = simulation.engines.values().stream()
@@ -325,17 +355,10 @@ public class SimulationTest {
     assertThat(roles).containsOnly(TrexRole.FOLLOW, TrexRole.LEAD);
     assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
 
-    // we are heartbeating at half the rate of the time. so if we have no other leader or recoverer in the last three
-    // commits it we would be a stable leader
-    final var lastCommits = messages.reversed()
-        .stream()
-        .takeWhile(m -> m instanceof Commit)
-        .toList();
-
-    LOGGER.info("lastCommits.size(): " + lastCommits.size());
-
-    assertThat(lastCommits).hasSizeGreaterThan(2);
-
+    // and we should have the same commit logs
+    assertThat(simulation.trexEngine1.journal.fakeJournal)
+        .isEqualTo(simulation.trexEngine2.journal.fakeJournal)
+        .isEqualTo(simulation.trexEngine3.journal.fakeJournal);
   }
 
   private void makeLeader(Simulation simulation) {
@@ -349,11 +372,16 @@ public class SimulationTest {
     // when we call timeout it will make a new prepare and self-promise to become Recoverer
     leader.timeout().ifPresent(p -> {
       // in a three node cluster we need only one other node to be reachable to become leader
-      final var r2 = simulation.trexEngine2.paxos(p);
-      final var lm = leader.paxos(r2.messages().getFirst());
+      final var r = simulation.trexEngine2.paxos(p);
+      final var lm = leader.paxos(r.messages().getFirst());
       // we need to send accept messages to the other nodes
-      simulation.trexEngine2.paxos(lm.messages().getFirst());
+      final var r1 = simulation.trexEngine2.paxos(lm.messages().getFirst());
       simulation.trexEngine3.paxos(lm.messages().getFirst());
+      // we only need one accept response to get a commit
+      final var r3 = leader.paxos(r1.messages().getFirst());
+      simulation.trexEngine2.paxos(r3.messages().getFirst());
+      simulation.trexEngine3.paxos(r3.messages().getFirst());
     });
+    LOGGER.info("Leader: " + leader.trexNode.nodeIdentifier());
   }
 }

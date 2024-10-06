@@ -1,8 +1,6 @@
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.msg.Commit;
-import com.github.trex_paxos.msg.Prepare;
-import com.github.trex_paxos.msg.TrexMessage;
+import com.github.trex_paxos.msg.*;
 
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
@@ -26,11 +24,34 @@ public abstract class TrexEngine {
     this.trexNode = trexNode;
   }
 
+  /**
+   * Set a random timeout for the current node. This method is called when the node is not the leader.
+   */
   abstract void setRandomTimeout();
 
+  /**
+   * Reset the timeout for the current node. This method is called when the node is not the leader when it receives a
+   * message from the leader.
+   */
   abstract void resetTimeout();
 
+  /**
+   * Set the heartbeat for the current node. This method is called when the node is the leader or a recoverer.
+   */
   abstract void setHeartbeat();
+
+  /**
+   * Process an application command sent from a client.
+   */
+  Optional<Accept> command(Command command) {
+    if (trexNode.isLeader()) {
+      final var nextExcept = trexNode.nextAccept(command);
+      trexNode.paxos(nextExcept);
+      return Optional.of(nextExcept);
+    } else {
+      return Optional.empty();
+    }
+  }
 
   Semaphore mutex = new Semaphore(1);
 
@@ -97,7 +118,7 @@ public abstract class TrexEngine {
     } else {
       // here we reset the timeout if we see real work by a leader
       // FIXME this says that if we saw a message from the leader we should reset the timeout.
-      // yet it will lead to interupt. We should only reset the timeout if we see a message from the leader
+      // yet it will lead to interrupt. We should only reset the timeout if we see a message from the leader
       resetTimeout();
     }
     return result;
@@ -126,10 +147,11 @@ public abstract class TrexEngine {
     return result;
   }
 
-  public Optional<Commit> hearbeat() {
+  public Optional<Commit> heartbeat() {
     var result = trexNode.heartbeat();
     LOGGER.info("heartbeat: " + trexNode.nodeIdentifier() + " " + trexNode.getRole());
     setHeartbeat();
     return result;
   }
+
 }
