@@ -6,7 +6,6 @@ import java.util.Optional;
 import java.util.concurrent.Semaphore;
 import java.util.logging.Logger;
 
-@SuppressWarnings("unused")
 public abstract class TrexEngine {
   static final Logger LOGGER = Logger.getLogger(TrexEngine.class.getName());
 

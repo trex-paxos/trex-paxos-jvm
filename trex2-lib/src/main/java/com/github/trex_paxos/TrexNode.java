@@ -46,7 +46,6 @@ public class TrexNode {
    */
   private TrexRole role = FOLLOW;
 
-  @SuppressWarnings("unused")
   public TrexRole currentRole() {
     return role;
   }
@@ -436,12 +435,10 @@ public class TrexNode {
     return accept.number().greaterThan(progress.highestPromised());
   }
 
-  @SuppressWarnings("unused")
   public long highestCommitted() {
     return progress.highestCommittedIndex();
   }
 
-  @SuppressWarnings("unused")
   public byte nodeIdentifier() {
     return nodeIdentifier;
   }

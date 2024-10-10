@@ -21,7 +21,6 @@ public record Progress(byte nodeIdentifier, BallotNumber highestPromised, long h
    *
    * @param nodeIdentifier The current node identifier.
    */
-  @SuppressWarnings("unused")
   public Progress(byte nodeIdentifier) {
     this(nodeIdentifier, BallotNumber.MIN, 0, 0);
   }

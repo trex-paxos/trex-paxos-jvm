@@ -18,7 +18,6 @@ public interface QuorumStrategy {
   /**
    * A simple majority quorum strategy suitable for classical three or five node clusters. .
    */
-  @SuppressWarnings("unused")
   QuorumStrategy SIMPLE_MAJORITY = new QuorumStrategy() {
     QuorumOutcome simple(Set<Vote> votes) {
       final int majority = (int) Math.floor((votes.size() / 2.0) + 1);
