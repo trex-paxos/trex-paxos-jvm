@@ -103,16 +103,16 @@ public class TrexNode {
       case Prepare prepare -> {
         var number = prepare.number();
         if (number.lessThan(progress.highestPromised()) || prepare.logIndex() <= progress.highestCommittedIndex()) {
-          // nack a low prepare else any prepare for a committed slot sending any accepts they are missing
+          // nack a low nextPrepareMessage else any nextPrepareMessage for a committed slot sending any accepts they are missing
           messages.add(nack(prepare, loadCatchup(prepare.logIndex())));
         } else if (number.greaterThan(progress.highestPromised())) {
-          // ack a higher prepare
+          // ack a higher nextPrepareMessage
           final var newProgress = progress.withHighestPromised(prepare.number());
           journal.saveProgress(newProgress);
           final var ack = ack(prepare);
           messages.add(ack);
           this.progress = newProgress;
-          // leader or recoverer should give way to a higher prepare
+          // leader or recoverer should give way to a higher nextPrepareMessage
           if (prepare.number().nodeIdentifier() != nodeIdentifier && role != FOLLOW) {
             backdown();
           }
@@ -123,7 +123,7 @@ public class TrexNode {
         } else if (number.equals(progress.highestPromised())) {
           messages.add(ack(prepare));
         } else {
-          throw new AssertionError("unreachable progress={" + progress + "}, prepare={" + prepare + "}");
+          throw new AssertionError("unreachable progress={" + progress + "}, nextPrepareMessage={" + prepare + "}");
         }
       }
       case AcceptResponse acceptResponse -> {
@@ -218,7 +218,7 @@ public class TrexNode {
                 // we are unable to achieve a quorum, so we must back down
                   backdown();
               case WIN -> {
-                // only if we learn that other nodes have prepared higher slots we must prepare them
+                // only if we learn that other nodes have prepared higher slots we must nextPrepareMessage them
                 votes.values().stream()
                     .filter(p -> p.highestCommittedIndex().isPresent())
                     .map(p -> p.highestCommittedIndex().get())
@@ -253,7 +253,7 @@ public class TrexNode {
                   acceptVotesByLogIndex.put(logIndex, new AcceptVotes(accept));
                   // send the Accept to ourselves and process the response
                   paxos(paxos(accept).messages().getFirst());
-                  // we are no longer awaiting the prepare for the current slot
+                  // we are no longer awaiting the nextPrepareMessage for the current slot
                   prepareResponsesByLogIndex.remove(logIndex);
                   // if we have had no evidence of higher accepted operationBytes we can promote
                   if (prepareResponsesByLogIndex.isEmpty()) {
@@ -295,6 +295,9 @@ public class TrexNode {
           // resend message for missing slots
           if (commitableAccepts.size() < maxSlotCommittable - lastCommittedIndex) {
             messages.add(new Catchup(nodeIdentifier, from, newHighestCommitted));
+          }
+          if (!role.equals(FOLLOW)) {
+            backdown();
           }
         }
       }
@@ -370,9 +373,9 @@ public class TrexNode {
   }
 
   /**
-   * Send a positive prepare response message to the leader.
+   * Send a positive nextPrepareMessage response message to the leader.
    *
-   * @param prepare The prepare message to acknowledge.
+   * @param prepare The nextPrepareMessage message to acknowledge.
    */
   PrepareResponse ack(Prepare prepare) {
     return new PrepareResponse(
@@ -382,9 +385,9 @@ public class TrexNode {
   }
 
   /**
-   * Send a negative prepare response message to the leader.
+   * Send a negative nextPrepareMessage response message to the leader.
    *
-   * @param prepare The prepare message to reject.
+   * @param prepare The nextPrepareMessage message to reject.
    * @param catchup The list of accept messages to send to the leader.
    */
   PrepareResponse nack(Prepare prepare, List<Accept> catchup) {
@@ -392,30 +395,6 @@ public class TrexNode {
         new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), false),
         journal.loadAccept(prepare.logIndex()),
         Optional.of(new CatchupResponse(nodeIdentifier, prepare.from(), progress.highestCommittedIndex(), catchup)));
-  }
-
-  /**
-   * Client request to append a command to the log. TODO is this needed?
-   *
-   * @param command The command to append.
-   * @return An accept for the next unassigned slot in the log at this leader.
-   */
-  Optional<Accept> startAppendToLog(Command command) {
-    assert role == LEAD : "role={" + role + "}";
-    if (term != null) {
-      final long slot = progress.highestAcceptedIndex() + 1;
-      final var accept = new Accept(nodeIdentifier, slot, term, command);
-      // this could self accept else self reject
-      final var actOrNack = this.paxos(accept);
-      assert actOrNack.messages().size() == 1 : "accept response should be a single messages={" + actOrNack + "}";
-      // update state on the self accept or reject
-      final var updated = this.paxos(actOrNack.messages().getFirst());
-      // we should not have any messages to send as we have not sent out the message to get a commit.
-      assert updated.messages().isEmpty() : "updated should be empty={" + updated + "}";
-      // return the Accept which should be sent out to the cluster.
-      return Optional.of(accept);
-    } else
-      return Optional.empty();
   }
 
   static boolean equalOrHigherAccept(Progress progress, Accept accept) {
@@ -447,7 +426,7 @@ public class TrexNode {
     if (role == FOLLOW) {
       role = RECOVER;
       term = new BallotNumber(progress.highestPromised().counter() + 1, nodeIdentifier);
-      final var prepare = new Prepare(nodeIdentifier, progress.highestCommittedIndex() + 1, term);
+      final var prepare = nextPrepareMessage();
       final var selfPrepareResponse = paxos(prepare);
       assert selfPrepareResponse.messages().size() == 1 : "selfPrepare={" + selfPrepareResponse + "}";
       return Optional.of(prepare);
@@ -463,12 +442,29 @@ public class TrexNode {
     return role;
   }
 
-  public Optional<Commit> heartbeat() {
-    final var commit = role == LEAD ? new Commit(nodeIdentifier, progress.highestCommittedIndex()) : null;
-    return Optional.ofNullable(commit);
+  public List<TrexMessage> heartbeat() {
+    final var result = new ArrayList<TrexMessage>();
+    if (isLeader()) {
+      result.add(nextCommitMessage());
+    } else if (isRecover()) {
+      result.add(nextPrepareMessage());
+    }
+    return result;
   }
 
-  public Accept nextAccept(Command command) {
+  private Commit nextCommitMessage() {
+    return new Commit(nodeIdentifier, progress.highestCommittedIndex());
+  }
+
+  private Prepare nextPrepareMessage() {
+    return new Prepare(nodeIdentifier, progress.highestCommittedIndex() + 1, term);
+  }
+
+  public Accept nextAcceptMessage(Command command) {
     return new Accept(nodeIdentifier, progress.highestAcceptedIndex() + 1, progress.highestPromised(), command);
+  }
+
+  public boolean isRecover() {
+    return role.equals(RECOVER);
   }
 }

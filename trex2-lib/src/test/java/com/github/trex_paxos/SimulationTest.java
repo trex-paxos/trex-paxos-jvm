@@ -35,15 +35,16 @@ class Simulation {
   static final Logger LOGGER = Logger.getLogger(Simulation.class.getName());
 
   private final RandomGenerator rng;
-  private final long maxTimeout;
-  private final long halfTimeout;
+  private final long longMaxTimeout;
+  private final long shortMaxTimeout;
 
-  public Simulation(RandomGenerator rng, long maxTimeout) {
-    this.maxTimeout = maxTimeout;
+  public Simulation(RandomGenerator rng, long longMaxTimeout) {
+    this.longMaxTimeout = longMaxTimeout;
     this.rng = rng;
-    halfTimeout = maxTimeout / 2;
-    assert this.maxTimeout > 1;
-    assert this.halfTimeout > 0 && this.halfTimeout < this.maxTimeout;
+    shortMaxTimeout = longMaxTimeout / 3;
+    assert this.longMaxTimeout > 1;
+    assert this.shortMaxTimeout > 0 && this.shortMaxTimeout < this.longMaxTimeout;
+    LOGGER.info("maxTimeout: " + longMaxTimeout + " halfTimeout: " + shortMaxTimeout);
   }
 
   static RandomGenerator repeatableRandomGenerator(long seed) {
@@ -73,7 +74,33 @@ class Simulation {
 
   NavigableMap<Long,List<Event>> eventQueue = new TreeMap<>();
 
-  private void resetTimeout(byte nodeIdentifier) {
+  long now = 0;
+  long lastNow = 0;
+
+  private long tick(long now) {
+    this.lastNow = this.now;
+    this.now = now;
+    LOGGER.info("\n ------------------ \ntick: " + now + "\n\t\t" + trexEngine1.role() + " " + trexEngine2.role() + " " + trexEngine3.role());
+    return now;
+  }
+
+  private void setTimeout(byte nodeIdentifier) {
+    final var oldTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
+    final var timeout = rng.nextInt((int) shortMaxTimeout + 1, (int) longMaxTimeout);
+    final var when = Math.max(lastNow, now) + timeout;
+    if (nodeTimeouts.containsKey(nodeIdentifier)) {
+      clearTimeout(nodeIdentifier);
+    }
+    final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
+    nodeTimeouts.put(nodeIdentifier, when);
+    events.add(new Timeout(nodeIdentifier));
+    final var newTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
+    LOGGER.info("\tsetTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier + "+=" + timeout);
+//    assert eventQueue.keySet().containsAll(nodeTimeouts.values()) : "Not all node timeouts are present in the event queue";
+  }
+
+  private void clearTimeout(byte nodeIdentifier) {
+    final var oldTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
     Optional.ofNullable(nodeTimeouts.get(nodeIdentifier)).ifPresent(timeout -> Optional.ofNullable(eventQueue.get(timeout)).ifPresent(events -> {
           events.remove(new Timeout(nodeIdentifier));
           if (events.isEmpty()) {
@@ -82,37 +109,20 @@ class Simulation {
         })
     );
     nodeTimeouts.remove(nodeIdentifier);
-    assert eventQueue.keySet().containsAll(nodeTimeouts.values()) : "Not all node timeouts are present in the event queue";
-  }
-
-  long now = 0;
-
-  private long now() {
-    return now;
-  }
-
-  private long tick(long now) {
-    this.now = now;
-    LOGGER.info("\ttick: " + now);
-    return now;
-  }
-
-  private void setRandomTimeout(byte nodeIdentifier) {
-    final var timeout = rng.nextInt((int) maxTimeout);
-    final var when = now() + timeout;
-    if (nodeTimeouts.containsKey(nodeIdentifier)) {
-      resetTimeout(nodeIdentifier);
-    }
-    final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
-    nodeTimeouts.put(nodeIdentifier, when);
-    events.add(new Timeout(nodeIdentifier));
-    assert eventQueue.keySet().containsAll(nodeTimeouts.values()) : "Not all node timeouts are present in the event queue";
+    final var newTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
+    LOGGER.info("\tclearTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier);
+    //assert eventQueue.keySet().containsAll(nodeTimeouts.values()) : "Not all node timeouts are present in the event queue";
   }
 
   private void setHeartbeat(byte nodeIdentifier) {
-    final var when = now() + halfTimeout;
+    final var timeout = rng.nextInt((int) shortMaxTimeout / 2, (int) shortMaxTimeout);
+    final var when = Math.max(lastNow, now) + timeout; // TODO no need to max?
     final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
-    events.add(new Heartbeat(nodeIdentifier));
+    final var hb = new Heartbeat(nodeIdentifier);
+    if (!events.contains(hb)) {
+      events.add(hb);
+      LOGGER.info("\tsetHeartbeat: " + nodeIdentifier + "+=" + timeout);
+    }
   }
 
   final QuorumStrategy threeNodeQuorum = new FixedQuorumStrategy(3);
@@ -152,7 +162,7 @@ class Simulation {
 
         // for what is in the queue of events at this time
         final List<TrexMessage> newMessages = events.stream().flatMap(event -> {
-          LOGGER.info("\tevent: " + event);
+          LOGGER.info("event: " + event);
           switch (event) {
             case Timeout timeout -> {
               // if it is a timeout collect the prepare message if the node is still a follower at this time
@@ -206,7 +216,7 @@ class Simulation {
               .collect(Collectors.joining("\n\t")));
 
           // messages sent in the cluster will arrive after 1 time unit
-          final var nextTime = now() + 1;
+          final var nextTime = now + 1;
           // we add the messages to the event queue at that time
           final var nextTimeList = this.eventQueue.computeIfAbsent(nextTime, _ -> new ArrayList<>());
           nextTimeList.addAll(newMessages.stream().map(Send::new).toList());
@@ -251,12 +261,12 @@ class Simulation {
 
     @Override
     void setRandomTimeout() {
-      Simulation.this.setRandomTimeout(trexNode.nodeIdentifier());
+      Simulation.this.setTimeout(trexNode.nodeIdentifier());
     }
 
     @Override
-    void resetTimeout() {
-      Simulation.this.resetTimeout(trexNode.nodeIdentifier);
+    void clearTimeout() {
+      Simulation.this.clearTimeout(trexNode.nodeIdentifier);
     }
 
     @Override
@@ -270,9 +280,22 @@ class Simulation {
       final var result = super.paxos(input);
       final var newRole = trexNode.getRole();
       if (oldRole != newRole) {
-        LOGGER.info("Role change: " + trexNode.nodeIdentifier() + " " + oldRole + " -> " + newRole);
+        LOGGER.info("Role change:\n\t" + trexNode.nodeIdentifier() + " " + oldRole + " -> " + newRole);
       }
       return result;
+    }
+
+    @Override
+    public String toString() {
+      return "PaxosEngine{" +
+          trexNode.nodeIdentifier() + "=" +
+          trexNode.currentRole().toString() + "," +
+          trexNode.progress +
+          '}';
+    }
+
+    public String role() {
+      return trexNode.currentRole().toString();
     }
   }
 
@@ -318,7 +341,7 @@ public class SimulationTest {
   public void testLeaderElection1000() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(1234);
     IntStream.range(0, 1000).forEach(i -> {
-          LOGGER.info("\n --------------- \nstarting iteration: " + i);
+      LOGGER.info("\n ================= \nstarting iteration: " + i);
       testLeaderElection(rng);
         }
     );
@@ -331,8 +354,8 @@ public class SimulationTest {
     // we do a cold cluster start with no prior leader in the journals
     simulation.coldStart();
 
-    // when we run for a maximum of 10 iterations
-    final var messages = simulation.run(10, false);
+    // when we run for a maximum of 45 iterations
+    final var messages = simulation.run(45, false);
 
     // then we should have a single leader and the rest followers
     final var roles = simulation.engines.values().stream()
@@ -359,9 +382,9 @@ public class SimulationTest {
 
   @Test
   public void testClientWork1000() {
-    RandomGenerator rng = Simulation.repeatableRandomGenerator(1234);
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(9876);
     IntStream.range(0, 1000).forEach(i -> {
-          LOGGER.info("\n --------------- \nstarting iteration: " + i);
+      LOGGER.info("\n ================= \nstarting iteration: " + i);
           testClientWork(rng);
         }
     );

@@ -2,6 +2,7 @@ package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.*;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
 import java.util.logging.Logger;
@@ -32,7 +33,7 @@ public abstract class TrexEngine {
    * Reset the timeout for the current node. This method is called when the node is not the leader when it receives a
    * message from the leader.
    */
-  abstract void resetTimeout();
+  abstract void clearTimeout();
 
   /**
    * Set the heartbeat for the current node. This method is called when the node is the leader or a recoverer.
@@ -44,7 +45,7 @@ public abstract class TrexEngine {
    */
   Optional<Accept> command(Command command) {
     if (trexNode.isLeader()) {
-      final var nextExcept = trexNode.nextAccept(command);
+      final var nextExcept = trexNode.nextAcceptMessage(command);
       trexNode.paxos(nextExcept);
       return Optional.of(nextExcept);
     } else {
@@ -95,29 +96,46 @@ public abstract class TrexEngine {
    * This method will run our paxos algorithm and set or reset timeouts and heartbeats as required.
    */
   TrexResult paxosNotThreadSafe(TrexMessage input) {
-    //final var sufficentEvidence = this.
-
-    // if our input is a commit and it proves that a leader is making progress we will reset our timeout.
-    // if we only see the same commit then we will timeout yet we should issue a lowball prepare.
-    // if the cluster size is five or more the leader must hearbeat noops into slots to ensure it gets higher commits.
-    if (input instanceof Commit(final var from, final var logIndex)
-        && !trexNode.isLeader()
-        && from != trexNode.nodeIdentifier()
-        && logIndex > trexNode.highestCommitted()
-    ) {
-      resetTimeout();
+    if (evidenceOfLeader(input)) {
+      trexNode.backdown();
+      clearTimeout();
+      setRandomTimeout();
     }
+
+    final var oldRole = trexNode.getRole();
 
     final var result = trexNode.paxos(input);
 
+    final var newRole = trexNode.getRole();
+
     if (trexNode.isLeader()) {
       // this line says we must always see our own heartbeat to set a new heartbeat.
-      resetTimeout();
+      clearTimeout();
       setHeartbeat();
-      // TODO what if we are a recover we should heartbeat prepares until the network is stable.
+      // TODO recoverer should heartbeat prepares until the network is stable.
+    } else if (trexNode.isRecover()) {
+      setHeartbeat();
+    }
+
+    if (oldRole != newRole) {
+      if (oldRole == TrexRole.LEAD) {
+        setRandomTimeout();
+      }
     }
 
     return result;
+  }
+
+  private boolean evidenceOfLeader(TrexMessage input) {
+    return switch (input) {
+      case Commit commit -> !trexNode.isLeader()
+          && commit.from() != trexNode.nodeIdentifier()
+          && commit.logIndex() >= trexNode.highestCommitted();
+      case Accept accept -> !trexNode.isLeader()
+          && accept.from() != trexNode.nodeIdentifier()
+          && accept.logIndex() > trexNode.highestCommitted();
+      default -> false;
+    };
   }
 
   public void start() {
@@ -127,26 +145,18 @@ public abstract class TrexEngine {
   public Optional<Prepare> timeout() {
     var result = trexNode.timeout();
     if (result.isPresent()) {
-      LOGGER.info("timeout: " + trexNode.nodeIdentifier() + " " + trexNode.getRole());
+      LOGGER.info("timeout:\n\t" + trexNode.nodeIdentifier() + " " + trexNode.getRole());
       setRandomTimeout();
     }
     return result;
   }
 
-  public TrexResult receive(TrexMessage p) {
-    var oldRole = trexNode.getRole();
-    var result = trexNode.paxos(p);
-    var newRole = trexNode.getRole();
-    if( oldRole != newRole ){
-      LOGGER.info(trexNode.nodeIdentifier() + " " + newRole);
-    }
-    return result;
-  }
-
-  public Optional<Commit> heartbeat() {
+  public List<TrexMessage> heartbeat() {
     var result = trexNode.heartbeat();
-    LOGGER.info("heartbeat: " + trexNode.nodeIdentifier() + " " + trexNode.getRole());
-    setHeartbeat();
+    if (!result.isEmpty()) {
+      setHeartbeat();
+    }
+    LOGGER.info("heartbeat: " + trexNode.nodeIdentifier() + " " + trexNode.getRole() + " " + result);
     return result;
   }
 
