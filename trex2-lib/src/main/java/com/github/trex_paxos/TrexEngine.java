@@ -112,14 +112,11 @@ public abstract class TrexEngine {
 
     if (trexNode.isLeader()) {
       // this line says we must always see our own heartbeat to set a new heartbeat.
+      resetTimeout();
       setHeartbeat();
       // TODO what if we are a recover we should heartbeat prepares until the network is stable.
-    } else {
-      // here we reset the timeout if we see real work by a leader
-      // FIXME this says that if we saw a message from the leader we should reset the timeout.
-      // yet it will lead to interrupt. We should only reset the timeout if we see a message from the leader
-      resetTimeout();
     }
+
     return result;
   }
 
