@@ -5,6 +5,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/// This is a very simple quorum strategy that is typical for three or five node paxos clusters. It can also work for
+/// even numbers of nodes yet for various reasons it is not recommended to use odd numbers of nodes. In real world
+/// deployments you would want to expand and contract the cluster which requires a more sophisticated strategy such as
+/// UPaxos.
 public class FixedQuorumStrategy implements QuorumStrategy {
   final int quorumSize;
   final int majority;
@@ -33,5 +37,4 @@ public class FixedQuorumStrategy implements QuorumStrategy {
   public QuorumOutcome assessAccepts(long logIndex, Set<Vote> accepts) {
     return simple(accepts);
   }
-
 }

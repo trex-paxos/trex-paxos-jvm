@@ -5,14 +5,16 @@ import com.github.trex_paxos.msg.Progress;
 
 import java.util.Optional;
 
-/**
- * The journal is the storage layer of the Paxos Algorithm. It is also used as the replicated log for the state machine.
- * This API is designed to be simple and easy to implement via a NavigableMap interface such as a BTreeMap or MVStore.
- * <p>
- * Only when an empty node is created the journal must have a `NoOperation.NOOP` accept journaled at log index 0.
- * It must also have the nodes progress saved as `new Progress(noteIdentifier)`. When a cold cluster is started up the
- * nodes will attempt to prepare the slot 1.
- */
+/// The journal is the storage layer of the Paxos Algorithm. It is also used as the replicated log for the state machine.
+/// This API is designed to be simple and easy to implement via a NavigableMap interface such as a BTreeMap or MVStore.
+/// Yet you could implement it with a SQL database or a distributed key value store that has ordered keys.
+///
+/// VERY IMPORTANT: The journal must be crash durable. This means that the journal must commit to disk after every write (fsync).
+/// This must be done before any messages are sent from the node after processing any input messages.
+///
+/// Only when an empty node is fist created the journal must have a `NoOperation.NOOP` accept journaled at log index 0.
+/// It must also have the nodes progress saved as `new Progress(noteIdentifier)`. When a cold cluster is started up the
+/// nodes will time out to and will attempt to prepare the slot 1 which is why it must container a NOOP.
 public interface Journal {
   /**
    * Save the progress record to durable storage. This method must force the disk.

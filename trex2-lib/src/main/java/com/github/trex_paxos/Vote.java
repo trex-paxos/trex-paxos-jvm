@@ -4,6 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
+/// Nodes in a cluster vote for whether an accept message is chosen or not. This object tracks such votes.
 public record Vote(byte from, byte to, long logIndex, boolean vote) {
   public static Vote readFrom(DataInputStream dis) throws IOException {
     byte from = dis.readByte();

@@ -8,17 +8,16 @@ import java.util.stream.LongStream;
 
 import static com.github.trex_paxos.TrexRole.*;
 
-/// A TrexNode is a single node in a Paxos cluster. It is responsible for managing the Paxos algorithm. It requires
-/// two collaborating classes:
-/// *  A [Journal] which must be crash durable storage.
+/// A TrexNode is a single node in a Paxos cluster. It runs the part-time parliament algorithm. It requires
+/// collaborating classes
+/// - A [Journal] which must be crash durable storage. The wrapping [TrexEngine] must flush the journal to durable state (fsync) before sending out any messages.
+/// - A [QuorumStrategy] which may be a simple majority, in the future FPaxos or UPaxos.
 public class TrexNode {
-  /**
-   * Create a new TrexNode that will load the current progress from the journal. The journal must have been pre-initialised.
-   *
-   * @param nodeIdentifier The unique node identifier. This must be unique across the cluster and across enough time for prior messages to have been forgotten.
-   * @param quorumStrategy The quorum strategy that may be a simple majority, else things like FPaxos or UPaxos
-   * @param journal        The durable storage and durable log. This must be pre-initialised.
-   */
+  /// Create a new TrexNode that will load the current progress from the journal. The journal must have been pre-initialised.
+  ///
+  /// @param nodeIdentifier The unique node identifier. This must be unique across the cluster and across enough time for prior messages to have been forgotten.
+  /// @param quorumStrategy The quorum strategy that may be a simple majority, else things like FPaxos or UPaxos
+  /// @param journal        The durable storage and durable log. This must be pre-initialised.
   public TrexNode(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal) {
     this.nodeIdentifier = nodeIdentifier;
     this.journal = journal;
@@ -26,59 +25,41 @@ public class TrexNode {
     this.progress = journal.loadProgress(nodeIdentifier);
   }
 
-  /**
-   * The current node identifier. This must be globally unique.
-   */
+  /// The current node identifier. This must be globally unique in the cluster. You can manage that using Paxos itself.
   final byte nodeIdentifier;
 
-  /**
-   * The durable storage and durable log.
-   */
+  /// The durable storage and durable log.
   final Journal journal;
 
-  /**
-   * The quorum strategy that may be a simple majority, or FPaxos or UPaxos
-   */
+  // The quorum strategy that may be trivial or may be cluster membership aware to implement UPaxos. You can manage that using Paxos itself.
   final QuorumStrategy quorumStrategy;
 
-  /**
-   * If we have rebooted then we are a follower.
-   */
+  /// If we have rebooted then we start off as a follower.
   private TrexRole role = FOLLOW;
 
-  public TrexRole currentRole() {
-    return role;
-  }
-
-  /**
-   * The initial progress must be loaded from the journal. TA fresh node the journal must be pre-initialised.
-   */
+  /// The initial progress is loaded from the Journal at startup. It is the last known state of the node prior to a crash.
   Progress progress;
 
-  /**
-   * During a recovery we will track all the slots that we are probing to find the highest accepted operationBytes.
-   */
+  /// During a recovery we will track all the slots that we are probing to find the highest accepted operationBytes.
   final NavigableMap<Long, Map<Byte, PrepareResponse>> prepareResponsesByLogIndex = new TreeMap<>();
 
-  /**
-   * When leading we will track the responses to a stream of accept messages.
-   */
+  // When leading we will track the responses to a stream of accept messages.
   final NavigableMap<Long, AcceptVotes> acceptVotesByLogIndex = new TreeMap<>();
 
-  /**
-   * When we are leader we need to now the highest ballot number to use.
-   */
+  /// Lamport's "Paxos Made Simple" uses the terminology 'proposal number'. Here we use the term 'BallotNumber' as it
+  /// is better aligned to his original The Part-time Parliament paper. We use the term 'BallotNumber' as it is more
+  /// aligned to how we count votes from the other nodes.
   BallotNumber term = null;
 
-  /// This is the main Paxos Algorithm. It is not public as the timeout logic which is outside of this class will need to
-  /// first intercept Commit messages and then call this method. This method will recurse without returning when we need to
-  /// send a message to ourselves. As a side effect the progress record will be updated and the journal will be updated.
+  /// This is the main Paxos Algorithm. It is not public as a TrexEngine will wrap this to handle specifics of resetting
+  /// timeouts. This method will recurse without returning when we need tpo send a message to ourselves. As a side
+  /// effect the progress record will be updated and accept messages will be added into the journal.
   ///
-  /// As we are recursing on self messages the calling logic can filter out messages sent from ourselves if we are using
-  /// real broadcast networking rather than point to point.
+  /// VERY IMPORTANT: The journal *must* be flushed to durable storage before sending out any messages returned from
+  /// this method. That ultimately inhibits throughput but cannot be skipped without breaking the algorithm.
   ///
   /// @param input The message to process.
-  /// @return A list of messages to send out to the cluster and/or a list of chosen commands to up-call to the host
+  /// @return A possibly empty list of messages to send out to the cluster plus a possibly empty list of chosen commands to up-call to the host
   /// application.
   TrexResult paxos(TrexMessage input) {
     List<TrexMessage> messages = new ArrayList<>();
@@ -168,9 +149,7 @@ public class TrexNode {
                         case Accept(_, _, _, NoOperation _) -> {
                           // NOOP
                         }
-                        case Accept(_, _, _, final Command command) -> {
-                          commands.add(command);
-                        }
+                        case Accept(_, _, _, final Command command) -> commands.add(command);
                       }
                     }
                     // free the memory
@@ -478,5 +457,9 @@ public class TrexNode {
 
   public boolean isRecover() {
     return role.equals(RECOVER);
+  }
+
+  public TrexRole currentRole() {
+    return role;
   }
 }

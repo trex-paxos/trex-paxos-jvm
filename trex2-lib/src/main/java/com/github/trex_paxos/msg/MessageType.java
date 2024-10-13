@@ -8,7 +8,6 @@ import java.util.stream.Collectors;
 public enum MessageType {
   Prepare(1),
   PrepareResponse(2),
-
   Accept(3),
   AcceptResponse(4),
   Commit(5),
@@ -45,6 +44,7 @@ public enum MessageType {
   /**
    * Host applications may want to use this map to convert ordinal values to message classes for custom deserialization.
    */
+  @SuppressWarnings("unused")
   public static Class<? extends TrexMessage> classFromMessageId(byte id) {
     return ORDINAL_TO_CLASS_MAP.get(id);
   }
@@ -56,6 +56,7 @@ public enum MessageType {
   /**
    * Host applications may want to use this map to convert message classes to ordinal values for custom serialization.
    */
+  @SuppressWarnings("unused")
   public static byte idFromMessageTypeClass(Class<? extends TrexMessage> classType) {
     return CLASS_TO_ORDINAL_MAP.get(classType);
   }

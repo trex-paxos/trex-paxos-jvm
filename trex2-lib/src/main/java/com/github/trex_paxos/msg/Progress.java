@@ -14,7 +14,7 @@ import java.io.IOException;
  * @param highestAcceptedIndex The highest log index that has been accepted.
  */
 public record Progress(byte nodeIdentifier, BallotNumber highestPromised, long highestCommittedIndex,
-                       long highestAcceptedIndex) implements JournalRecord {
+                       long highestAcceptedIndex) {
 
   /**
    * When an application initializes an empty journal it has to have a NIL value.

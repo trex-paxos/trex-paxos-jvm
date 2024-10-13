@@ -10,7 +10,8 @@ import java.io.*;
  * application can use a different serialization mechanism as your wire format such as JSON.
  */
 public class Pickle {
-  // TODO consider moving the DataInputStream and DataOutputStream usage into the Pickle class.
+  // TODO consider moving all of the DataInputStream and DataOutputStream code into the Pickle class. This is because
+  // teams might want to use there own serialization mechanism for the wire format.
   public static TrexMessage readMessage(byte[] bytes) {
     ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
     DataInputStream dis = new DataInputStream(bis);

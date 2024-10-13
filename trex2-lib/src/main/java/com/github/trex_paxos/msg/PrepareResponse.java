@@ -7,6 +7,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Optional;
 
+// TODO seems unsafe not to name the Ballot Number. An AcceptResponse transmits such info as progress and I think we should add it here at the very least to log.
 public record PrepareResponse(Vote vote,
                               Optional<Accept> highestUncommitted,
                               Optional<CatchupResponse> catchupResponse) implements TrexMessage, DirectMessage {
