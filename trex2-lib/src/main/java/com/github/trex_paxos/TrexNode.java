@@ -70,12 +70,16 @@ public class TrexNode {
    */
   BallotNumber term = null;
 
-  /**
-   * This is the main Paxos Algorithm. It is not public as the timeout logic needs to first intercept Commit messages.
-   * @param input The message to process.
-   * @return A list of messages to send out to the cluster and/or a list of chosen commands to up-call to the host
-   * application.
-   */
+  /// This is the main Paxos Algorithm. It is not public as the timeout logic which is outside of this class will need to
+  /// first intercept Commit messages and then call this method. This method will recurse without returning when we need to
+  /// send a message to ourselves. As a side effect the progress record will be updated and the journal will be updated.
+  ///
+  /// As we are recursing on self messages the calling logic can filter out messages sent from ourselves if we are using
+  /// real broadcast networking rather than point to point.
+  ///
+  /// @param input The message to process.
+  /// @return A list of messages to send out to the cluster and/or a list of chosen commands to up-call to the host
+  /// application.
   TrexResult paxos(TrexMessage input) {
     List<TrexMessage> messages = new ArrayList<>();
     List<Command> commands = new ArrayList<>();
@@ -139,7 +143,9 @@ public class TrexNode {
                   quorumStrategy.assessAccepts(logIndex, vs);
               switch (quorumOutcome) {
                 case WIN -> {
+                  // we have a quorum at that log index but due to lost messages we may have gaps before it.
                   acceptVotesByLogIndex.put(logIndex, AcceptVotes.chosen(acceptVotes.accept()));
+                  // we must commit in log order so we must go from our current commit to the new commit and stop on any gaps
                   Optional<Long> highestCommitable = Optional.empty();
                   List<Long> deletable = new ArrayList<>();
                   List<Long> committedSlots = new ArrayList<>();
@@ -153,6 +159,7 @@ public class TrexNode {
                       break;
                     }
                   }
+                  // only if we have some contiguous slots that we can commit which might still not be all slots
                   if (highestCommitable.isPresent()) {
                     // run the callback
                     for (var slot : committedSlots) {
@@ -163,7 +170,6 @@ public class TrexNode {
                         }
                         case Accept(_, _, _, final Command command) -> {
                           commands.add(command);
-                          messages.add(new Commit(nodeIdentifier, slot));
                         }
                       }
                     }
@@ -174,7 +180,7 @@ public class TrexNode {
                     // we have committed
                     this.progress = progress.withHighestCommitted(highestCommitable.get());
                     // let the cluster know
-                    messages.add(new Commit(nodeIdentifier, highestCommitable.get()));
+                    messages.add(makeCommitMessage());
                   }
                 }
                 case WAIT -> {
@@ -288,10 +294,12 @@ public class TrexNode {
               }
             }
           }
+
           if (!commitableAccepts.isEmpty()) {
             progress = progress.withHighestCommitted(commitableAccepts.getLast().logIndex());
             journal.saveProgress(progress);
           }
+
           // resend message for missing slots
           if (commitableAccepts.size() < maxSlotCommittable - lastCommittedIndex) {
             messages.add(new Catchup(nodeIdentifier, from, newHighestCommitted));
@@ -311,6 +319,10 @@ public class TrexNode {
       }
     }
     return new TrexResult(messages, commands);
+  }
+
+  Commit makeCommitMessage() {
+    return new Commit(nodeIdentifier, progress.highestCommittedIndex());
   }
 
   private void saveCatchup(CatchupResponse catchupResponse) {

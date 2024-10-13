@@ -2,6 +2,7 @@ package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.*;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
@@ -41,15 +42,16 @@ public abstract class TrexEngine {
   abstract void setHeartbeat();
 
   /**
-   * Process an application command sent from a client.
+   * Process an application command sent from a client. This is only done by a leader. It will return a single accept
+   * plus it will also add a commit message to the outbound messages.
    */
-  Optional<Accept> command(Command command) {
+  List<TrexMessage> command(Command command) {
     if (trexNode.isLeader()) {
       final var nextExcept = trexNode.nextAcceptMessage(command);
       trexNode.paxos(nextExcept);
-      return Optional.of(nextExcept);
+      return List.of(nextExcept, trexNode.makeCommitMessage());
     } else {
-      return Optional.empty();
+      return Collections.emptyList();
     }
   }
 
@@ -72,7 +74,7 @@ public abstract class TrexEngine {
    * @throws AssertionError If the algorithm is in an invalid state.
    */
   public TrexResult paxos(TrexMessage input) {
-    // we should ignore messages sent from ourselves.
+    // we should ignore messages sent from ourselves which happens in a true broadcast network and simulation unit tests.
     if (input.from() == trexNode.nodeIdentifier()) {
       return TrexResult.noResult();
     }
@@ -97,7 +99,7 @@ public abstract class TrexEngine {
    */
   TrexResult paxosNotThreadSafe(TrexMessage input) {
     if (evidenceOfLeader(input)) {
-      trexNode.backdown();
+      if (trexNode.getRole() != TrexRole.FOLLOW) trexNode.backdown();
       clearTimeout();
       setRandomTimeout();
     }

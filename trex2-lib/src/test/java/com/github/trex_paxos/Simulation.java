@@ -1,0 +1,355 @@
+package com.github.trex_paxos;
+
+import com.github.trex_paxos.msg.*;
+
+import java.util.*;
+import java.util.function.Function;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
+import java.util.random.RandomGenerator;
+import java.util.random.RandomGeneratorFactory;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
+class Simulation {
+  static {
+    Logger rootLogger = Logger.getLogger("");
+    Handler[] handlers = rootLogger.getHandlers();
+    for (Handler handler : handlers) {
+      handler.setFormatter(new SimpleFormatter() {
+        @Override
+        public String format(LogRecord record) {
+          return String.format("[%s] %s%n",
+              record.getLevel().getName(),
+              record.getMessage());
+        }
+      });
+    }
+  }
+
+  static final Logger LOGGER = Logger.getLogger(Simulation.class.getName());
+
+  private final RandomGenerator rng;
+  private final long longMaxTimeout;
+  private final long shortMaxTimeout;
+
+  public Simulation(RandomGenerator rng, long longMaxTimeout) {
+    this.longMaxTimeout = longMaxTimeout;
+    this.rng = rng;
+    shortMaxTimeout = longMaxTimeout / 3;
+    assert this.longMaxTimeout > 1;
+    assert this.shortMaxTimeout > 0 && this.shortMaxTimeout < this.longMaxTimeout;
+    LOGGER.info("maxTimeout: " + longMaxTimeout + " halfTimeout: " + shortMaxTimeout);
+  }
+
+  static RandomGenerator repeatableRandomGenerator(long seed) {
+    RandomGeneratorFactory<RandomGenerator> factory = RandomGeneratorFactory.of("L64X128MixRandom");
+    // Create a seeded random generator using the factory
+    RandomGenerator rng = factory.create(seed);
+    LOGGER.info("Simulation Using Seed: " + seed);
+    return rng;
+  }
+
+  Map<Byte, Long> nodeTimeouts = new HashMap<>();
+
+  public ArrayList<Message> run(int i, boolean b, Function<Send, Stream<TrexMessage>> nemesis) {
+    final var allMessages = new ArrayList<Message>();
+
+    if (b) {
+      makeClientDataEvents(i, eventQueue);
+    }
+
+    final var _ = IntStream.range(0, i).anyMatch(i1 -> {
+      Optional.ofNullable(eventQueue.pollFirstEntry()).ifPresent(timeWithEvents -> {
+
+        // advance the clock
+        final var now1 = tick(timeWithEvents.getKey());
+
+        // grab the events at this time
+        final var events = timeWithEvents.getValue();
+
+        // for what is in the queue of events at this time
+        final List<TrexMessage> newMessages = events.stream().flatMap(event -> {
+          LOGGER.info("event: " + event);
+          switch (event) {
+            case Timeout timeout -> {
+              // if it is a timeout collect the prepare message if the node is still a follower at this time
+              final var prepare = switch (timeout.nodeIdentifier) {
+                case 1 -> trexEngine1.timeout();
+                case 2 -> trexEngine2.timeout();
+                case 3 -> trexEngine3.timeout();
+                default ->
+                    throw new IllegalStateException("Unexpected node identifier for timeout: " + timeout.nodeIdentifier);
+              };
+              return prepare.stream();
+            }
+
+            // if it is a message that has arrived run paxos
+            case Send send -> {
+              return networkSimulation(send, nemesis);
+            }
+            case Heartbeat heartbeat -> {
+              // if it is a timeout collect the prepare message if the node is still a follower at this time
+              final var commit = switch (heartbeat.nodeIdentifier) {
+                case 1 -> trexEngine1.heartbeat();
+                case 2 -> trexEngine2.heartbeat();
+                case 3 -> trexEngine3.heartbeat();
+                default ->
+                    throw new IllegalStateException("Unexpected node identifier for heartbeat: " + heartbeat.nodeIdentifier);
+              };
+              return commit.stream();
+            }
+            case ClientCommand _ -> {
+              return engines.entrySet().stream()
+                  .flatMap(e -> {
+                    final var data = now1 + ":" + e.getKey();
+                    final var msg = e.getValue().command(
+                        new Command(data, data.getBytes()));
+                    return msg.stream();
+                  });
+            }
+          }
+        }).toList();
+
+        // the message arrive in the next time unit
+        if (!newMessages.isEmpty()) {
+          LOGGER.info("\t\tnewMessages:\n\t" + newMessages.stream()
+              .map(Object::toString)
+              .collect(Collectors.joining("\n\t")));
+
+          // messages sent in the cluster will arrive after 1 time unit
+          final var nextTime = now1 + 1;
+          // we add the messages to the event queue at that time
+          final var nextTimeList = this.eventQueue.computeIfAbsent(nextTime, _ -> new ArrayList<>());
+          nextTimeList.addAll(newMessages.stream().map(Send::new).toList());
+        }
+
+        // add the messages to the all messages list
+        allMessages.addAll(newMessages);
+      });
+      // if the event queue is empty we are done
+      var finished = this.eventQueue.isEmpty();
+      if (finished) {
+        LOGGER.info("finished as no on iteration: " + i1);
+      }
+      return finished;
+    });
+    return allMessages;
+  }
+
+  public ArrayList<Message> run(int i, boolean b) {
+    return run(i, b, DEFAULT_NETWORK_SIMULATION);
+  }
+
+  sealed interface Event permits Heartbeat, Send, Timeout, ClientCommand {
+  }
+
+  record Timeout(byte nodeIdentifier) implements Event {
+  }
+
+  record Send(Message message) implements Event {
+  }
+
+  record Heartbeat(byte nodeIdentifier) implements Event {
+  }
+
+  record ClientCommand() implements Event {
+  }
+
+  NavigableMap<Long, List<Event>> eventQueue = new TreeMap<>();
+
+  long now = 0;
+  long lastNow = 0;
+
+  private long tick(long now) {
+    this.lastNow = this.now;
+    this.now = now;
+    LOGGER.info("\n ------------------ \ntick: " + now + "\n\t\t" + trexEngine1.role() + " " + trexEngine2.role() + " " + trexEngine3.role());
+    return now;
+  }
+
+  private void setTimeout(byte nodeIdentifier) {
+    final var oldTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
+    final var timeout = rng.nextInt((int) shortMaxTimeout + 1, (int) longMaxTimeout);
+    final var when = Math.max(lastNow, now) + timeout;
+    if (nodeTimeouts.containsKey(nodeIdentifier)) {
+      clearTimeout(nodeIdentifier);
+    }
+    final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
+    nodeTimeouts.put(nodeIdentifier, when);
+    events.add(new Timeout(nodeIdentifier));
+    final var newTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
+    LOGGER.info("\tsetTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier + "+=" + timeout);
+//    assert eventQueue.keySet().containsAll(nodeTimeouts.values()) : "Not all node timeouts are present in the event queue";
+  }
+
+  private void clearTimeout(byte nodeIdentifier) {
+    final var oldTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
+    Optional.ofNullable(nodeTimeouts.get(nodeIdentifier)).ifPresent(timeout -> Optional.ofNullable(eventQueue.get(timeout)).ifPresent(events -> {
+          events.remove(new Timeout(nodeIdentifier));
+          if (events.isEmpty()) {
+            eventQueue.remove(timeout);
+          }
+        })
+    );
+    nodeTimeouts.remove(nodeIdentifier);
+    final var newTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
+    LOGGER.info("\tclearTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier);
+    //assert eventQueue.keySet().containsAll(nodeTimeouts.values()) : "Not all node timeouts are present in the event queue";
+  }
+
+  private void setHeartbeat(byte nodeIdentifier) {
+    final var timeout = rng.nextInt((int) shortMaxTimeout / 2, (int) shortMaxTimeout);
+    final var when = Math.max(lastNow, now) + timeout; // TODO no need to max?
+    final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
+    final var hb = new Heartbeat(nodeIdentifier);
+    if (!events.contains(hb)) {
+      events.add(hb);
+      LOGGER.info("\tsetHeartbeat: " + nodeIdentifier + "+=" + timeout);
+    }
+  }
+
+  final QuorumStrategy threeNodeQuorum = new FixedQuorumStrategy(3);
+
+  final TestablePaxosEngine trexEngine1 = trexEngine((byte) 1, threeNodeQuorum);
+  final TestablePaxosEngine trexEngine2 = trexEngine((byte) 2, threeNodeQuorum);
+  final TestablePaxosEngine trexEngine3 = trexEngine((byte) 3, threeNodeQuorum);
+
+  final Map<Byte, TestablePaxosEngine> engines = Map.of(
+      (byte) 1, trexEngine1,
+      (byte) 2, trexEngine2,
+      (byte) 3, trexEngine3
+  );
+
+  // start will launch some timeouts into the event queue
+  void coldStart() {
+    trexEngine1.start();
+    trexEngine2.start();
+    trexEngine3.start();
+  }
+
+  /**
+   * This is how we can inject network failures into the simulation. The default implementation is to pass the message
+   * without any errors. It is intended that this method is override with a method that will simulate network failures.
+   * This sort of testing is inspired by the Jepsen testing framework which calls the errors a Nemesis.
+   *
+   * @param send The message to simulate sending.
+   * @return The messages that will be sent to the network having been interfered with to simulate network failures.
+   */
+  protected Stream<TrexMessage> networkSimulation(Send send, Function<Send, Stream<TrexMessage>> nemesis) {
+    return nemesis.apply(send);
+  }
+
+  final Function<Send, Stream<TrexMessage>> DEFAULT_NETWORK_SIMULATION = send -> switch (send.message()) {
+    case BroadcastMessage m -> engines.values().stream()
+        .flatMap(engine -> engine.paxos(m).messages().stream());
+    case DirectMessage m -> engines.get(m.to()).paxos(m).messages().stream();
+    case AbstractCommand abstractCommand -> throw new AssertionError("Unexpected command message: " + abstractCommand);
+  };
+
+  private void makeClientDataEvents(int iterations, NavigableMap<Long, List<Event>> eventQueue) {
+    IntStream.range(0, iterations).forEach(i -> {
+      if (rng.nextBoolean()) {
+        eventQueue.put((long) i, new ArrayList<>(List.of(new ClientCommand())));
+      }
+    });
+  }
+
+  private TestablePaxosEngine trexEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy) {
+    return new TestablePaxosEngine(nodeIdentifier,
+        quorumStrategy,
+        new TransparentJournal(nodeIdentifier)
+    );
+  }
+
+  class TestablePaxosEngine extends TrexEngine {
+
+    final TransparentJournal journal;
+
+    public TestablePaxosEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy, TransparentJournal journal) {
+      super(new TrexNode(nodeIdentifier, quorumStrategy, journal));
+      this.journal = journal;
+    }
+
+    @Override
+    void setRandomTimeout() {
+      Simulation.this.setTimeout(trexNode.nodeIdentifier());
+    }
+
+    @Override
+    void clearTimeout() {
+      Simulation.this.clearTimeout(trexNode.nodeIdentifier);
+    }
+
+    @Override
+    void setHeartbeat() {
+      Simulation.this.setHeartbeat(trexNode.nodeIdentifier);
+    }
+
+    @Override
+    public TrexResult paxos(TrexMessage input) {
+      if (this.trexNode.nodeIdentifier == 2 && input instanceof Commit(_, final var logIndex) && logIndex > 6) {
+        LOGGER.info("hum");
+      }
+      final var oldRole = trexNode.getRole();
+      final var result = super.paxos(input);
+      final var newRole = trexNode.getRole();
+      if (oldRole != newRole) {
+        LOGGER.info("Role change:\n\t" + trexNode.nodeIdentifier() + " " + oldRole + " -> " + newRole);
+      }
+
+      if (input instanceof Commit(
+          final var from, final var index
+      ) && from != trexNode.nodeIdentifier() && index > trexNode.highestCommitted()) {
+        LOGGER.info(trexNode.nodeIdentifier + " -> Commit: " + input + " -> " + trexNode.highestCommitted());
+      }
+      return result;
+    }
+
+    @Override
+    public String toString() {
+      return "PaxosEngine{" +
+          trexNode.nodeIdentifier() + "=" +
+          trexNode.currentRole().toString() + "," +
+          trexNode.progress +
+          '}';
+    }
+
+    public String role() {
+      return trexNode.currentRole().toString();
+    }
+  }
+
+  static class TransparentJournal implements Journal {
+    public TransparentJournal(byte nodeIdentifier) {
+      progress = new Progress(nodeIdentifier);
+    }
+
+    Progress progress;
+
+    @Override
+    public void saveProgress(Progress progress) {
+      this.progress = progress;
+    }
+
+    NavigableMap<Long, Accept> fakeJournal = new TreeMap<>();
+
+    @Override
+    public void journalAccept(Accept accept) {
+      fakeJournal.put(accept.logIndex(), accept);
+    }
+
+    @Override
+    public Progress loadProgress(byte nodeIdentifier) {
+      return progress;
+    }
+
+    @Override
+    public Optional<Accept> loadAccept(long logIndex) {
+      return Optional.ofNullable(fakeJournal.get(logIndex));
+    }
+  }
+}

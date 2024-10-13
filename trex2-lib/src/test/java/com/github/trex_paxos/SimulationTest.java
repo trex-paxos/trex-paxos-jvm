@@ -4,331 +4,17 @@ import com.github.trex_paxos.msg.*;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.util.*;
-import java.util.logging.Handler;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
-import java.util.logging.SimpleFormatter;
+import java.util.List;
+import java.util.NavigableMap;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Function;
 import java.util.random.RandomGenerator;
-import java.util.random.RandomGeneratorFactory;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static com.github.trex_paxos.Simulation.LOGGER;
 import static org.assertj.core.api.Assertions.assertThat;
-
-class Simulation {
-  static {
-    Logger rootLogger = Logger.getLogger("");
-    Handler[] handlers = rootLogger.getHandlers();
-    for (Handler handler : handlers) {
-      handler.setFormatter(new SimpleFormatter() {
-        @Override
-        public String format(LogRecord record) {
-          return String.format("[%s] %s%n",
-              record.getLevel().getName(),
-              record.getMessage());
-        }
-      });
-    }
-  }
-  static final Logger LOGGER = Logger.getLogger(Simulation.class.getName());
-
-  private final RandomGenerator rng;
-  private final long longMaxTimeout;
-  private final long shortMaxTimeout;
-
-  public Simulation(RandomGenerator rng, long longMaxTimeout) {
-    this.longMaxTimeout = longMaxTimeout;
-    this.rng = rng;
-    shortMaxTimeout = longMaxTimeout / 3;
-    assert this.longMaxTimeout > 1;
-    assert this.shortMaxTimeout > 0 && this.shortMaxTimeout < this.longMaxTimeout;
-    LOGGER.info("maxTimeout: " + longMaxTimeout + " halfTimeout: " + shortMaxTimeout);
-  }
-
-  static RandomGenerator repeatableRandomGenerator(long seed) {
-    RandomGeneratorFactory<RandomGenerator> factory = RandomGeneratorFactory.of("L64X128MixRandom");
-    // Create a seeded random generator using the factory
-    RandomGenerator rng = factory.create(seed);
-    LOGGER.info("Simulation Using Seed: " + seed);
-    return rng;
-  }
-
-  Map<Byte,Long> nodeTimeouts = new HashMap<>();
-
-  sealed interface Event permits Heartbeat, Send, Timeout, ClientCommand {
-  }
-
-  record Timeout(byte nodeIdentifier) implements Event {
-  }
-
-  record Send(Message message) implements Event {
-  }
-
-  record Heartbeat(byte nodeIdentifier) implements Event {
-  }
-
-  record ClientCommand() implements Event {
-  }
-
-  NavigableMap<Long,List<Event>> eventQueue = new TreeMap<>();
-
-  long now = 0;
-  long lastNow = 0;
-
-  private long tick(long now) {
-    this.lastNow = this.now;
-    this.now = now;
-    LOGGER.info("\n ------------------ \ntick: " + now + "\n\t\t" + trexEngine1.role() + " " + trexEngine2.role() + " " + trexEngine3.role());
-    return now;
-  }
-
-  private void setTimeout(byte nodeIdentifier) {
-    final var oldTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
-    final var timeout = rng.nextInt((int) shortMaxTimeout + 1, (int) longMaxTimeout);
-    final var when = Math.max(lastNow, now) + timeout;
-    if (nodeTimeouts.containsKey(nodeIdentifier)) {
-      clearTimeout(nodeIdentifier);
-    }
-    final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
-    nodeTimeouts.put(nodeIdentifier, when);
-    events.add(new Timeout(nodeIdentifier));
-    final var newTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
-    LOGGER.info("\tsetTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier + "+=" + timeout);
-//    assert eventQueue.keySet().containsAll(nodeTimeouts.values()) : "Not all node timeouts are present in the event queue";
-  }
-
-  private void clearTimeout(byte nodeIdentifier) {
-    final var oldTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
-    Optional.ofNullable(nodeTimeouts.get(nodeIdentifier)).ifPresent(timeout -> Optional.ofNullable(eventQueue.get(timeout)).ifPresent(events -> {
-          events.remove(new Timeout(nodeIdentifier));
-          if (events.isEmpty()) {
-            eventQueue.remove(timeout);
-          }
-        })
-    );
-    nodeTimeouts.remove(nodeIdentifier);
-    final var newTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
-    LOGGER.info("\tclearTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier);
-    //assert eventQueue.keySet().containsAll(nodeTimeouts.values()) : "Not all node timeouts are present in the event queue";
-  }
-
-  private void setHeartbeat(byte nodeIdentifier) {
-    final var timeout = rng.nextInt((int) shortMaxTimeout / 2, (int) shortMaxTimeout);
-    final var when = Math.max(lastNow, now) + timeout; // TODO no need to max?
-    final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
-    final var hb = new Heartbeat(nodeIdentifier);
-    if (!events.contains(hb)) {
-      events.add(hb);
-      LOGGER.info("\tsetHeartbeat: " + nodeIdentifier + "+=" + timeout);
-    }
-  }
-
-  final QuorumStrategy threeNodeQuorum = new FixedQuorumStrategy(3);
-
-  final TestablePaxosEngine trexEngine1 = trexEngine((byte) 1, threeNodeQuorum);
-  final TestablePaxosEngine trexEngine2 = trexEngine((byte) 2, threeNodeQuorum);
-  final TestablePaxosEngine trexEngine3 = trexEngine((byte) 3, threeNodeQuorum);
-
-  final Map<Byte, TestablePaxosEngine> engines = Map.of(
-      (byte) 1, trexEngine1,
-      (byte) 2, trexEngine2,
-      (byte) 3, trexEngine3
-  );
-
-  // start will launch some timeouts into the event queue
-  void coldStart() {
-    trexEngine1.start();
-    trexEngine2.start();
-    trexEngine3.start();
-  }
-
-  ArrayList<Message> run(int iterations, boolean clientData) {
-    final var allMessages = new ArrayList<Message>();
-
-    if (clientData) {
-      makeClientDataEvents(iterations, eventQueue);
-    }
-
-    final var _ = IntStream.range(0, iterations).anyMatch(i -> {
-      Optional.ofNullable(eventQueue.pollFirstEntry()).ifPresent(timeWithEvents -> {
-
-        // advance the clock
-        final var now = tick(timeWithEvents.getKey());
-
-        // grab the events at this time
-        final var events = timeWithEvents.getValue();
-
-        // for what is in the queue of events at this time
-        final List<TrexMessage> newMessages = events.stream().flatMap(event -> {
-          LOGGER.info("event: " + event);
-          switch (event) {
-            case Timeout timeout -> {
-              // if it is a timeout collect the prepare message if the node is still a follower at this time
-              final var prepare = switch (timeout.nodeIdentifier) {
-                case 1 -> trexEngine1.timeout();
-                case 2 -> trexEngine2.timeout();
-                case 3 -> trexEngine3.timeout();
-                default ->
-                    throw new IllegalStateException("Unexpected node identifier for timeout: " + timeout.nodeIdentifier);
-              };
-              return prepare.stream();
-            }
-
-            // if it is a message that has arrived run paxos
-            case Send send -> {
-              return switch (send.message()) {
-                case BroadcastMessage m -> engines.values().stream()
-                    .flatMap(engine -> engine.paxos(m).messages().stream());
-                case DirectMessage m -> engines.get(m.to()).paxos(m).messages().stream();
-                case AbstractCommand abstractCommand ->
-                    throw new AssertionError("Unexpected command message: " + abstractCommand);
-              };
-            }
-            case Heartbeat heartbeat -> {
-              // if it is a timeout collect the prepare message if the node is still a follower at this time
-              final var commit = switch (heartbeat.nodeIdentifier) {
-                case 1 -> trexEngine1.heartbeat();
-                case 2 -> trexEngine2.heartbeat();
-                case 3 -> trexEngine3.heartbeat();
-                default ->
-                    throw new IllegalStateException("Unexpected node identifier for heartbeat: " + heartbeat.nodeIdentifier);
-              };
-              return commit.stream();
-            }
-            case ClientCommand _ -> {
-              return engines.entrySet().stream()
-                  .flatMap(e -> {
-                    final var data = now + ":" + e.getKey();
-                    final var msg = e.getValue().command(
-                        new Command(data, data.getBytes()));
-                    return msg.stream();
-                  });
-            }
-          }
-        }).toList();
-
-        // the message arrive in the next time unit
-        if( !newMessages.isEmpty() ){
-          LOGGER.info("\t\tnewMessages:\n\t" + newMessages.stream()
-              .map(Object::toString)
-              .collect(Collectors.joining("\n\t")));
-
-          // messages sent in the cluster will arrive after 1 time unit
-          final var nextTime = now + 1;
-          // we add the messages to the event queue at that time
-          final var nextTimeList = this.eventQueue.computeIfAbsent(nextTime, _ -> new ArrayList<>());
-          nextTimeList.addAll(newMessages.stream().map(Send::new).toList());
-        }
-
-        // add the messages to the all messages list
-        allMessages.addAll(newMessages);
-      });
-      // if the event queue is empty we are done
-      var finished = this.eventQueue.isEmpty();
-      if (finished) {
-        LOGGER.info("finished as no on iteration: " + i);
-      }
-      return finished;
-    });
-    return allMessages;
-  }
-
-  private void makeClientDataEvents(int iterations, NavigableMap<Long, List<Event>> eventQueue) {
-    IntStream.range(0, iterations).forEach(i -> {
-      if (rng.nextBoolean()) {
-        eventQueue.put((long) i, new ArrayList<>(List.of(new ClientCommand())));
-      }
-    });
-  }
-
-  private TestablePaxosEngine trexEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy) {
-    return new TestablePaxosEngine(nodeIdentifier,
-        quorumStrategy,
-        new TransparentJournal(nodeIdentifier)
-    );
-  }
-
-  class TestablePaxosEngine extends TrexEngine {
-
-    final TransparentJournal journal;
-
-    public TestablePaxosEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy, TransparentJournal journal) {
-      super(new TrexNode(nodeIdentifier, quorumStrategy, journal));
-      this.journal = journal;
-    }
-
-    @Override
-    void setRandomTimeout() {
-      Simulation.this.setTimeout(trexNode.nodeIdentifier());
-    }
-
-    @Override
-    void clearTimeout() {
-      Simulation.this.clearTimeout(trexNode.nodeIdentifier);
-    }
-
-    @Override
-    void setHeartbeat() {
-      Simulation.this.setHeartbeat(trexNode.nodeIdentifier);
-    }
-
-    @Override
-    public TrexResult paxos(TrexMessage input) {
-      final var oldRole = trexNode.getRole();
-      final var result = super.paxos(input);
-      final var newRole = trexNode.getRole();
-      if (oldRole != newRole) {
-        LOGGER.info("Role change:\n\t" + trexNode.nodeIdentifier() + " " + oldRole + " -> " + newRole);
-      }
-      return result;
-    }
-
-    @Override
-    public String toString() {
-      return "PaxosEngine{" +
-          trexNode.nodeIdentifier() + "=" +
-          trexNode.currentRole().toString() + "," +
-          trexNode.progress +
-          '}';
-    }
-
-    public String role() {
-      return trexNode.currentRole().toString();
-    }
-  }
-
-  static class TransparentJournal implements Journal {
-    public TransparentJournal(byte nodeIdentifier) {
-      progress = new Progress(nodeIdentifier);
-    }
-
-    Progress progress;
-
-    @Override
-    public void saveProgress(Progress progress) {
-      this.progress = progress;
-    }
-
-    NavigableMap<Long, Accept> fakeJournal = new TreeMap<>();
-
-    @Override
-    public void journalAccept(Accept accept) {
-      fakeJournal.put(accept.logIndex(), accept);
-    }
-
-    @Override
-    public Progress loadProgress(byte nodeIdentifier) {
-      return progress;
-    }
-
-    @Override
-    public Optional<Accept> loadAccept(long logIndex) {
-      return Optional.ofNullable(fakeJournal.get(logIndex));
-    }
-  }
-}
 
 public class SimulationTest {
 
@@ -337,6 +23,7 @@ public class SimulationTest {
     LoggerConfig.initialize();
   }
 
+  // TODO this is an perfect network leader election test. We need to add a tests for a partitioned and clients on a code start.
   @Test
   public void testLeaderElection1000() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(1234);
@@ -381,7 +68,7 @@ public class SimulationTest {
 
 
   @Test
-  public void testClientWork1000() {
+  public void testClientWorkPerfectNetwork1000() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(9876);
     IntStream.range(0, 1000).forEach(i -> {
       LOGGER.info("\n ================= \nstarting iteration: " + i);
@@ -419,16 +106,105 @@ public class SimulationTest {
     )).isTrue();
   }
 
+  @Test
+  public void testClientWorkLossyNetwork() {
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(56734);
+
+    // given a repeatable test setup
+    final var simulation = new Simulation(rng, 30);
+
+    // first force a leader as we have separate tests for leader election. This is a partitioned network test.
+    makeLeader(simulation);
+
+    // TODO is run length the same as the number of iterations that send messages? Does that matter in practice for the nemesis?
+    int runLength = 15;
+
+    final Function<Simulation.Send, Stream<TrexMessage>> nemesis = makeNemesis(
+        runLength,
+        simulation.trexEngine1,
+        simulation.trexEngine2,
+        simulation.trexEngine3
+    );
+
+    // when we run for 15 iterations with client data
+    simulation.run(runLength, true, nemesis);
+
+    // then we should have a single leader and the rest followers
+    final var roles = simulation.engines.values().stream()
+        .map(TrexEngine::trexNode)
+        .map(TrexNode::currentRole)
+        .toList();
+
+    // assert that we ended with only one leader
+    assertThat(roles).containsOnly(TrexRole.FOLLOW, TrexRole.LEAD);
+    assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
+
+    LOGGER.info("sizes: " + simulation.trexEngine1.journal.fakeJournal.size() + " " + simulation.trexEngine2.journal.fakeJournal.size() + " " + simulation.trexEngine3.journal.fakeJournal.size());
+
+    // and we should have the same commit logs
+    assertThat(consistentJournals(
+        simulation.trexEngine1.journal.fakeJournal,
+        simulation.trexEngine2.journal.fakeJournal,
+        simulation.trexEngine3.journal.fakeJournal
+
+    )).isTrue();
+
+  }
+
+  private static Function<Simulation.Send, Stream<TrexMessage>> makeNemesis(
+      int runLength,
+      Simulation.TestablePaxosEngine engine1,
+      Simulation.TestablePaxosEngine engine2,
+      Simulation.TestablePaxosEngine engine3) {
+
+    final var enginesAsList = List.of(engine1, engine2, engine3);
+
+    final var counter = new java.util.concurrent.atomic.AtomicLong();
+
+    return send -> {
+      // which node to partition
+      final var partitionedNodeIndex = counter.getAndIncrement() % 3;
+
+      // Convert immutable list to mutable list
+      final var mutableEnginesList = new java.util.ArrayList<>(enginesAsList);
+      return switch (send.message()) {
+        case BroadcastMessage m -> {
+          // Remove the entry at partitionedNodeIndex
+          mutableEnginesList.remove((int) partitionedNodeIndex);
+          mutableEnginesList.forEach(e -> LOGGER.info("\t" + e.trexNode.nodeIdentifier() + " <- " + m));
+          yield mutableEnginesList.stream().map(e -> e.paxos(m)).flatMap(p -> p.messages().stream());
+        }
+        case DirectMessage m -> {
+          // Check if m.to() matches partitionedNodeIndex
+          if (m.to() == partitionedNodeIndex) {
+            LOGGER.info("\t" + m.to() + " <- null");
+            yield Stream.empty();
+          } else {
+            LOGGER.info("\t" + m.to() + " <- " + m);
+            // engines are 1 indexed but lists are zero indexed
+            yield enginesAsList.get(m.to() - 1).paxos(m).messages().stream();
+          }
+        }
+        case AbstractCommand abstractCommand ->
+            throw new AssertionError("Unexpected command message: " + abstractCommand);
+      };
+    };
+  }
+
   /**
    * This logic will iteration over the journals and ensure that they are not inconsistent.
    */
-  boolean consistentJournals(NavigableMap<Long, Accept> fakeJournal, NavigableMap<Long, Accept> fakeJournal1, NavigableMap<Long, Accept> fakeJournal2) {
-    final NavigableMap<Long, Accept> longestJournal = fakeJournal.size() > fakeJournal1.size() ? fakeJournal : fakeJournal1.size() > fakeJournal2.size() ? fakeJournal1 : fakeJournal2;
+  boolean consistentJournals(NavigableMap<Long, Accept> fakeJournal1, NavigableMap<Long, Accept> fakeJournal2, NavigableMap<Long, Accept> fakeJournal3) {
+    final NavigableMap<Long, Accept> longestJournal = fakeJournal1.size() > fakeJournal2.size() ? fakeJournal1 : fakeJournal2.size() > fakeJournal3.size() ? fakeJournal2 : fakeJournal3;
     return longestJournal.entrySet().stream().allMatch(e -> {
       final var logIndex = e.getKey();
       final var accept = e.getValue();
-      return Optional.ofNullable(fakeJournal1.get(logIndex)).map(a -> a.equals(accept)).orElse(true)
-          && Optional.ofNullable(fakeJournal2.get(logIndex)).map(a -> a.equals(accept)).orElse(true);
+      LOGGER.info("logIndex: " + logIndex +
+          "\n\taccept1: " + Optional.ofNullable(fakeJournal1.get(logIndex)).map(Objects::toString).orElse("null") +
+          "\n\taccept2: " + Optional.ofNullable(fakeJournal2.get(logIndex)).map(Objects::toString).orElse("null") +
+          "\n\taccept3: " + Optional.ofNullable(fakeJournal3.get(logIndex)).map(Objects::toString).orElse("null"));
+      return Optional.ofNullable(fakeJournal2.get(logIndex)).map(a -> a.equals(accept)).orElse(true)
+          && Optional.ofNullable(fakeJournal3.get(logIndex)).map(a -> a.equals(accept)).orElse(true);
     });
   }
 
