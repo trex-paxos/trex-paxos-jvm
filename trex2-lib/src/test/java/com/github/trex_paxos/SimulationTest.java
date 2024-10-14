@@ -1,13 +1,11 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.*;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-import java.util.NavigableMap;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.random.RandomGenerator;
 import java.util.stream.IntStream;
@@ -18,8 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class SimulationTest {
 
-  @BeforeAll
-  public static void init(){
+  static {
     LoggerConfig.initialize();
   }
 
@@ -42,7 +39,7 @@ public class SimulationTest {
     simulation.coldStart();
 
     // when we run for a maximum of 45 iterations
-    final var messages = simulation.run(45, false);
+    final var messages = simulation.run(50, false);
 
     // then we should have a single leader and the rest followers
     final var roles = simulation.engines.values().stream()
@@ -116,11 +113,12 @@ public class SimulationTest {
     // first force a leader as we have separate tests for leader election. This is a partitioned network test.
     makeLeader(simulation);
 
-    // TODO is run length the same as the number of iterations that send messages? Does that matter in practice for the nemesis?
     int runLength = 15;
 
-    final Function<Simulation.Send, Stream<TrexMessage>> nemesis = makeNemesis(
-        runLength,
+    final var counter = new java.util.concurrent.atomic.AtomicLong();
+
+    final var nemesis = makeNemesis(
+        _ -> (byte) (counter.getAndIncrement() % 3),
         simulation.trexEngine1,
         simulation.trexEngine2,
         simulation.trexEngine3
@@ -151,31 +149,115 @@ public class SimulationTest {
 
   }
 
-  private static Function<Simulation.Send, Stream<TrexMessage>> makeNemesis(
-      int runLength,
+  @Test
+  public void testClientWorkRotatingPartitionedNetwork() {
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(634546345);
+
+    // given a repeatable test setup
+    final var simulation = new Simulation(rng, 30);
+
+    // first force a leader as we have separate tests for leader election. This is a partitioned network test.
+    makeLeader(simulation);
+
+    LOGGER.info("\n\nSTART ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ START\n");
+
+    int runLength = 60;
+
+    final var nemesis = getRotatingPartitionNemesis(simulation, runLength / 3);
+
+    // when we run for 15 iterations with client data
+    simulation.run(runLength, true, nemesis);
+
+    // then we should have a single leader and the rest followers
+    final var roles = simulation.engines.values().stream()
+        .map(TrexEngine::trexNode)
+        .map(TrexNode::currentRole)
+        .toList();
+
+    // assert that we ended with only one leader
+    assertThat(roles).containsOnly(TrexRole.FOLLOW, TrexRole.LEAD);
+    assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
+
+    LOGGER.info("\n\nEMD ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ END\n\n");
+    LOGGER.info(simulation.trexEngine1.role() + " " + simulation.trexEngine2.role() + " " + simulation.trexEngine3.role());
+    LOGGER.info("sizes: " + simulation.trexEngine1.journal.fakeJournal.size() + " " + simulation.trexEngine2.journal.fakeJournal.size() + " " + simulation.trexEngine3.journal.fakeJournal.size());
+
+    // and we should have the same commit logs
+    assertThat(consistentJournals(
+        simulation.trexEngine1.journal.fakeJournal,
+        simulation.trexEngine2.journal.fakeJournal,
+        simulation.trexEngine3.journal.fakeJournal
+
+    )).isTrue();
+
+  }
+
+  private static BiFunction<Simulation.Send, Long, Stream<TrexMessage>> getRotatingPartitionNemesis(Simulation simulation, int period) {
+    final var counter = new AtomicLong();
+    final var latestTime = new AtomicLong();
+    final var isolatedNode = new AtomicLong();
+    final var lastIsolatedNode = new AtomicLong();
+    LOGGER.info(">>> new isolatedNode: " + (isolatedNode.get() + 1));
+    return makeNemesis(
+        time -> {
+          final var lastTime = latestTime.get();
+          if (time > lastTime) {
+            counter.getAndIncrement();
+            latestTime.set(time);
+          }
+          lastIsolatedNode.set(isolatedNode.get());
+          isolatedNode.set(counter.getAndIncrement() / period % 3);
+          if (isolatedNode.get() != lastIsolatedNode.get()) {
+            LOGGER.info(">>> new isolatedNode: " + (isolatedNode.get() + 1));
+          }
+          return (byte) (isolatedNode.get());
+        },
+        simulation.trexEngine1,
+        simulation.trexEngine2,
+        simulation.trexEngine3
+    );
+  }
+
+  private static BiFunction<Simulation.Send, Long, Stream<TrexMessage>> makeNemesis(
+      Function<Long, Byte> timeToPartitionedNode,
       Simulation.TestablePaxosEngine engine1,
       Simulation.TestablePaxosEngine engine2,
       Simulation.TestablePaxosEngine engine3) {
 
     final var enginesAsList = List.of(engine1, engine2, engine3);
 
-    final var counter = new java.util.concurrent.atomic.AtomicLong();
-
-    return send -> {
+    return (send, time) -> {
       // which node to partition
-      final var partitionedNodeIndex = counter.getAndIncrement() % 3;
+      final var partitionedNodeIndex = timeToPartitionedNode.apply(time);
 
-      // Convert immutable list to mutable list
-      final var mutableEnginesList = new java.util.ArrayList<>(enginesAsList);
+      // Convert immutable list to mutable list so that we can remove the isolated node
+      final var mutableEnginesList = new ArrayList<>(enginesAsList);
+
       return switch (send.message()) {
-        case BroadcastMessage m -> {
+        case BroadcastMessage broadcastMessage -> {
           // Remove the entry at partitionedNodeIndex
           mutableEnginesList.remove((int) partitionedNodeIndex);
-          mutableEnginesList.forEach(e -> LOGGER.info("\t" + e.trexNode.nodeIdentifier() + " <- " + m));
-          yield mutableEnginesList.stream().map(e -> e.paxos(m)).flatMap(p -> p.messages().stream());
+          mutableEnginesList.forEach(e -> LOGGER.info("\t\t" + broadcastMessage + " ~> " + e.trexNode.nodeIdentifier()));
+          LOGGER.info("\t\tdropped(" + broadcastMessage + ") ~> " + (partitionedNodeIndex + 1));
+          // here we send to messages to servers that are not isolated. if they reply to a server that is isolated we will drop the message
+          yield mutableEnginesList.stream()
+              .map(e -> e.paxos(broadcastMessage))
+              .flatMap(p -> p.messages().stream())
+              .filter(outbound -> switch (outbound) {
+                case DirectMessage directMessageResponse -> {
+                  // filter out responses noting that we are 1 indexed
+                  if (directMessageResponse.to() == partitionedNodeIndex + 1) {
+                    LOGGER.info("\t" + directMessageResponse.to() + " <~ dropped(" + directMessageResponse + ")");
+                    yield false;
+                  } else {
+                    LOGGER.info("\t" + directMessageResponse.to() + " <~ " + directMessageResponse);
+                    yield true;
+                  }
+                }
+                default -> true;
+              });
         }
         case DirectMessage m -> {
-          // Check if m.to() matches partitionedNodeIndex
           if (m.to() == partitionedNodeIndex) {
             LOGGER.info("\t" + m.to() + " <- null");
             yield Stream.empty();

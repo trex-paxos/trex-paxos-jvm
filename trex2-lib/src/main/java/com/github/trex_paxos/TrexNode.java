@@ -80,7 +80,12 @@ public class TrexNode {
             this.progress = progress.withHighestPromised(accept.number());
           }
           journal.saveProgress(this.progress);
-          messages.add(ack(accept));
+          final var ack = ack(accept);
+          if (accept.number().nodeIdentifier() == nodeIdentifier) {
+            // we vote for ourself
+            paxos(ack);
+          }
+          messages.add(ack);
         } else {
           throw new AssertionError("unreachable progress={" + progress + "}, accept={" + accept + "}");
         }
@@ -152,7 +157,7 @@ public class TrexNode {
                         case Accept(_, _, _, final Command command) -> commands.add(command);
                       }
                     }
-                    // free the memory
+                    // free the memory and stop heartbeating out the accepts
                     for (final var deletableId : deletable) {
                       acceptVotesByLogIndex.remove(deletableId);
                     }
@@ -433,18 +438,38 @@ public class TrexNode {
     return role;
   }
 
+  /// The heartbeat method is called by the TrexEngine to send messages to the cluster to stop them
+  /// timing out. There may also be dropped messages due to partitions or crashes. So we will also
+  /// heart beat prepare or accept messages that are pending a response.
   public List<TrexMessage> heartbeat() {
     final var result = new ArrayList<TrexMessage>();
     if (isLeader()) {
-      result.add(nextCommitMessage());
+      result.add(currentCommitMessage());
+      result.addAll(pendingAcceptMessages());
     } else if (isRecover()) {
-      result.add(nextPrepareMessage());
+      result.add(currentPrepareMessage());
     }
     return result;
   }
 
-  private Commit nextCommitMessage() {
+  private List<Accept> pendingAcceptMessages() {
+    final var r = LongStream.range(
+            progress.highestCommittedIndex() + 1,
+            progress.highestAcceptedIndex() + 1
+        )
+        .mapToObj(journal::loadAccept)
+        .takeWhile(Optional::isPresent)
+        .flatMap(Optional::stream)
+        .toList();
+    return r;
+  }
+
+  private Commit currentCommitMessage() {
     return new Commit(nodeIdentifier, progress.highestCommittedIndex());
+  }
+
+  private Prepare currentPrepareMessage() {
+    return new Prepare(nodeIdentifier, progress.highestCommittedIndex(), term);
   }
 
   private Prepare nextPrepareMessage() {

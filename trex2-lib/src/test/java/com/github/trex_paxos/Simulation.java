@@ -3,7 +3,7 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.*;
 
 import java.util.*;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 import java.util.logging.Handler;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
@@ -55,18 +55,18 @@ class Simulation {
 
   Map<Byte, Long> nodeTimeouts = new HashMap<>();
 
-  public ArrayList<Message> run(int i, boolean b, Function<Send, Stream<TrexMessage>> nemesis) {
+  public ArrayList<Message> run(int iterations, boolean makeClientMessages, BiFunction<Send, Long, Stream<TrexMessage>> nemesis) {
     final var allMessages = new ArrayList<Message>();
 
-    if (b) {
-      makeClientDataEvents(i, eventQueue);
+    if (makeClientMessages) {
+      makeClientDataEvents(iterations, eventQueue);
     }
 
-    final var _ = IntStream.range(0, i).anyMatch(i1 -> {
+    final var _ = IntStream.range(0, iterations).anyMatch(i1 -> {
       Optional.ofNullable(eventQueue.pollFirstEntry()).ifPresent(timeWithEvents -> {
 
         // advance the clock
-        final var now1 = tick(timeWithEvents.getKey());
+        tick(timeWithEvents.getKey());
 
         // grab the events at this time
         final var events = timeWithEvents.getValue();
@@ -89,23 +89,23 @@ class Simulation {
 
             // if it is a message that has arrived run paxos
             case Send send -> {
-              return networkSimulation(send, nemesis);
+              return networkSimulation(send, now, nemesis);
             }
             case Heartbeat heartbeat -> {
               // if it is a timeout collect the prepare message if the node is still a follower at this time
-              final var commit = switch (heartbeat.nodeIdentifier) {
+              final var commitWithAccepts = switch (heartbeat.nodeIdentifier) {
                 case 1 -> trexEngine1.heartbeat();
                 case 2 -> trexEngine2.heartbeat();
                 case 3 -> trexEngine3.heartbeat();
                 default ->
                     throw new IllegalStateException("Unexpected node identifier for heartbeat: " + heartbeat.nodeIdentifier);
               };
-              return commit.stream();
+              return commitWithAccepts.stream();
             }
             case ClientCommand _ -> {
               return engines.entrySet().stream()
                   .flatMap(e -> {
-                    final var data = now1 + ":" + e.getKey();
+                    final var data = now + ":" + e.getKey();
                     final var msg = e.getValue().command(
                         new Command(data, data.getBytes()));
                     return msg.stream();
@@ -116,12 +116,12 @@ class Simulation {
 
         // the message arrive in the next time unit
         if (!newMessages.isEmpty()) {
-          LOGGER.info("\t\tnewMessages:\n\t" + newMessages.stream()
+          LOGGER.info("\tnewMessages:\n\t" + newMessages.stream()
               .map(Object::toString)
               .collect(Collectors.joining("\n\t")));
 
           // messages sent in the cluster will arrive after 1 time unit
-          final var nextTime = now1 + 1;
+          final var nextTime = now + 1;
           // we add the messages to the event queue at that time
           final var nextTimeList = this.eventQueue.computeIfAbsent(nextTime, _ -> new ArrayList<>());
           nextTimeList.addAll(newMessages.stream().map(Send::new).toList());
@@ -164,11 +164,10 @@ class Simulation {
   long now = 0;
   long lastNow = 0;
 
-  private long tick(long now) {
+  private void tick(long now) {
     this.lastNow = this.now;
     this.now = now;
     LOGGER.info("\n ------------------ \ntick: " + now + "\n\t\t" + trexEngine1.role() + " " + trexEngine2.role() + " " + trexEngine3.role());
-    return now;
   }
 
   private void setTimeout(byte nodeIdentifier) {
@@ -214,9 +213,9 @@ class Simulation {
 
   final QuorumStrategy threeNodeQuorum = new FixedQuorumStrategy(3);
 
-  final TestablePaxosEngine trexEngine1 = trexEngine((byte) 1, threeNodeQuorum);
-  final TestablePaxosEngine trexEngine2 = trexEngine((byte) 2, threeNodeQuorum);
-  final TestablePaxosEngine trexEngine3 = trexEngine((byte) 3, threeNodeQuorum);
+  final TestablePaxosEngine trexEngine1 = makeTrexEngine((byte) 1, threeNodeQuorum);
+  final TestablePaxosEngine trexEngine2 = makeTrexEngine((byte) 2, threeNodeQuorum);
+  final TestablePaxosEngine trexEngine3 = makeTrexEngine((byte) 3, threeNodeQuorum);
 
   final Map<Byte, TestablePaxosEngine> engines = Map.of(
       (byte) 1, trexEngine1,
@@ -231,19 +230,18 @@ class Simulation {
     trexEngine3.start();
   }
 
-  /**
-   * This is how we can inject network failures into the simulation. The default implementation is to pass the message
-   * without any errors. It is intended that this method is override with a method that will simulate network failures.
-   * This sort of testing is inspired by the Jepsen testing framework which calls the errors a Nemesis.
-   *
-   * @param send The message to simulate sending.
-   * @return The messages that will be sent to the network having been interfered with to simulate network failures.
-   */
-  protected Stream<TrexMessage> networkSimulation(Send send, Function<Send, Stream<TrexMessage>> nemesis) {
-    return nemesis.apply(send);
+  /// This is how we can inject network failures into the simulation. The default implementation is to pass the message
+  /// without any errors. It is intended that this method is override with a method that will simulate network failures.
+  /// This sort of testing is inspired by the Jepsen testing framework which calls the errors a Nemesis.
+  ///
+  /// @param send The message to simulate sending.
+  /// @param now  The current time in the simulation.
+  /// @return The messages that will be sent to the network having been interfered with to simulate network failures.
+  protected Stream<TrexMessage> networkSimulation(Send send, Long now, BiFunction<Send, Long, Stream<TrexMessage>> nemesis) {
+    return nemesis.apply(send, now);
   }
 
-  final Function<Send, Stream<TrexMessage>> DEFAULT_NETWORK_SIMULATION = send -> switch (send.message()) {
+  final BiFunction<Send, Long, Stream<TrexMessage>> DEFAULT_NETWORK_SIMULATION = (send, _) -> switch (send.message()) {
     case BroadcastMessage m -> engines.values().stream()
         .flatMap(engine -> engine.paxos(m).messages().stream());
     case DirectMessage m -> engines.get(m.to()).paxos(m).messages().stream();
@@ -258,7 +256,7 @@ class Simulation {
     });
   }
 
-  private TestablePaxosEngine trexEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy) {
+  TestablePaxosEngine makeTrexEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy) {
     return new TestablePaxosEngine(nodeIdentifier,
         quorumStrategy,
         new TransparentJournal(nodeIdentifier)
@@ -299,12 +297,6 @@ class Simulation {
       final var newRole = trexNode.getRole();
       if (oldRole != newRole) {
         LOGGER.info("Role change:\n\t" + trexNode.nodeIdentifier() + " " + oldRole + " -> " + newRole);
-      }
-
-      if (input instanceof Commit(
-          final var from, final var index
-      ) && from != trexNode.nodeIdentifier() && index > trexNode.highestCommitted()) {
-        LOGGER.info(trexNode.nodeIdentifier + " -> Commit: " + input + " -> " + trexNode.highestCommitted());
       }
       return result;
     }

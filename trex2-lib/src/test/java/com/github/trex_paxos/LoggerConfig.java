@@ -1,10 +1,9 @@
 package com.github.trex_paxos;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.util.logging.*;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class LoggerConfig {
   private static final Logger LOGGER = Logger.getLogger(LoggerConfig.class.getName());
@@ -18,33 +17,6 @@ public class LoggerConfig {
 
       // Create and set a new ConsoleHandler
       ConsoleHandler consoleHandler = new ConsoleHandler(){{setOutputStream(System.out);}};
-
-      // Create a custom formatter
-      Formatter customFormatter = new Formatter() {
-        private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-
-        @Override
-        public String format(LogRecord record) {
-          StringBuilder builder = new StringBuilder();
-          builder.append(dateFormat.format(new Date(record.getMillis())))
-              .append(" [")
-              .append(record.getLevel().getName())
-              .append("] ")
-              .append(formatMessage(record))
-              .append("\n");
-
-          if (record.getThrown() != null) {
-            StringWriter sw = new StringWriter();
-            PrintWriter pw = new PrintWriter(sw);
-            record.getThrown().printStackTrace(pw);
-            builder.append(sw);
-          }
-
-          return builder.toString();
-        }
-      };
-
-      consoleHandler.setFormatter(customFormatter);
 
       // Set the handler to the root logger
       Logger.getLogger("").addHandler(consoleHandler);
