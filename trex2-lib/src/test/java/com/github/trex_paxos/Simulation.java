@@ -55,7 +55,11 @@ class Simulation {
 
   Map<Byte, Long> nodeTimeouts = new HashMap<>();
 
-  public ArrayList<Message> run(int iterations, boolean makeClientMessages, BiFunction<Send, Long, Stream<TrexMessage>> nemesis) {
+  public ArrayList<Message> run(
+      int iterations,
+      boolean makeClientMessages,
+      BiFunction<Send, Long, Stream<TrexMessage>> nemesis
+  ) {
     final var allMessages = new ArrayList<Message>();
 
     if (makeClientMessages) {
@@ -68,12 +72,16 @@ class Simulation {
         // advance the clock
         tick(timeWithEvents.getKey());
 
+        LOGGER.info("------------------");
+        LOGGER.info("tick: " + now + "\t" + trexEngine1.role() + " " + trexEngine2.role() + " " + trexEngine3.role());
+
+
         // grab the events at this time
         final var events = timeWithEvents.getValue();
 
         // for what is in the queue of events at this time
         final List<TrexMessage> newMessages = events.stream().flatMap(event -> {
-          LOGGER.info("event: " + event);
+          LOGGER.fine(() -> "event: " + event);
           switch (event) {
             case Timeout timeout -> {
               // if it is a timeout collect the prepare message if the node is still a follower at this time
@@ -116,7 +124,7 @@ class Simulation {
 
         // the message arrive in the next time unit
         if (!newMessages.isEmpty()) {
-          LOGGER.info("\tnewMessages:\n\t" + newMessages.stream()
+          LOGGER.fine(() -> "\tnewMessages:\n\t" + newMessages.stream()
               .map(Object::toString)
               .collect(Collectors.joining("\n\t")));
 
@@ -133,7 +141,7 @@ class Simulation {
       // if the event queue is empty we are done
       var finished = this.eventQueue.isEmpty();
       if (finished) {
-        LOGGER.info("finished as no on iteration: " + i1);
+        LOGGER.info("finished as empty iteration: " + i1);
       }
       return finished;
     });
@@ -167,7 +175,6 @@ class Simulation {
   private void tick(long now) {
     this.lastNow = this.now;
     this.now = now;
-    LOGGER.info("\n ------------------ \ntick: " + now + "\n\t\t" + trexEngine1.role() + " " + trexEngine2.role() + " " + trexEngine3.role());
   }
 
   private void setTimeout(byte nodeIdentifier) {
@@ -181,8 +188,7 @@ class Simulation {
     nodeTimeouts.put(nodeIdentifier, when);
     events.add(new Timeout(nodeIdentifier));
     final var newTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
-    LOGGER.info("\tsetTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier + "+=" + timeout);
-//    assert eventQueue.keySet().containsAll(nodeTimeouts.values()) : "Not all node timeouts are present in the event queue";
+    LOGGER.fine(() -> "\tsetTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier + "+=" + timeout);
   }
 
   private void clearTimeout(byte nodeIdentifier) {
@@ -196,8 +202,7 @@ class Simulation {
     );
     nodeTimeouts.remove(nodeIdentifier);
     final var newTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
-    LOGGER.info("\tclearTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier);
-    //assert eventQueue.keySet().containsAll(nodeTimeouts.values()) : "Not all node timeouts are present in the event queue";
+    LOGGER.fine(() -> "\tclearTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier);
   }
 
   private void setHeartbeat(byte nodeIdentifier) {
@@ -207,7 +212,7 @@ class Simulation {
     final var hb = new Heartbeat(nodeIdentifier);
     if (!events.contains(hb)) {
       events.add(hb);
-      LOGGER.info("\tsetHeartbeat: " + nodeIdentifier + "+=" + timeout);
+      LOGGER.fine(() -> "\tsetHeartbeat: " + nodeIdentifier + "+=" + timeout);
     }
   }
 
@@ -289,11 +294,15 @@ class Simulation {
 
     @Override
     public TrexResult paxos(TrexMessage input) {
+      if (input.from() == trexNode.nodeIdentifier()) {
+        return TrexResult.noResult();
+      }
+      LOGGER.info(trexNode.nodeIdentifier + " <~ " + input);
       final var oldRole = trexNode.getRole();
       final var result = super.paxos(input);
       final var newRole = trexNode.getRole();
       if (oldRole != newRole) {
-        LOGGER.info("Role change:\n\t" + trexNode.nodeIdentifier() + " " + oldRole + " -> " + newRole);
+        LOGGER.info(trexNode.nodeIdentifier() + " == " + newRole);
       }
       return result;
     }

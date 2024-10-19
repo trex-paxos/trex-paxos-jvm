@@ -77,7 +77,6 @@ public abstract class TrexEngine {
       mutex.acquire();
       try {
         final var r = paxosNotThreadSafe(input);
-        // FIXME we need to remove CatchUpReponse and loop then flush at the end to implement batching which will work for client accepts.
         trexNode.journal.sync();
         return r;
       } finally {
@@ -158,8 +157,8 @@ public abstract class TrexEngine {
     var result = trexNode.heartbeat();
     if (!result.isEmpty()) {
       setHeartbeat();
+      LOGGER.fine(() -> "heartbeat: " + trexNode.nodeIdentifier() + " " + trexNode.getRole() + " " + result);
     }
-    LOGGER.info("heartbeat: " + trexNode.nodeIdentifier() + " " + trexNode.getRole() + " " + result);
     return result;
   }
 

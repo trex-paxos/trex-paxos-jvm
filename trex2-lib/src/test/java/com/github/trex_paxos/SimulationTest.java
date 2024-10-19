@@ -58,8 +58,6 @@ public class SimulationTest {
         .takeWhile(m -> m instanceof Commit)
         .toList();
 
-    LOGGER.info("lastCommits.size(): " + lastCommits.size());
-
     assertThat(lastCommits).hasSizeGreaterThan(2);
   }
 
@@ -158,7 +156,7 @@ public class SimulationTest {
     // first force a leader as we have separate tests for leader election. This is a partitioned network test.
     makeLeader(simulation);
 
-    LOGGER.info("\n\nSTART ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ START\n");
+    LOGGER.info("START ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ START");
 
     int runLength = 60;
 
@@ -197,7 +195,6 @@ public class SimulationTest {
     final var latestTime = new AtomicLong();
     final var isolatedNode = new AtomicLong();
     final var lastIsolatedNode = new AtomicLong();
-    LOGGER.info(">>> new isolatedNode: " + (isolatedNode.get() + 1));
     return makeNemesis(
         time -> {
           final var lastTime = latestTime.get();
@@ -208,7 +205,7 @@ public class SimulationTest {
           lastIsolatedNode.set(isolatedNode.get());
           isolatedNode.set(counter.getAndIncrement() / period % 3);
           if (isolatedNode.get() != lastIsolatedNode.get()) {
-            LOGGER.info(">>> new isolatedNode: " + (isolatedNode.get() + 1));
+            LOGGER.info("NEW isolatedNode: " + (isolatedNode.get() + 1));
           }
           return (byte) (isolatedNode.get());
         },
@@ -236,13 +233,10 @@ public class SimulationTest {
       return switch (send.message()) {
         case BroadcastMessage broadcastMessage -> {
           if (broadcastMessage.from() == partitionedNodeIndex + 1) {
-            LOGGER.info("\tBroadcastMessage from isolated node " + (partitionedNodeIndex + 1) + " ignored.");
             yield Stream.empty();
           }
           // Drop the target node
           mutableEnginesList.remove((int) partitionedNodeIndex);
-          mutableEnginesList.forEach(e -> LOGGER.info("\t\t" + broadcastMessage + " ~> " + e.trexNode.nodeIdentifier()));
-          LOGGER.info("\t\tdropped(" + broadcastMessage + ") ~> " + (partitionedNodeIndex + 1));
           // here we send to messages to servers that are not isolated. if they reply to a server that is isolated we will drop the message
           yield mutableEnginesList.stream()
               .map(e -> e.paxos(broadcastMessage))
@@ -251,10 +245,8 @@ public class SimulationTest {
                 case DirectMessage directMessageResponse -> {
                   // filter out responses noting that we are 1 indexed
                   if (directMessageResponse.to() == partitionedNodeIndex + 1) {
-                    LOGGER.info("\t" + directMessageResponse.to() + " <~ dropped(" + directMessageResponse + ")");
                     yield false;
                   } else {
-                    LOGGER.info("\t" + directMessageResponse.to() + " <~ " + directMessageResponse);
                     yield true;
                   }
                 }
@@ -263,10 +255,8 @@ public class SimulationTest {
         }
         case DirectMessage m -> {
           if (m.to() == partitionedNodeIndex) {
-            LOGGER.info("\t" + m.to() + " <- null");
             yield Stream.empty();
           } else {
-            LOGGER.info("\t" + m.to() + " <- " + m);
             // engines are 1 indexed but lists are zero indexed
             yield enginesAsList.get(m.to() - 1).paxos(m).messages().stream();
           }
@@ -316,7 +306,7 @@ public class SimulationTest {
       simulation.trexEngine3.paxos(r3.messages().getFirst());
     });
 
-    LOGGER.info("Leader: " + leader.trexNode.nodeIdentifier());
+    LOGGER.info(leader.trexNode.nodeIdentifier + " == LEADER");
   }
 
 }
