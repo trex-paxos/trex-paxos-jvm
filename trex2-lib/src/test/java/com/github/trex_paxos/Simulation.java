@@ -246,7 +246,6 @@ class Simulation {
         .flatMap(engine -> engine.paxos(m).messages().stream());
     case DirectMessage m -> engines.get(m.to()).paxos(m).messages().stream();
     case AbstractCommand abstractCommand -> throw new AssertionError("Unexpected command message: " + abstractCommand);
-    default -> throw new IllegalStateException("Unexpected value: " + send.message());
   };
 
   private void makeClientDataEvents(int iterations, NavigableMap<Long, List<Event>> eventQueue) {

@@ -94,7 +94,7 @@ public class TrexNode {
         var number = prepare.number();
         if (number.lessThan(progress.highestPromised()) || prepare.logIndex() <= progress.highestCommittedIndex()) {
           // nack a low nextPrepareMessage else any nextPrepareMessage for a committed slot sending any accepts they are missing
-          messages.add(nack(prepare, loadCatchup(prepare.logIndex())));
+          messages.add(nack(prepare));
         } else if (number.greaterThan(progress.highestPromised())) {
           // ack a higher nextPrepareMessage
           final var newProgress = progress.withHighestPromised(prepare.number());
@@ -259,9 +259,7 @@ public class TrexNode {
             switch (accept) {
               case Accept(_, _, _, NoOperation _) -> {
               }
-              case Accept(_, _, _, final Command command) -> {
-                commands.add(command);
-              }
+              case Accept(_, _, _, final Command command) -> commands.add(command);
             }
           }
 
@@ -352,9 +350,8 @@ public class TrexNode {
    * Send a negative nextPrepareMessage response message to the leader.
    *
    * @param prepare The nextPrepareMessage message to reject.
-   * @param catchup The list of accept messages to send to the leader.
    */
-  PrepareResponse nack(Prepare prepare, List<Accept> catchup) {
+  PrepareResponse nack(Prepare prepare) {
     return new PrepareResponse(
         new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), false),
         highestCommitted(), journal.loadAccept(prepare.logIndex())
@@ -408,7 +405,7 @@ public class TrexNode {
 
   /// The heartbeat method is called by the TrexEngine to send messages to the cluster to stop them
   /// timing out. There may also be dropped messages due to partitions or crashes. So we will also
-  /// heart beat prepare or accept messages that are pending a response.
+  /// heartbeat prepare or accept messages that are pending a response.
   public List<TrexMessage> heartbeat() {
     final var result = new ArrayList<TrexMessage>();
     if (isLeader()) {
@@ -421,7 +418,7 @@ public class TrexNode {
   }
 
   private List<Accept> pendingAcceptMessages() {
-    final var r = LongStream.range(
+    return LongStream.range(
             progress.highestCommittedIndex() + 1,
             progress.highestAcceptedIndex() + 1
         )
@@ -429,7 +426,6 @@ public class TrexNode {
         .takeWhile(Optional::isPresent)
         .flatMap(Optional::stream)
         .toList();
-    return r;
   }
 
   private Commit currentCommitMessage() {
