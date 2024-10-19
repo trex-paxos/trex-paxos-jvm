@@ -24,7 +24,6 @@ public class Pickle {
         case MessageType.AcceptResponse -> AcceptResponse.readFrom(dis);
         case MessageType.Commit -> Commit.readFrom(dis);
         case MessageType.Catchup -> Catchup.readFrom(dis);
-        case MessageType.CatchupResponse -> CatchupResponse.readFrom(dis);
       };
     } catch (IOException e) {
       throw new RuntimeException(e);
@@ -52,5 +51,21 @@ public class Pickle {
     ByteArrayInputStream bis = new ByteArrayInputStream(pickled);
     DataInputStream dis = new DataInputStream(bis);
     return Progress.readFrom(dis);
+  }
+
+  public static long uncheckedReadLong(DataInputStream dis) {
+    try {
+      return dis.readLong();
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
+  static void uncheckedWriteLong(DataOutputStream dos, long i) {
+    try {
+      dos.writeLong(i);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

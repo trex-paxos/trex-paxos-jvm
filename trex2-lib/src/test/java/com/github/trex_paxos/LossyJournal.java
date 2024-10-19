@@ -34,6 +34,11 @@ public class LossyJournal implements Journal {
     return Optional.ofNullable(acceptMap.get(logIndex));
   }
 
+  @Override
+  public void sync() {
+    // no-op
+  }
+
   final Map<Byte, Long> committedMap = new HashMap<>();
 
 }

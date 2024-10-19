@@ -246,6 +246,7 @@ class Simulation {
         .flatMap(engine -> engine.paxos(m).messages().stream());
     case DirectMessage m -> engines.get(m.to()).paxos(m).messages().stream();
     case AbstractCommand abstractCommand -> throw new AssertionError("Unexpected command message: " + abstractCommand);
+    default -> throw new IllegalStateException("Unexpected value: " + send.message());
   };
 
   private void makeClientDataEvents(int iterations, NavigableMap<Long, List<Event>> eventQueue) {
@@ -289,9 +290,6 @@ class Simulation {
 
     @Override
     public TrexResult paxos(TrexMessage input) {
-      if (this.trexNode.nodeIdentifier == 2 && input instanceof Commit(_, final var logIndex) && logIndex > 6) {
-        LOGGER.info("hum");
-      }
       final var oldRole = trexNode.getRole();
       final var result = super.paxos(input);
       final var newRole = trexNode.getRole();
@@ -342,6 +340,11 @@ class Simulation {
     @Override
     public Optional<Accept> loadAccept(long logIndex) {
       return Optional.ofNullable(fakeJournal.get(logIndex));
+    }
+
+    @Override
+    public void sync() {
+      // no-op
     }
   }
 }

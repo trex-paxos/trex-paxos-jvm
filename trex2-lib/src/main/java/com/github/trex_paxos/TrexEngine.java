@@ -40,9 +40,9 @@ public abstract class TrexEngine {
   /// then append a commit message as it is very cheap for another node to filter out commits it has already seen.
   List<TrexMessage> command(Command command) {
     if (trexNode.isLeader()) {
-      final var nextExcept = trexNode.nextAcceptMessage(command);
-      trexNode.paxos(nextExcept);
-      return List.of(nextExcept, trexNode.makeCommitMessage());
+      final var nextAcceptMessage = trexNode.nextAcceptMessage(command);
+      trexNode.paxos(nextAcceptMessage);
+      return List.of(nextAcceptMessage, trexNode.makeCommitMessage());
     } else {
       return Collections.emptyList();
     }
@@ -76,7 +76,10 @@ public abstract class TrexEngine {
     try {
       mutex.acquire();
       try {
-        return paxosNotThreadSafe(input);
+        final var r = paxosNotThreadSafe(input);
+        // FIXME we need to remove CatchUpReponse and loop then flush at the end to implement batching which will work for client accepts.
+        trexNode.journal.sync();
+        return r;
       } finally {
         mutex.release();
       }
@@ -127,10 +130,13 @@ public abstract class TrexEngine {
     return switch (input) {
       case Commit commit -> !trexNode.isLeader()
           && commit.from() != trexNode.nodeIdentifier()
-          && commit.logIndex() >= trexNode.highestCommitted();
+          && (commit.highestAcceptedIndex() >= trexNode.highestAccepted()
+          || commit.highestCommittedIndex() >= trexNode.highestCommitted())
+      ;
       case Accept accept -> !trexNode.isLeader()
           && accept.from() != trexNode.nodeIdentifier()
-          && accept.logIndex() > trexNode.highestCommitted();
+          && (accept.logIndex() > trexNode.highestAccepted()
+          || accept.logIndex() > trexNode.highestCommitted());
       default -> false;
     };
   }

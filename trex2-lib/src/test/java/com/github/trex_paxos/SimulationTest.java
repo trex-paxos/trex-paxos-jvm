@@ -63,7 +63,6 @@ public class SimulationTest {
     assertThat(lastCommits).hasSizeGreaterThan(2);
   }
 
-
   @Test
   public void testClientWorkPerfectNetwork1000() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(9876);
@@ -115,7 +114,7 @@ public class SimulationTest {
 
     int runLength = 15;
 
-    final var counter = new java.util.concurrent.atomic.AtomicLong();
+    final var counter = new AtomicLong();
 
     final var nemesis = makeNemesis(
         _ -> (byte) (counter.getAndIncrement() % 3),
@@ -165,7 +164,7 @@ public class SimulationTest {
 
     final var nemesis = getRotatingPartitionNemesis(simulation, runLength / 3);
 
-    // when we run for 15 iterations with client data
+    // run with client data
     simulation.run(runLength, true, nemesis);
 
     // then we should have a single leader and the rest followers
@@ -190,6 +189,7 @@ public class SimulationTest {
 
     )).isTrue();
 
+    assertThat(simulation.trexEngine1.journal.progress.highestCommittedIndex()).isGreaterThan(10);
   }
 
   private static BiFunction<Simulation.Send, Long, Stream<TrexMessage>> getRotatingPartitionNemesis(Simulation simulation, int period) {
@@ -235,7 +235,11 @@ public class SimulationTest {
 
       return switch (send.message()) {
         case BroadcastMessage broadcastMessage -> {
-          // Remove the entry at partitionedNodeIndex
+          if (broadcastMessage.from() == partitionedNodeIndex + 1) {
+            LOGGER.info("\tBroadcastMessage from isolated node " + (partitionedNodeIndex + 1) + " ignored.");
+            yield Stream.empty();
+          }
+          // Drop the target node
           mutableEnginesList.remove((int) partitionedNodeIndex);
           mutableEnginesList.forEach(e -> LOGGER.info("\t\t" + broadcastMessage + " ~> " + e.trexNode.nodeIdentifier()));
           LOGGER.info("\t\tdropped(" + broadcastMessage + ") ~> " + (partitionedNodeIndex + 1));
@@ -281,7 +285,7 @@ public class SimulationTest {
     return longestJournal.entrySet().stream().allMatch(e -> {
       final var logIndex = e.getKey();
       final var accept = e.getValue();
-      LOGGER.info("logIndex: " + logIndex +
+      LOGGER.info("highestCommittedIndex: " + logIndex +
           "\n\taccept1: " + Optional.ofNullable(fakeJournal1.get(logIndex)).map(Objects::toString).orElse("null") +
           "\n\taccept2: " + Optional.ofNullable(fakeJournal2.get(logIndex)).map(Objects::toString).orElse("null") +
           "\n\taccept3: " + Optional.ofNullable(fakeJournal3.get(logIndex)).map(Objects::toString).orElse("null"));

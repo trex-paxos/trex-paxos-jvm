@@ -11,8 +11,7 @@ public enum MessageType {
   Accept(3),
   AcceptResponse(4),
   Commit(5),
-  Catchup(6),
-  CatchupResponse(7);
+  Catchup(6);
 
   private final byte id;
 
@@ -37,8 +36,7 @@ public enum MessageType {
       (byte) 2, com.github.trex_paxos.msg.Accept.class,
       (byte) 3, com.github.trex_paxos.msg.AcceptResponse.class,
       (byte) 4, com.github.trex_paxos.msg.Commit.class,
-      (byte) 5, com.github.trex_paxos.msg.Catchup.class,
-      (byte) 6, com.github.trex_paxos.msg.CatchupResponse.class
+      (byte) 5, com.github.trex_paxos.msg.Catchup.class
   );
 
   /**
@@ -72,7 +70,6 @@ public enum MessageType {
       case AcceptResponse _ -> AcceptResponse;
       case Commit _ -> Commit;
       case Catchup _ -> Catchup;
-      case CatchupResponse _ -> CatchupResponse;
     };
   }
 }

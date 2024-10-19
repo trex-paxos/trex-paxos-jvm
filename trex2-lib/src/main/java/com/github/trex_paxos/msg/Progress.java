@@ -13,7 +13,9 @@ import java.io.IOException;
  * @param highestCommittedIndex The highest log index that has been learnt to have been fixed and so committed.
  * @param highestAcceptedIndex The highest log index that has been accepted.
  */
-public record Progress(byte nodeIdentifier, BallotNumber highestPromised, long highestCommittedIndex,
+public record Progress(byte nodeIdentifier,
+                       BallotNumber highestPromised,
+                       long highestCommittedIndex,
                        long highestAcceptedIndex) {
 
   /**

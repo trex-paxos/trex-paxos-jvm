@@ -44,4 +44,7 @@ public interface Journal {
    * @param logIndex The log slot to load the accept record for.
    */
   Optional<Accept> loadAccept(long logIndex);
+
+  /// Sync the journal to disk. This method must force the disk. This must be done before any messages are sent out.
+  void sync();
 }
