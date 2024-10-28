@@ -6,10 +6,19 @@
     "configurations": [
         {
             "type": "java",
+            "name": "UUIDv7Generator",
+            "request": "launch",
+            "mainClass": "com.github.trex_paxos.demo.UUIDv7Generator",
+            "projectName": "trex2-demo"
+        },
+        {
+            "type": "java",
             "name": "CommandServer",
             "request": "launch",
             "mainClass": "com.github.trex_paxos.demo.CommandServer",
-            "args": ["--serverport=9999"],
+            "args": [
+                "--serverport=9999"
+            ],
             "projectName": "trex2-demo"
         },
         {

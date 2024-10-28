@@ -3,6 +3,8 @@ package com.github.trex_paxos.demo;
 import java.security.SecureRandom;
 import java.util.UUID;
 
+import com.github.f4b6a3.uuid.UuidCreator;
+
 public class UUIDv7Generator {
     private static final SecureRandom RANDOM = new SecureRandom();
     private final byte nodeIdentifier;
@@ -15,23 +17,43 @@ public class UUIDv7Generator {
         return System.currentTimeMillis();
     }
 
-    protected byte[] getRandomBytes() {
-        byte[] randomBytes = new byte[7];
+    protected byte[] getRandomBytes(int size) {
+        byte[] randomBytes = new byte[size];
         RANDOM.nextBytes(randomBytes);
         return randomBytes;
     }
 
     public UUID generateUUID() {
         long timestamp = getCurrentTimestamp();
-        byte[] randomBytes = getRandomBytes();
         
         // Get the most significant bits
         long msb = constructMsb(timestamp);
         
         // Get the least significant bits
-        long lsb = constructLsb(randomBytes);
+        //long lsb = constructLsb(randomBytes);
         
+        byte[] data = getRandomBytes(16);
+        data[6]  &= 0x0f;  /* clear version        */
+        data[6]  |= 0x40;  /* set to version 4     */
+        data[8]  &= 0x3f;  /* clear variant        */
+        data[8]  |= (byte) 0x80;  /* set to IETF variant  */
+        //long msb = 0;
+        long lsb = 0;
+        assert data.length == 16 : "data must be 16 bytes in length";
+        for (int i=8; i<16; i++)
+            lsb = (lsb << 8) | (data[i] & 0xff);
         return new UUID(msb, lsb);
+    }
+
+    public static void main(String[] args) {
+        UUIDv7Generator generator = new UUIDv7Generator((byte)1);
+        UUID uuid = generator.generateUUID2();
+        System.out.println("Generated UUID: " + uuid);
+    }
+
+    public UUID generateUUID2() {
+        UUID uuid = UuidCreator.getTimeOrderedEpoch();
+        return uuid; 
     }
 
     protected long constructMsb(long timestamp) {

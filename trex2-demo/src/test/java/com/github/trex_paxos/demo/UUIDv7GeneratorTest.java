@@ -24,7 +24,7 @@ public class UUIDv7GeneratorTest {
         }
         
         @Override
-        protected byte[] getRandomBytes() {
+        protected byte[] getRandomBytes(int size) {
             return fixedRandomBytes;
         }
         
