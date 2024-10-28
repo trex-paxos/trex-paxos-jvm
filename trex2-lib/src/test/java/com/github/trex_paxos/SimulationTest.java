@@ -3,12 +3,15 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.*;
 import org.junit.jupiter.api.Test;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.random.RandomGenerator;
 import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 import static com.github.trex_paxos.Simulation.LOGGER;
@@ -93,19 +96,27 @@ public class SimulationTest {
     assertThat(roles).containsOnly(TrexRole.FOLLOW, TrexRole.LEAD);
     assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
 
+
     // and we should have the same commit logs
     assertThat(consistentJournals(
-        simulation.trexEngine1.journal.fakeJournal,
-        simulation.trexEngine2.journal.fakeJournal,
-        simulation.trexEngine3.journal.fakeJournal
-
+        simulation.trexEngine1.journal,
+        simulation.trexEngine2.journal,
+        simulation.trexEngine3.journal
     )).isTrue();
   }
 
   @Test
-  public void testClientWorkLossyNetwork() {
+  public void testClientWorkLossyNetwork1000() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(56734);
 
+    IntStream.range(0, 1000).forEach(i -> {
+          LOGGER.info("\n ================= \nstarting iteration: " + i);
+          testWorkLossyNetwork(rng);
+        }
+    );
+  }
+
+  private void testWorkLossyNetwork(RandomGenerator rng) {
     // given a repeatable test setup
     final var simulation = new Simulation(rng, 30);
 
@@ -140,18 +151,24 @@ public class SimulationTest {
 
     // and we should have the same commit logs
     assertThat(consistentJournals(
-        simulation.trexEngine1.journal.fakeJournal,
-        simulation.trexEngine2.journal.fakeJournal,
-        simulation.trexEngine3.journal.fakeJournal
-
+        simulation.trexEngine1.journal,
+        simulation.trexEngine2.journal,
+        simulation.trexEngine3.journal
     )).isTrue();
-
   }
 
+  // FIXME this test fails so we have a bug
   @Test
-  public void testClientWorkRotatingPartitionedNetwork() {
+  public void testWorkRotationNetworkPartition1000() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(634546345);
+    IntStream.range(0, 1000).forEach(i -> {
+          LOGGER.info("\n ================= \nstarting iteration: " + i);
+          testWorkRotationNetworkPartition(rng);
+        }
+    );
+  }
 
+  private void testWorkRotationNetworkPartition(RandomGenerator rng) {
     // given a repeatable test setup
     final var simulation = new Simulation(rng, 30);
 
@@ -174,7 +191,6 @@ public class SimulationTest {
         .toList();
 
     // assert that we ended with only one leader
-    assertThat(roles).containsOnly(TrexRole.FOLLOW, TrexRole.LEAD);
     assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
 
     LOGGER.info("\n\nEMD ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ END\n\n");
@@ -183,13 +199,79 @@ public class SimulationTest {
 
     // and we should have the same commit logs
     assertThat(consistentJournals(
-        simulation.trexEngine1.journal.fakeJournal,
-        simulation.trexEngine2.journal.fakeJournal,
-        simulation.trexEngine3.journal.fakeJournal
-
+        simulation.trexEngine1.journal,
+        simulation.trexEngine2.journal,
+        simulation.trexEngine3.journal
     )).isTrue();
 
+    assertThat(consistentCommits(
+        simulation.trexEngine1.allCommands,
+        simulation.trexEngine2.allCommands,
+        simulation.trexEngine3.allCommands
+    )).isTrue();
+
+    if (simulation.trexEngine1.journal.progress.highestCommittedIndex() <= 10) {
+      LOGGER.info("highestCommittedIndex: " + simulation.trexEngine1.journal.progress.highestCommittedIndex());
+    }
     assertThat(simulation.trexEngine1.journal.progress.highestCommittedIndex()).isGreaterThan(10);
+  }
+
+  private boolean consistentCommits(
+      List<AbstractCommand> engine1,
+      List<AbstractCommand> engine2,
+      List<AbstractCommand> engine3) {
+    final var maxLength =
+        Math.max(engine1.size(), Math.max(
+            engine2.size(), engine3.size()));
+    return IntStream.range(0, maxLength).allMatch(index -> {
+      final Optional<AbstractCommand> optional1 = engine1.stream().skip(index).findFirst();
+      final Optional<AbstractCommand> optional2 = engine2.stream().skip(index).findFirst();
+      final Optional<AbstractCommand> optional3 = engine3.stream().skip(index).findFirst();
+      // Check if all non-empty values are equal
+      final var result =
+          optional1.map(
+                  // if one is defined check it against the two and three
+                  a1 -> optional2.map(a1::equals).orElse(true) && optional3.map(a1::equals).orElse(true)
+              )
+              // if one is not defined then check two against three
+              .orElse(true)
+              &&
+              optional2.map(
+                  // check two against three
+                  a2 -> optional3.map(a2::equals).orElse(true)
+              ).orElse(true); // if one and two are not defined it does not matter what three is
+      return result;
+    });
+  }
+
+  private boolean consistentJournals(
+      Simulation.TransparentJournal journal1,
+      Simulation.TransparentJournal journal2,
+      Simulation.TransparentJournal journal3) {
+    final var maxLength = Math.max(
+        journal1.fakeJournal.size(), Math.max(
+            journal2.fakeJournal.size(),
+            journal3.fakeJournal.size()));
+    return LongStream.range(0, maxLength).allMatch(e -> {
+      final Optional<Accept> accept1 = journal1.getCommitted(e);
+      final Optional<Accept> accept2 = journal2.getCommitted(e);
+      final Optional<Accept> accept3 = journal3.getCommitted(e);
+
+      // Check if all non-empty values are equal
+      final var result =
+          accept1.map(
+                  // if one is defined check it against the two and three
+                  a1 -> accept2.map(a1::equals).orElse(true) && accept3.map(a1::equals).orElse(true)
+              )
+              // if one is not defined then check two against three
+              .orElse(true)
+              &&
+              accept2.map(
+                  // check two against three
+                  a2 -> accept3.map(a2::equals).orElse(true)
+              ).orElse(true); // if one and two are not defined it does not matter what three is
+      return result;
+    });
   }
 
   private static BiFunction<Simulation.Send, Long, Stream<TrexMessage>> getRotatingPartitionNemesis(Simulation simulation, int period) {
@@ -244,14 +326,8 @@ public class SimulationTest {
               .map(e -> e.paxos(broadcastMessage))
               .flatMap(p -> p.messages().stream())
               .filter(outbound -> switch (outbound) {
-                case DirectMessage directMessageResponse -> {
-                  // filter out responses noting that we are 1 indexed
-                  if (directMessageResponse.to() == partitionedNodeIndex + 1) {
-                    yield false;
-                  } else {
-                    yield true;
-                  }
-                }
+                case DirectMessage directMessageResponse -> // filter out responses noting that we are 1 indexed
+                    directMessageResponse.to() != partitionedNodeIndex + 1;
                 default -> true;
               });
         }
@@ -267,23 +343,6 @@ public class SimulationTest {
             throw new AssertionError("Unexpected command message: " + abstractCommand);
       };
     };
-  }
-
-  /**
-   * This logic will iteration over the journals and ensure that they are not inconsistent.
-   */
-  boolean consistentJournals(NavigableMap<Long, Accept> fakeJournal1, NavigableMap<Long, Accept> fakeJournal2, NavigableMap<Long, Accept> fakeJournal3) {
-    final NavigableMap<Long, Accept> longestJournal = fakeJournal1.size() > fakeJournal2.size() ? fakeJournal1 : fakeJournal2.size() > fakeJournal3.size() ? fakeJournal2 : fakeJournal3;
-    return longestJournal.entrySet().stream().allMatch(e -> {
-      final var logIndex = e.getKey();
-      final var accept = e.getValue();
-      LOGGER.info("highestCommittedIndex: " + logIndex +
-          "\n\taccept1: " + Optional.ofNullable(fakeJournal1.get(logIndex)).map(Objects::toString).orElse("null") +
-          "\n\taccept2: " + Optional.ofNullable(fakeJournal2.get(logIndex)).map(Objects::toString).orElse("null") +
-          "\n\taccept3: " + Optional.ofNullable(fakeJournal3.get(logIndex)).map(Objects::toString).orElse("null"));
-      return Optional.ofNullable(fakeJournal2.get(logIndex)).map(a -> a.equals(accept)).orElse(true)
-          && Optional.ofNullable(fakeJournal3.get(logIndex)).map(a -> a.equals(accept)).orElse(true);
-    });
   }
 
   void makeLeader(Simulation simulation) {

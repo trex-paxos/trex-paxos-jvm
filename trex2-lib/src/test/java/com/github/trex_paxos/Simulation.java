@@ -272,6 +272,8 @@ class Simulation {
 
     final TransparentJournal journal;
 
+    final List<AbstractCommand> allCommands = new ArrayList<>();
+
     public TestablePaxosEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy, TransparentJournal journal) {
       super(new TrexNode(nodeIdentifier, quorumStrategy, journal));
       this.journal = journal;
@@ -304,6 +306,7 @@ class Simulation {
       if (oldRole != newRole) {
         LOGGER.info(trexNode.nodeIdentifier() + " == " + newRole);
       }
+      allCommands.addAll(result.commands());
       return result;
     }
 
@@ -353,6 +356,12 @@ class Simulation {
     @Override
     public void sync() {
       // no-op
+    }
+
+    public Optional<Accept> getCommitted(Long logIndex) {
+      return logIndex <= this.progress.highestCommittedIndex() ?
+          Optional.ofNullable(fakeJournal.get(logIndex)) :
+          Optional.empty();
     }
   }
 }
