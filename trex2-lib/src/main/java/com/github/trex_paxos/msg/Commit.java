@@ -30,13 +30,4 @@ public record Commit(
     final var highestCommittedIndex = dis.readLong();
     return new Commit(from, highestCommittedIndex, highestAcceptedIndex);
   }
-
-  @Override
-  public String toString() {
-    return "Commit{" +
-        "from=" + from +
-        ", highestCommittedIndex=" + highestCommittedIndex +
-        ", highestAcceptedIndex=" + highestAcceptedIndex +
-        '}';
-  }
 }
