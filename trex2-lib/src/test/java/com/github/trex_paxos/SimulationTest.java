@@ -31,6 +31,7 @@ public class SimulationTest {
     );
   }
 
+  @Test
   public void testLeaderElection(RandomGenerator rng) {
     // given a repeatable test setup
     final var simulation = new Simulation(rng, 30);
@@ -71,6 +72,7 @@ public class SimulationTest {
     );
   }
 
+  @Test
   public void testClientWork(RandomGenerator rng) {
     // given a repeatable test setup
     final var simulation = new Simulation(rng, 30);
