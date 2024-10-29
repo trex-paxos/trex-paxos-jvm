@@ -1,12 +1,8 @@
 package com.github.trex_paxos.demo;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-
 import com.github.trex_paxos.msg.Command;
+
+import java.util.concurrent.*;
 
 public class CommandProcessor {
     private final BlockingQueue<String> workQueue;
@@ -23,11 +19,11 @@ public class CommandProcessor {
     }
 
     // Called by TCP reader virtual threads
-    public CompletableFuture<Result> submitCommand(Command command) {
+    public CompletableFuture<Result> submitCommand(Command command) throws InterruptedException {
         CompletableFuture<Result> future = new CompletableFuture<>();
-        pendingCommands.put(command.clientMsgUuid().toString(), future);
+        pendingCommands.put(command.clientMsgUuid(), future);
         // Add the command to the work queue
-        workQueue.offer(command.clientMsgUuid().toString());
+        workQueue.put(command.clientMsgUuid());
         return future;
     }
 
@@ -49,7 +45,7 @@ public class CommandProcessor {
 
     private Result doWork(String commandId) {
             // Implementation of work processing
-            return new Result(commandId.toString());
+        return new Result(commandId);
     }
 
     private void handleError(Exception e) {
