@@ -3,6 +3,7 @@ package com.github.trex_paxos.msg;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * A client command to be executed by the state machine. As this library is neutral to the application, the command is
@@ -34,38 +35,31 @@ public record Command(String clientMsgUuid, byte[] operationBytes) implements Ab
 
     @Override
     public boolean equals(Object arg0) {
-        if (this == arg0) {
-            return true;
-        }
-        if (arg0 == null) {
-            return false;
-        }
-        if (getClass() != arg0.getClass()) {
-            return false;
-        }
-        Command other = (Command) arg0;
+      if (this == arg0) {
+        return true;
+      }
+      if (arg0 == null) {
+        return false;
+      }
+      if (getClass() != arg0.getClass()) {
+        return false;
+      }
+      Command other = (Command) arg0;
       if (clientMsgUuid == null) {
         if (other.clientMsgUuid != null) {
-                return false;
-            }
+          return false;
+        }
       } else if (!clientMsgUuid.equals(other.clientMsgUuid)) {
-            return false;
+        return false;
       }
-      if (operationBytes == null) {
-        return other.operationBytes == null;
-        } else {
-        if (other.operationBytes == null) {
-                return false;
-        }
-        if (operationBytes.length != other.operationBytes.length) {
-                return false;
-        }
-        for (int i = 0; i < operationBytes.length; i++) {
-          if (operationBytes[i] != other.operationBytes[i]) {
-                    return false;
-                }
-            }
-            return true;
-        }
+      return java.util.Arrays.equals(operationBytes, other.operationBytes);
     }
+
+  @Override
+  public String toString() {
+    return "Command[" +
+        "clientMsgUuid='" + clientMsgUuid + '\'' +
+        ", operationBytes=" + Arrays.toString(operationBytes) +
+        ']';
+  }
 }

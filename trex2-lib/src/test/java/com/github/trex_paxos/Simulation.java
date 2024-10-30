@@ -12,6 +12,7 @@ import java.util.random.RandomGenerator;
 import java.util.random.RandomGeneratorFactory;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 class Simulation {
@@ -73,8 +74,10 @@ class Simulation {
         tick(timeWithEvents.getKey());
 
         LOGGER.info("------------------");
-        LOGGER.info("tick: " + now + "\t" + trexEngine1.role() + " " + trexEngine2.role() + " " + trexEngine3.role());
-
+        LOGGER.info("tick: " + now + "\n\t" + trexEngine1.role() + " " + trexEngine1.trexNode().progress.toString()
+            + "\n\t" + trexEngine2.role() + " " + trexEngine2.trexNode().progress.toString()
+            + "\n\t" + trexEngine3.role() + " " + trexEngine3.trexNode().progress.toString()
+        );
 
         // grab the events at this time
         final var events = timeWithEvents.getValue();
@@ -143,9 +146,45 @@ class Simulation {
       if (finished) {
         LOGGER.info("finished as empty iteration: " + i1);
       }
+      finished = finished && matchingCommands(trexEngine1.allCommands, trexEngine2.allCommands, trexEngine3.allCommands);
+      if (finished) {
+        LOGGER.info("finished as not matching commands:\n" +
+            "\t" + trexEngine1.allCommands.stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
+            + "\t" + trexEngine2.allCommands.stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
+            + "\t" + trexEngine3.allCommands.stream().map(Objects::toString).collect(Collectors.joining(",")));
+      }
       return finished;
     });
     return allMessages;
+  }
+
+  static boolean matchingCommands(List<AbstractCommand> c1,
+                                  List<AbstractCommand> c2,
+                                  List<AbstractCommand> c3) {
+    final var maxLength = Math.max(
+        c1.size(), Math.max(
+            c2.size(),
+            c3.size()));
+    return LongStream.range(0, maxLength).allMatch(i -> {
+      final Optional<AbstractCommand> optC1 = i < c1.size() ? Optional.of(c1.get((int) i)) : Optional.empty();
+      final Optional<AbstractCommand> optC2 = i < c2.size() ? Optional.of(c2.get((int) i)) : Optional.empty();
+      final Optional<AbstractCommand> optC3 = i < c3.size() ? Optional.of(c3.get((int) i)) : Optional.empty();
+
+      // Check if all non-empty values are equal
+      final var result =
+          optC1.map(
+                  // if one is defined check it against the two and three
+                  a1 -> optC2.map(a1::equals).orElse(true) && optC3.map(a1::equals).orElse(true)
+              )
+              // if one is not defined then check two against three
+              .orElse(true)
+              &&
+              optC2.map(
+                  // check two against three
+                  a2 -> optC3.map(a2::equals).orElse(true)
+              ).orElse(true); // if one and two are not defined it does not matter what three is
+      return result;
+    });
   }
 
   public ArrayList<Message> run(int i, boolean b) {

@@ -3,6 +3,7 @@ package com.github.trex_paxos.msg;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.stream.IntStream;
 
 public record Catchup(byte from, byte to, long highestCommittedIndex,
@@ -25,5 +26,15 @@ public record Catchup(byte from, byte to, long highestCommittedIndex,
     final var length = Math.min(slotGaps.length, Short.MAX_VALUE);
     dos.writeShort(length);
     IntStream.range(0, length).forEach(i -> Pickle.uncheckedWriteLong(dos, slotGaps[i]));
+  }
+
+  @Override
+  public String toString() {
+    return "Catchup[" +
+        "from=" + from +
+        ", to=" + to +
+        ", highestCommittedIndex=" + highestCommittedIndex +
+        ", slotGaps=" + Arrays.toString(slotGaps) +
+        ']';
   }
 }

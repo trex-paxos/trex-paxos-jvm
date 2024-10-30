@@ -244,7 +244,9 @@ public class TrexNode {
         }
       }
       case Commit(final var commitFrom, final var maxSlotCommittable, long leaderMaxAcceptedIndex) -> {
+        // FIXME do not ff the commit only commit if we knew the ballot at the slot
         final var lastCommittedIndex = highestCommitted();
+        // FIXME if it is the next slot we can commit it without all this logic as long as the accept is by the same leader number
         if (maxSlotCommittable > lastCommittedIndex) {
           // we may have gaps, so we must find the ones that we have in the log
           final var commitableAccepts =
@@ -252,6 +254,7 @@ public class TrexNode {
                   .mapToObj(journal::loadAccept)
                   .takeWhile(Optional::isPresent)
                   .map(Optional::get)
+                  .filter(accept -> accept.number().nodeIdentifier() == commitFrom)
                   .toList();
 
           // make the callback to the main application
@@ -319,7 +322,7 @@ public class TrexNode {
   AcceptResponse ack(Accept accept) {
     return
         new AcceptResponse(
-            new Vote(nodeIdentifier, accept.number().nodeIdentifier(), accept.logIndex(), true)
+            new Vote(nodeIdentifier, accept.number().nodeIdentifier(), accept.logIndex(), true, accept.number())
             , progress);
   }
 
@@ -330,7 +333,7 @@ public class TrexNode {
    */
   AcceptResponse nack(Accept accept) {
     return new AcceptResponse(
-        new Vote(nodeIdentifier, accept.number().nodeIdentifier(), accept.logIndex(), false)
+        new Vote(nodeIdentifier, accept.number().nodeIdentifier(), accept.logIndex(), false, accept.number())
         , progress);
   }
 
@@ -341,7 +344,7 @@ public class TrexNode {
    */
   PrepareResponse ack(Prepare prepare) {
     return new PrepareResponse(
-        new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), true),
+        new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), true, prepare.number()),
         highestCommitted(), journal.loadAccept(prepare.logIndex())
     );
   }
@@ -353,7 +356,7 @@ public class TrexNode {
    */
   PrepareResponse nack(Prepare prepare) {
     return new PrepareResponse(
-        new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), false),
+        new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), false, prepare.number()),
         highestCommitted(), journal.loadAccept(prepare.logIndex())
     );
   }

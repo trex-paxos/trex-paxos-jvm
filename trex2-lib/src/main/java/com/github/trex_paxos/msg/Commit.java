@@ -12,6 +12,7 @@ import java.io.IOException;
 /// @param highestCommittedIndex The highest log index that the leader has learnt to have been fixed and so committed.
 /// @param highestAcceptedIndex  The highest log index that the leader has attempted to fix.
 public record Commit(
+    // FIXME: we must add the Ballot Number for the follower to know it is commiting the same log entry as the leader.
     byte from,
     long highestCommittedIndex,
     long highestAcceptedIndex

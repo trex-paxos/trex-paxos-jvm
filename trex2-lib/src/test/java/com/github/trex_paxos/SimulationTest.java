@@ -15,6 +15,7 @@ import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 import static com.github.trex_paxos.Simulation.LOGGER;
+import static com.github.trex_paxos.Simulation.matchingCommands;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class SimulationTest {
@@ -34,7 +35,6 @@ public class SimulationTest {
     );
   }
 
-  @Test
   public void testLeaderElection(RandomGenerator rng) {
     // given a repeatable test setup
     final var simulation = new Simulation(rng, 30);
@@ -75,7 +75,6 @@ public class SimulationTest {
     );
   }
 
-  @Test
   public void testClientWork(RandomGenerator rng) {
     // given a repeatable test setup
     final var simulation = new Simulation(rng, 30);
@@ -86,6 +85,19 @@ public class SimulationTest {
     // when we run for 15 iterations with client data
     simulation.run(15, true);
 
+    assertThat(matchingCommands(
+        simulation.trexEngine1.allCommands,
+        simulation.trexEngine2.allCommands,
+        simulation.trexEngine3.allCommands
+    )).isTrue();
+
+    // and we should have the same commit logs
+    assertThat(consistentJournals(
+        simulation.trexEngine1.journal,
+        simulation.trexEngine2.journal,
+        simulation.trexEngine3.journal
+    )).isTrue();
+
     // then we should have a single leader and the rest followers
     final var roles = simulation.engines.values().stream()
         .map(TrexEngine::trexNode)
@@ -95,14 +107,6 @@ public class SimulationTest {
     // assert that we ended with only one leader
     assertThat(roles).containsOnly(TrexRole.FOLLOW, TrexRole.LEAD);
     assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
-
-
-    // and we should have the same commit logs
-    assertThat(consistentJournals(
-        simulation.trexEngine1.journal,
-        simulation.trexEngine2.journal,
-        simulation.trexEngine3.journal
-    )).isTrue();
   }
 
   @Test
@@ -143,11 +147,11 @@ public class SimulationTest {
         .map(TrexNode::currentRole)
         .toList();
 
-    // assert that we ended with only one leader
-    assertThat(roles).containsOnly(TrexRole.FOLLOW, TrexRole.LEAD);
-    assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
-
-    LOGGER.info("sizes: " + simulation.trexEngine1.journal.fakeJournal.size() + " " + simulation.trexEngine2.journal.fakeJournal.size() + " " + simulation.trexEngine3.journal.fakeJournal.size());
+    assertThat(matchingCommands(
+        simulation.trexEngine1.allCommands,
+        simulation.trexEngine2.allCommands,
+        simulation.trexEngine3.allCommands
+    )).isTrue();
 
     // and we should have the same commit logs
     assertThat(consistentJournals(
@@ -155,6 +159,12 @@ public class SimulationTest {
         simulation.trexEngine2.journal,
         simulation.trexEngine3.journal
     )).isTrue();
+
+    // assert that we ended with only one leader
+    assertThat(roles).containsOnly(TrexRole.FOLLOW, TrexRole.LEAD);
+    assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
+
+    LOGGER.info("sizes: " + simulation.trexEngine1.journal.fakeJournal.size() + " " + simulation.trexEngine2.journal.fakeJournal.size() + " " + simulation.trexEngine3.journal.fakeJournal.size());
   }
 
   // FIXME this test fails so we have a bug
@@ -190,12 +200,15 @@ public class SimulationTest {
         .map(TrexNode::currentRole)
         .toList();
 
-    // assert that we ended with only one leader
-    assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
-
     LOGGER.info("\n\nEMD ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ END\n\n");
     LOGGER.info(simulation.trexEngine1.role() + " " + simulation.trexEngine2.role() + " " + simulation.trexEngine3.role());
     LOGGER.info("sizes: " + simulation.trexEngine1.journal.fakeJournal.size() + " " + simulation.trexEngine2.journal.fakeJournal.size() + " " + simulation.trexEngine3.journal.fakeJournal.size());
+
+    assertThat(matchingCommands(
+        simulation.trexEngine1.allCommands,
+        simulation.trexEngine2.allCommands,
+        simulation.trexEngine3.allCommands
+    )).isTrue();
 
     // and we should have the same commit logs
     assertThat(consistentJournals(
@@ -213,7 +226,11 @@ public class SimulationTest {
     if (simulation.trexEngine1.journal.progress.highestCommittedIndex() <= 10) {
       LOGGER.info("highestCommittedIndex: " + simulation.trexEngine1.journal.progress.highestCommittedIndex());
     }
+
     assertThat(simulation.trexEngine1.journal.progress.highestCommittedIndex()).isGreaterThan(10);
+
+    // assert that we ended with only one leader
+    assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
   }
 
   private boolean consistentCommits(
@@ -228,6 +245,7 @@ public class SimulationTest {
       final Optional<AbstractCommand> optional2 = engine2.stream().skip(index).findFirst();
       final Optional<AbstractCommand> optional3 = engine3.stream().skip(index).findFirst();
       // Check if all non-empty values are equal
+      //noinspection UnnecessaryLocalVariable
       final var result =
           optional1.map(
                   // if one is defined check it against the two and three
@@ -258,6 +276,7 @@ public class SimulationTest {
       final Optional<Accept> accept3 = journal3.getCommitted(e);
 
       // Check if all non-empty values are equal
+      //noinspection UnnecessaryLocalVariable
       final var result =
           accept1.map(
                   // if one is defined check it against the two and three
@@ -369,5 +388,4 @@ public class SimulationTest {
 
     LOGGER.info(leader.trexNode.nodeIdentifier + " == LEADER");
   }
-
 }

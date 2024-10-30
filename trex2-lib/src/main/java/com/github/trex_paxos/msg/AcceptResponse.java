@@ -6,6 +6,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
+// TODO feels a bit risky not to give the Ballot Number we are responding to
 public record AcceptResponse(Vote vote, Progress progress) implements TrexMessage, DirectMessage {
 
   /**

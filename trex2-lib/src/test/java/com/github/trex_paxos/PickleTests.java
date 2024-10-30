@@ -40,7 +40,7 @@ public class PickleTests {
   @Test
   public void testAcceptNackPickleUnpickle() throws IOException {
     AcceptResponse acceptNack = new AcceptResponse(
-      new Vote((byte) 1, (byte) 2, 4L, true),
+        new Vote((byte) 1, (byte) 2, 4L, true, new BallotNumber(13, (byte) 3)),
       new Progress((byte) 0,
         new BallotNumber(6, (byte) 7),
         11L,
@@ -54,7 +54,7 @@ public class PickleTests {
   @Test
   public void testPrepareResponsePickleUnpickle() throws IOException {
     PrepareResponse prepareAck = new PrepareResponse(
-        new Vote((byte) 1, (byte) 2, 3L, true),
+        new Vote((byte) 1, (byte) 2, 3L, true, new BallotNumber(13, (byte) 3)),
         1234213424L, Optional.of(new Accept((byte) 4, 5L, new BallotNumber(6, (byte) 7), NoOperation.NOOP))
     );
     byte[] pickled = Pickle.writeMessage(prepareAck);
