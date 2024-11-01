@@ -69,7 +69,6 @@ class Simulation {
 
     final var _ = IntStream.range(0, iterations).anyMatch(i1 -> {
       Optional.ofNullable(eventQueue.pollFirstEntry()).ifPresent(timeWithEvents -> {
-
         // advance the clock
         tick(timeWithEvents.getKey());
 
@@ -146,12 +145,13 @@ class Simulation {
       if (finished) {
         LOGGER.info("finished as empty iteration: " + i1);
       }
-      finished = finished && matchingCommands(trexEngine1.allCommands, trexEngine2.allCommands, trexEngine3.allCommands);
-      if (finished) {
-        LOGGER.info("finished as not matching commands:\n" +
-            "\t" + trexEngine1.allCommands.stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
-            + "\t" + trexEngine2.allCommands.stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
-            + "\t" + trexEngine3.allCommands.stream().map(Objects::toString).collect(Collectors.joining(",")));
+      final var matchingCommands = matchingCommands(trexEngine1.allCommands, trexEngine2.allCommands, trexEngine3.allCommands);
+      finished = finished || !matchingCommands;
+      if (!matchingCommands) {
+        LOGGER.info("finished as not matching commands:" +
+            "\n\t" + trexEngine1.allCommands.stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
+            + "\n\t" + trexEngine2.allCommands.stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
+            + "\n\t" + trexEngine3.allCommands.stream().map(Objects::toString).collect(Collectors.joining(",")));
       }
       return finished;
     });
@@ -183,6 +183,9 @@ class Simulation {
                   // check two against three
                   a2 -> optC3.map(a2::equals).orElse(true)
               ).orElse(true); // if one and two are not defined it does not matter what three is
+      if (!result) {
+        LOGGER.info("command mismatch:\n\t" + optC1 + "\n\t" + optC2 + "\n\t" + optC3);
+      }
       return result;
     });
   }

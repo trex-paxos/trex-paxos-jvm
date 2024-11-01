@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.stream.IntStream;
 
+// FIXME remove the highestCommittedIndex as we will not ff anymore
 public record Catchup(byte from, byte to, long highestCommittedIndex,
                       long[] slotGaps) implements DirectMessage, TrexMessage {
   public static Catchup readFrom(DataInputStream dis) throws IOException {
@@ -33,7 +34,7 @@ public record Catchup(byte from, byte to, long highestCommittedIndex,
     return "Catchup[" +
         "from=" + from +
         ", to=" + to +
-        ", highestCommittedIndex=" + highestCommittedIndex +
+        ", logIndex=" + highestCommittedIndex +
         ", slotGaps=" + Arrays.toString(slotGaps) +
         ']';
   }

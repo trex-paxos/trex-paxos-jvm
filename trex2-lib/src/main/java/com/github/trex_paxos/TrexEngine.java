@@ -42,7 +42,7 @@ public abstract class TrexEngine {
     if (trexNode.isLeader()) {
       final var nextAcceptMessage = trexNode.nextAcceptMessage(command);
       trexNode.paxos(nextAcceptMessage);
-      return List.of(nextAcceptMessage, trexNode.makeCommitMessage());
+      return List.of(nextAcceptMessage, trexNode.currentCommitMessage());
     } else {
       return Collections.emptyList();
     }
@@ -130,7 +130,7 @@ public abstract class TrexEngine {
       case Commit commit -> !trexNode.isLeader()
           && commit.from() != trexNode.nodeIdentifier()
           && (commit.highestAcceptedIndex() >= trexNode.highestAccepted()
-          || commit.highestCommittedIndex() >= trexNode.highestCommitted())
+          || commit.logIndex() >= trexNode.highestCommitted())
       ;
       case Accept accept -> !trexNode.isLeader()
           && accept.from() != trexNode.nodeIdentifier()

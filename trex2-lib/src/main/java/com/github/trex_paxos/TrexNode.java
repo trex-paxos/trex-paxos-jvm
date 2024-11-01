@@ -4,6 +4,7 @@ import com.github.trex_paxos.msg.*;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 
 import static com.github.trex_paxos.TrexRole.*;
@@ -164,7 +165,7 @@ public class TrexNode {
                     // we have committed
                     this.progress = progress.withHighestCommitted(highestCommitable.get());
                     // let the cluster know
-                    messages.add(makeCommitMessage());
+                    messages.add(currentCommitMessage());
                   }
                 }
                 case WAIT -> {
@@ -243,68 +244,59 @@ public class TrexNode {
           }
         }
       }
-      case Commit(final var commitFrom, final var maxSlotCommittable, long leaderMaxAcceptedIndex) -> {
-        // FIXME do not ff the commit only commit if we knew the ballot at the slot
+      case Commit(
+          final var commitFrom, final var commitSlot, BallotNumber commitNumber, long leaderMaxAcceptedIndex
+      ) -> {
         final var lastCommittedIndex = highestCommitted();
-        // FIXME if it is the next slot we can commit it without all this logic as long as the accept is by the same leader number
-        if (maxSlotCommittable > lastCommittedIndex) {
+        if (commitSlot == lastCommittedIndex + 1) {
           // we may have gaps, so we must find the ones that we have in the log
-          final var commitableAccepts =
-              LongStream.range(lastCommittedIndex + 1, maxSlotCommittable + 1)
-                  .mapToObj(journal::loadAccept)
-                  .takeWhile(Optional::isPresent)
-                  .map(Optional::get)
-                  .filter(accept -> accept.number().nodeIdentifier() == commitFrom)
-                  .toList();
+          final var commitableAccept =
+              journal.loadAccept(commitSlot)
+                  .filter(accept -> accept.number().equals(commitNumber))
+                  .orElse(null);
 
           // make the callback to the main application
-          for (var accept : commitableAccepts) {
+          Optional.ofNullable(commitableAccept).ifPresent(accept -> {
             switch (accept) {
               case Accept(_, _, _, NoOperation _) -> {
               }
               case Accept(_, _, _, final Command command) -> commands.add(command);
             }
-          }
-
-          if (!commitableAccepts.isEmpty()) {
-            progress = progress.withHighestCommitted(commitableAccepts.getLast().logIndex());
+            progress = progress.withHighestCommitted(commitSlot);
             journal.saveProgress(progress);
-          }
-          if (!role.equals(FOLLOW)) {
-            backdown();
-          }
+
+            if (!role.equals(FOLLOW)) {
+              backdown();
+            }
+          });
         }
-        // deal with catchup
+        // deal with having a missing accept or an accept that was not chosen (i.e. isolated leader)
         final var newHighestCommitted = progress.highestCommittedIndex();
-        final var slotGaps = LongStream.range(newHighestCommitted + 1, leaderMaxAcceptedIndex + 1)
-            .filter(slot -> journal.loadAccept(slot).isEmpty())
+        final var slotGaps = LongStream.range(newHighestCommitted, leaderMaxAcceptedIndex + 1)
             .toArray();
         if (slotGaps.length > 0) {
           messages.add(new Catchup(nodeIdentifier, commitFrom, newHighestCommitted, slotGaps));
         }
       }
-      case Catchup(_, _, final var highestCommittedOther, long[] slotGaps) -> {
-        final var accepts = loadCatchup(highestCommittedOther);
-        accepts.addAll(LongStream.of(slotGaps).mapToObj(journal::loadAccept).flatMap(Optional::stream).toList());
-        messages.addAll(accepts);
-        messages.add(makeCommitMessage());
+      case Catchup(_, _, final var _, long[] slotGaps) -> {
+        // load all the slots that they are missing
+        final var accepts = LongStream.of(slotGaps)
+            .mapToObj(journal::loadAccept)
+            .flatMap(Optional::stream)
+            .toList();
+        // create a commit for each accept
+        final var commits = accepts.stream()
+            .map(accept -> new Commit(nodeIdentifier, accept.logIndex(), accept.number(), highestAccepted()))
+            .toList();
+        // interleave the accepts and commits
+        final var all = IntStream.range(0, accepts.size())
+            .mapToObj(i -> Arrays.asList(accepts.get(i), commits.get(i)))
+            .flatMap(List::stream)
+            .toList();
+        messages.addAll(all);
       }
     }
     return new TrexResult(messages, commands);
-  }
-
-  Commit makeCommitMessage() {
-    return new Commit(nodeIdentifier, highestCommitted(), highestAccepted());
-  }
-
-  // TODO convert this to a LongStream converted to an array
-  private List<Accept> loadCatchup(long highestCommittedOther) {
-    final long highestCommitted = highestCommitted();
-    List<Accept> catchup = new ArrayList<>();
-    for (long slot = highestCommitted + 1; slot < highestCommittedOther; slot++) {
-      journal.loadAccept(slot).ifPresent(catchup::add);
-    }
-    return catchup;
   }
 
   void backdown() {
@@ -431,8 +423,10 @@ public class TrexNode {
         .toList();
   }
 
-  private Commit currentCommitMessage() {
-    return new Commit(nodeIdentifier, highestCommitted(), highestAccepted());
+  Commit currentCommitMessage() {
+    final var highestCommitted = highestCommitted();
+    final var commitedAccept = journal.loadAccept(highestCommitted).orElseThrow();
+    return new Commit(nodeIdentifier, highestCommitted, commitedAccept.number(), highestAccepted());
   }
 
   private Prepare currentPrepareMessage() {

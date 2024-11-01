@@ -72,7 +72,7 @@ public class PickleTests {
 
   @Test
   public void testPickCommit() throws Exception {
-    Commit commit = new Commit((byte) 3, 5L, 4L);
+    Commit commit = new Commit((byte) 3, 5L, new BallotNumber(10, (byte) 128), 4L);
     byte[] pickled = Pickle.writeMessage(commit);
     Commit unpickled = (Commit) Pickle.readMessage(pickled);
     assertEquals(commit, unpickled);
