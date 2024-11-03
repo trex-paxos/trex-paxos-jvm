@@ -86,7 +86,7 @@ class Simulation {
           LOGGER.fine(() -> "event: " + event);
           switch (event) {
             case Timeout timeout -> {
-              // if it is a timeout collect the prepare message if the node is still a follower at this time
+              // if it is a timeout collect the prepare messages if the node is still a follower at this time
               final var prepare = switch (timeout.nodeIdentifier) {
                 case 1 -> trexEngine1.timeout();
                 case 2 -> trexEngine2.timeout();
@@ -97,12 +97,12 @@ class Simulation {
               return prepare.stream();
             }
 
-            // if it is a message that has arrived run paxos
+            // if it is a messages that has arrived run paxos
             case Send send -> {
               return networkSimulation(send, now, nemesis);
             }
             case Heartbeat heartbeat -> {
-              // if it is a timeout collect the prepare message if the node is still a follower at this time
+              // if it is a timeout collect the prepare messages if the node is still a follower at this time
               final var commitWithAccepts = switch (heartbeat.nodeIdentifier) {
                 case 1 -> trexEngine1.heartbeat();
                 case 2 -> trexEngine2.heartbeat();
@@ -124,7 +124,7 @@ class Simulation {
           }
         }).toList();
 
-        // the message arrive in the next time unit
+        // the messages arrive in the next time unit
         if (!newMessages.isEmpty()) {
           LOGGER.fine(() -> "\tnewMessages:\n\t" + newMessages.stream()
               .map(Object::toString)
@@ -134,7 +134,7 @@ class Simulation {
           final var nextTime = now + 1;
           // we add the messages to the event queue at that time
           final var nextTimeList = this.eventQueue.computeIfAbsent(nextTime, _ -> new ArrayList<>());
-          nextTimeList.addAll(newMessages.stream().map(Send::new).toList());
+          nextTimeList.add(new Send(newMessages));
         }
 
         // add the messages to the all messages list
@@ -200,7 +200,7 @@ class Simulation {
   record Timeout(byte nodeIdentifier) implements Event {
   }
 
-  record Send(Message message) implements Event {
+  record Send(List<TrexMessage> messages) implements Event {
   }
 
   record Heartbeat(byte nodeIdentifier) implements Event {
@@ -277,23 +277,23 @@ class Simulation {
     trexEngine3.start();
   }
 
-  /// This is how we can inject network failures into the simulation. The default implementation is to pass the message
+  /// This is how we can inject network failures into the simulation. The default implementation is to pass the messages
   /// without any errors. It is intended that this method is override with a method that will simulate network failures.
   /// This sort of testing is inspired by the Jepsen testing framework which calls the errors a Nemesis.
   ///
-  /// @param send The message to simulate sending.
+  /// @param send The messages to simulate sending.
   /// @param now  The current time in the simulation.
   /// @return The messages that will be sent to the network having been interfered with to simulate network failures.
   protected Stream<TrexMessage> networkSimulation(Send send, Long now, BiFunction<Send, Long, Stream<TrexMessage>> nemesis) {
     return nemesis.apply(send, now);
   }
 
-  final BiFunction<Send, Long, Stream<TrexMessage>> DEFAULT_NETWORK_SIMULATION = (send, _) -> switch (send.message()) {
-    case BroadcastMessage m -> engines.values().stream()
-        .flatMap(engine -> engine.paxos(m).messages().stream());
-    case DirectMessage m -> engines.get(m.to()).paxos(m).messages().stream();
-    case AbstractCommand abstractCommand -> throw new AssertionError("Unexpected command message: " + abstractCommand);
-  };
+  final BiFunction<Send, Long, Stream<TrexMessage>> DEFAULT_NETWORK_SIMULATION =
+      (send, _) ->
+          send.messages.stream().flatMap(x -> switch (x) {
+            case BroadcastMessage m -> engines.values().stream().flatMap(engine -> engine.paxos(m).messages().stream());
+            case DirectMessage m -> engines.get(m.to()).paxos(m).messages().stream();
+          });
 
   private void makeClientDataEvents(int iterations, NavigableMap<Long, List<Event>> eventQueue) {
     IntStream.range(0, iterations).forEach(i -> {

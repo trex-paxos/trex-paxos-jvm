@@ -295,6 +295,9 @@ public class TrexNode {
             .toList();
         messages.addAll(all);
       }
+      case CatchupResponse _ -> {
+        throw new AssertionError("CatchupResponse not yet implemented");
+      }
     }
     return new TrexResult(messages, commands);
   }

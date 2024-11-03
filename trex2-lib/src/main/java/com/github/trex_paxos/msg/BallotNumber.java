@@ -1,9 +1,5 @@
 package com.github.trex_paxos.msg;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-
 /// A ballot number is the proposal number used in the Paxos algorithm. Here we are using five bytes. The most significant
 /// are incremented as an integer when a node wishes to become a leader. We encode the
 /// nodeIdentifier in the least significant fifth byte. This works as long as we make the nodeIdentifier unique within the cluster
@@ -32,16 +28,7 @@ public record BallotNumber(int counter, byte nodeIdentifier) implements Comparab
         return String.format("N(c=%d,n=%d)", counter, nodeIdentifier);
     }
 
-    public void writeTo(DataOutputStream daos) throws IOException {
-        daos.writeInt(counter);
-        daos.writeByte(nodeIdentifier);
-    }
-
-    public static BallotNumber readFrom(DataInputStream dataInputStream) throws IOException {
-        return new BallotNumber(dataInputStream.readInt(), dataInputStream.readByte());
-    }
-
-    public Boolean lessThan(BallotNumber ballotNumber) {
+  public Boolean lessThan(BallotNumber ballotNumber) {
         return this.compareTo(ballotNumber) < 0;
     }
 

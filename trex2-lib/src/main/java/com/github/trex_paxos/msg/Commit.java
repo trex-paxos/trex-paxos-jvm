@@ -1,9 +1,5 @@
 package com.github.trex_paxos.msg;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-
 /// A leader sends out a Commit when it learns of a new fixed log index. It will also heartbeat this message to keep
 /// the followers from timing out. If a node was isolated and rejoins it will learn that it has missed out on some
 /// log indexes and will request a Catchup.
@@ -19,19 +15,4 @@ public record Commit(
     long highestAcceptedIndex
 ) implements TrexMessage, BroadcastMessage {
 
-  public void writeTo(DataOutputStream dos) throws IOException {
-    dos.writeByte(from);
-    dos.writeLong(logIndex);
-    number.writeTo(dos);
-    dos.writeLong(highestAcceptedIndex);
-  }
-
-  public static Commit readFrom(DataInputStream dis)
-    throws java.io.IOException {
-    final var from = dis.readByte();
-    final var logIndex = dis.readLong();
-    final var number = BallotNumber.readFrom(dis);
-    final var highestAcceptedIndex = dis.readLong();
-    return new Commit(from, logIndex, number, highestAcceptedIndex);
-  }
 }

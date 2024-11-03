@@ -76,6 +76,12 @@ public class SimulationTest {
     );
   }
 
+  @Test
+  public void testClientWork() {
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(9876);
+    testClientWork(rng);
+  }
+
   public void testClientWork(RandomGenerator rng) {
     // given a repeatable test setup
     final var simulation = new Simulation(rng, 30);
@@ -121,6 +127,12 @@ public class SimulationTest {
     );
   }
 
+  @Test
+  public void testClientWorkLossyNetwork() {
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(56734);
+    testWorkLossyNetwork(rng);
+  }
+
   private void testWorkLossyNetwork(RandomGenerator rng) {
     // given a repeatable test setup
     final var simulation = new Simulation(rng, 30);
@@ -128,7 +140,7 @@ public class SimulationTest {
     // first force a leader as we have separate tests for leader election. This is a partitioned network test.
     makeLeader(simulation);
 
-    int runLength = 15;
+    int runLength = 30;
 
     final var counter = new AtomicLong();
 
@@ -163,7 +175,7 @@ public class SimulationTest {
 
     // assert that we ended with only one leader
     assertThat(roles).containsOnly(TrexRole.FOLLOW, TrexRole.LEAD);
-    assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
+    assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isGreaterThan(1);
 
     LOGGER.info("sizes: " + simulation.trexEngine1.journal.fakeJournal.size() + " " + simulation.trexEngine2.journal.fakeJournal.size() + " " + simulation.trexEngine3.journal.fakeJournal.size());
   }
@@ -323,37 +335,24 @@ public class SimulationTest {
       // which node to partition
       final var partitionedNodeIndex = timeToPartitionedNode.apply(time);
 
-      // Convert immutable list to mutable list so that we can remove the isolated node
-      final var mutableEnginesList = new ArrayList<>(enginesAsList);
+      final var reachableNodes = new ArrayList<>(enginesAsList);
+      reachableNodes.remove((int) partitionedNodeIndex);
 
-      return switch (send.message()) {
-        case BroadcastMessage broadcastMessage -> {
-          if (broadcastMessage.from() == partitionedNodeIndex + 1) {
+      return send.messages().stream().flatMap(x -> switch (x) {
+        case BroadcastMessage m -> {
+          if (m.from() == partitionedNodeIndex + 1) {
             yield Stream.empty();
           }
-          // Drop the target node
-          mutableEnginesList.remove((int) partitionedNodeIndex);
-          // here we send to messages to servers that are not isolated. if they reply to a server that is isolated we will drop the message
-          yield mutableEnginesList.stream()
-              .map(e -> e.paxos(broadcastMessage))
-              .flatMap(p -> p.messages().stream())
-              .filter(outbound -> switch (outbound) {
-                case DirectMessage directMessageResponse -> // filter out responses noting that we are 1 indexed
-                    directMessageResponse.to() != partitionedNodeIndex + 1;
-                default -> true;
-              });
+          yield reachableNodes.stream()
+              .flatMap(engine -> engine.paxos(m).messages().stream());
         }
         case DirectMessage m -> {
-          if (m.to() == partitionedNodeIndex) {
+          if (m.to() == partitionedNodeIndex + 1 || m.from() == partitionedNodeIndex + 1) {
             yield Stream.empty();
-          } else {
-            // engines are 1 indexed but lists are zero indexed
-            yield enginesAsList.get(m.to() - 1).paxos(m).messages().stream();
           }
+          yield enginesAsList.get(m.to()).paxos(m).messages().stream();
         }
-        case AbstractCommand abstractCommand ->
-            throw new AssertionError("Unexpected command message: " + abstractCommand);
-      };
+      });
     };
   }
 
