@@ -145,27 +145,27 @@ class Simulation {
       if (finished) {
         LOGGER.info("finished as empty iteration: " + i1);
       }
-      final var matchingCommands = matchingCommands(trexEngine1.allCommands, trexEngine2.allCommands, trexEngine3.allCommands);
-      finished = finished || !matchingCommands;
-      if (!matchingCommands) {
+      final var matchingCommands = findMismatchIndex(trexEngine1.allCommands(), trexEngine2.allCommands(), trexEngine3.allCommands());
+      finished = finished || matchingCommands.isPresent();
+      if (matchingCommands.isPresent()) {
         LOGGER.info("finished as not matching commands:" +
-            "\n\t" + trexEngine1.allCommands.stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
-            + "\n\t" + trexEngine2.allCommands.stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
-            + "\n\t" + trexEngine3.allCommands.stream().map(Objects::toString).collect(Collectors.joining(",")));
+            "\n\t" + trexEngine1.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
+            + "\n\t" + trexEngine2.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
+            + "\n\t" + trexEngine3.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")));
       }
       return finished;
     });
     return allMessages;
   }
 
-  static boolean matchingCommands(List<AbstractCommand> c1,
-                                  List<AbstractCommand> c2,
-                                  List<AbstractCommand> c3) {
+  static OptionalLong findMismatchIndex(List<AbstractCommand> c1,
+                                        List<AbstractCommand> c2,
+                                        List<AbstractCommand> c3) {
     final var maxLength = Math.max(
         c1.size(), Math.max(
             c2.size(),
             c3.size()));
-    return LongStream.range(0, maxLength).allMatch(i -> {
+    return LongStream.range(0, maxLength).filter(i -> {
       final Optional<AbstractCommand> optC1 = i < c1.size() ? Optional.of(c1.get((int) i)) : Optional.empty();
       final Optional<AbstractCommand> optC2 = i < c2.size() ? Optional.of(c2.get((int) i)) : Optional.empty();
       final Optional<AbstractCommand> optC3 = i < c3.size() ? Optional.of(c3.get((int) i)) : Optional.empty();
@@ -186,8 +186,8 @@ class Simulation {
       if (!result) {
         LOGGER.info("command mismatch:\n\t" + optC1 + "\n\t" + optC2 + "\n\t" + optC3);
       }
-      return result;
-    });
+      return !result;
+    }).findFirst();
   }
 
   public ArrayList<Message> run(int i, boolean b) {
@@ -314,7 +314,11 @@ class Simulation {
 
     final TransparentJournal journal;
 
-    final List<AbstractCommand> allCommands = new ArrayList<>();
+    final TreeMap<Long, AbstractCommand> allCommandsMap = new TreeMap<>();
+
+    public List<AbstractCommand> allCommands() {
+      return new ArrayList<>(allCommandsMap.values());
+    }
 
     public TestablePaxosEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy, TransparentJournal journal) {
       super(new TrexNode(nodeIdentifier, quorumStrategy, journal));
@@ -348,7 +352,9 @@ class Simulation {
       if (oldRole != newRole) {
         LOGGER.info(trexNode.nodeIdentifier() + " == " + newRole);
       }
-      allCommands.addAll(result.commands());
+      if (!result.commands().isEmpty()) {
+        allCommandsMap.putAll(result.commands());
+      }
       return result;
     }
 

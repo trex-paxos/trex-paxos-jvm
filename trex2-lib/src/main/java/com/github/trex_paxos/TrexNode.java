@@ -3,8 +3,8 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.*;
 
 import java.util.*;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 
 import static com.github.trex_paxos.TrexRole.*;
@@ -14,6 +14,8 @@ import static com.github.trex_paxos.TrexRole.*;
 /// - A [Journal] which must be crash durable storage. The wrapping [TrexEngine] must flush the journal to durable state (fsync) before sending out any messages.
 /// - A [QuorumStrategy] which may be a simple majority, in the future FPaxos or UPaxos.
 public class TrexNode {
+  static final Logger LOGGER = Logger.getLogger(TrexNode.class.getName());
+
   /// Create a new TrexNode that will load the current progress from the journal. The journal must have been pre-initialised.
   ///
   /// @param nodeIdentifier The unique node identifier. This must be unique across the cluster and across enough time for prior messages to have been forgotten.
@@ -64,7 +66,7 @@ public class TrexNode {
   /// application.
   TrexResult paxos(TrexMessage input) {
     List<TrexMessage> messages = new ArrayList<>();
-    List<Command> commands = new ArrayList<>();
+    Map<Long, AbstractCommand> commands = new TreeMap<>();
     switch (input) {
       case Accept accept -> {
         if (lowerAccept(progress, accept) || higherAcceptForCommittedSlot(accept, progress)) {
@@ -79,6 +81,28 @@ public class TrexNode {
           if (higherAccept(progress, accept)) {
             // we must update promise on a higher accept http://stackoverflow.com/q/29880949/329496
             this.progress = progress.withHighestPromised(accept.number());
+            // we must change our own vote if we are an old leader
+            if (this.role == LEAD) {
+              // does this change our prior self vote?
+              final var logIndex = accept.logIndex();
+              Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex))
+                  .ifPresent(acceptVotes -> {
+                    final var oldNumber = acceptVotes.accept().number();
+                    final var newNumber = accept.number();
+                    if (oldNumber.lessThan(newNumber)) {
+                      // we have accepted a higher accept which is a promise as per http://stackoverflow.com/q/29880949/329496
+                      acceptVotes.responses().put(nodeIdentifier(), nack(acceptVotes.accept()));
+                      Set<Vote> vs = acceptVotes.responses().values().stream()
+                          .map(AcceptResponse::vote).collect(Collectors.toSet());
+                      final var quorumOutcome =
+                          quorumStrategy.assessAccepts(logIndex, vs);
+                      if (quorumOutcome == QuorumOutcome.LOSE) {
+                        // this happens in a three node cluster when an isolated split brain leader rejoins
+                        backdown();
+                      }
+                    }
+                  });
+            }
           }
           journal.saveProgress(this.progress);
           final var ack = ack(accept);
@@ -118,65 +142,83 @@ public class TrexNode {
         }
       }
       case AcceptResponse acceptResponse -> {
+        // Both Leader and Recoverer can receive AcceptResponses
         if (FOLLOW != role && acceptResponse.vote().to() == nodeIdentifier) {
-          // Both Leader and Recoverer can receive AcceptResponses
-          final var logIndex = acceptResponse.vote().logIndex();
-          Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex)).ifPresent(acceptVotes -> {
-            if (!acceptVotes.chosen()) {
-              acceptVotes.responses().put(acceptResponse.from(), acceptResponse);
-              Set<Vote> vs = acceptVotes.responses().values().stream()
-                  .map(AcceptResponse::vote).collect(Collectors.toSet());
-              final var quorumOutcome =
-                  quorumStrategy.assessAccepts(logIndex, vs);
-              switch (quorumOutcome) {
-                case WIN -> {
-                  // we have a quorum at that log index but due to lost messages we may have gaps before it.
-                  acceptVotesByLogIndex.put(logIndex, AcceptVotes.chosen(acceptVotes.accept()));
-                  // we must commit in log order so we must go from our current commit to the new commit and stop on any gaps
-                  Optional<Long> highestCommitable = Optional.empty();
-                  List<Long> deletable = new ArrayList<>();
-                  List<Long> committedSlots = new ArrayList<>();
-                  for (final var votesByIdMapEntry :
-                      acceptVotesByLogIndex.entrySet()) {
-                    if (votesByIdMapEntry.getValue().chosen()) {
-                      highestCommitable = Optional.of(votesByIdMapEntry.getKey());
-                      deletable.add(votesByIdMapEntry.getKey());
-                      committedSlots.add(votesByIdMapEntry.getKey());
-                    } else {
-                      break;
-                    }
-                  }
-                  // only if we have some contiguous slots that we can commit which might still not be all slots
-                  if (highestCommitable.isPresent()) {
-                    // run the callback
-                    for (var slot : committedSlots) {
-                      final var accept = journal.loadAccept(slot).orElseThrow();
-                      switch (accept) {
-                        case Accept(_, _, _, NoOperation _) -> {
-                          // NOOP
-                        }
-                        case Accept(_, _, _, final Command command) -> commands.add(command);
+          // An isolated leader rejoining must back down
+          if (LEAD == role && acceptResponse.progress().highestCommittedIndex() > progress.highestCommittedIndex()) {
+            backdown();
+          } else {
+            final var logIndex = acceptResponse.vote().logIndex();
+            Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex)).ifPresent(acceptVotes -> {
+              if (!acceptVotes.chosen()) {
+                acceptVotes.responses().put(acceptResponse.from(), acceptResponse);
+                Set<Vote> vs = acceptVotes.responses().values().stream()
+                    .map(AcceptResponse::vote).collect(Collectors.toSet());
+                final var quorumOutcome =
+                    quorumStrategy.assessAccepts(logIndex, vs);
+                switch (quorumOutcome) {
+                  case WIN -> {
+                    LOGGER.info(() ->
+                        "WIN logIndex=" + logIndex +
+                            " nodeIdentifier=" + nodeIdentifier() +
+                            " number=" + acceptVotes.accept().number() +
+                            " value=" + acceptVotes.accept().command().toString() +
+                            " vs=" + vs);
+
+                    // we have a quorum at that log index but due to lost messages we may have gaps before it.
+                    acceptVotesByLogIndex.put(logIndex, AcceptVotes.chosen(acceptVotes.accept()));
+                    // we must commit in log order so we must go from our current commit to the new commit and stop on any gaps
+                    Optional<Long> highestCommitable = Optional.empty();
+                    List<Long> deletable = new ArrayList<>();
+                    List<Long> committedSlots = new ArrayList<>();
+                    for (final var votesByIdMapEntry :
+                        acceptVotesByLogIndex.entrySet()) {
+                      if (votesByIdMapEntry.getValue().chosen()) {
+                        highestCommitable = Optional.of(votesByIdMapEntry.getKey());
+                        deletable.add(votesByIdMapEntry.getKey());
+                        committedSlots.add(votesByIdMapEntry.getKey());
+                      } else {
+                        break;
                       }
                     }
-                    // free the memory and stop heartbeating out the accepts
-                    for (final var deletableId : deletable) {
-                      acceptVotesByLogIndex.remove(deletableId);
+                    // only if we have some contiguous slots that we can commit which might still not be all slots
+                    if (highestCommitable.isPresent()) {
+                      // run the callback
+                      for (var slot : committedSlots) {
+                        final var accept = journal.loadAccept(slot).orElseThrow();
+                        switch (accept) {
+                          case Accept(_, final long s, _, NoOperation noop) -> {
+                            assert s == slot;
+                            commands.put(logIndex, noop);
+                          }
+                          case Accept(_, final long s, _, final Command command) -> {
+                            assert s == slot;
+                            LOGGER.info(() -> "COMMIT logIndex=" + logIndex + " nodeIdentifier=" + nodeIdentifier() + " clientMsgUuid=" + command.clientMsgUuid());
+                            commands.put(logIndex, command);
+                          }
+                        }
+                      }
+                      // free the memory and stop heartbeating out the accepts
+                      for (final var deletableId : deletable) {
+                        acceptVotesByLogIndex.remove(deletableId);
+                      }
+                      // we have committed
+                      this.progress = progress.withHighestCommitted(highestCommitable.get());
+                      // let the cluster know
+                      messages.add(currentCommitMessage());
                     }
-                    // we have committed
-                    this.progress = progress.withHighestCommitted(highestCommitable.get());
-                    // let the cluster know
-                    messages.add(currentCommitMessage());
                   }
+                  case WAIT -> {
+                    // do nothing as a quorum has not yet been reached.
+                  }
+                  case LOSE ->
+                    // we are unable to achieve a quorum, so we must back down as to another leader
+                      backdown();
                 }
-                case WAIT -> {
-                  // do nothing as a quorum has not yet been reached.
-                }
-                case LOSE ->
-                  // we are unable to achieve a quorum, so we must back down as to another leader
-                    backdown();
               }
-            }
-          });
+            });
+
+          }
         }
       }
       case PrepareResponse prepareResponse -> {
@@ -245,7 +287,7 @@ public class TrexNode {
         }
       }
       case Commit(
-          final var commitFrom, final var commitSlot, BallotNumber commitNumber, long leaderMaxAcceptedIndex
+          final var commitSlot, BallotNumber commitNumber, final var commitFrom
       ) -> {
         final var lastCommittedIndex = highestCommitted();
         if (commitSlot == lastCommittedIndex + 1) {
@@ -260,7 +302,7 @@ public class TrexNode {
             switch (accept) {
               case Accept(_, _, _, NoOperation _) -> {
               }
-              case Accept(_, _, _, final Command command) -> commands.add(command);
+              case Accept(_, final long logIndex, _, final Command command) -> commands.put(logIndex, command);
             }
             progress = progress.withHighestCommitted(commitSlot);
             journal.saveProgress(progress);
@@ -272,31 +314,27 @@ public class TrexNode {
         }
         // deal with having a missing accept or an accept that was not chosen (i.e. isolated leader)
         final var newHighestCommitted = progress.highestCommittedIndex();
-        final var slotGaps = LongStream.range(newHighestCommitted, leaderMaxAcceptedIndex + 1)
+        final var slotGaps = LongStream.range(newHighestCommitted, commitSlot + 1)
             .toArray();
         if (slotGaps.length > 0) {
-          messages.add(new Catchup(nodeIdentifier, commitFrom, newHighestCommitted, slotGaps));
+          messages.add(new Catchup(nodeIdentifier, commitFrom, slotGaps));
         }
       }
-      case Catchup(_, _, final var _, long[] slotGaps) -> {
+      case Catchup(byte replyTo, _, long[] slotGaps) -> {
         // load all the slots that they are missing
         final var accepts = LongStream.of(slotGaps)
+            .filter(s -> s <= progress.highestCommittedIndex())
             .mapToObj(journal::loadAccept)
             .flatMap(Optional::stream)
             .toList();
-        // create a commit for each accept
-        final var commits = accepts.stream()
-            .map(accept -> new Commit(nodeIdentifier, accept.logIndex(), accept.number(), highestAccepted()))
-            .toList();
-        // interleave the accepts and commits
-        final var all = IntStream.range(0, accepts.size())
-            .mapToObj(i -> Arrays.asList(accepts.get(i), commits.get(i)))
-            .flatMap(List::stream)
-            .toList();
-        messages.addAll(all);
+        messages.add(new CatchupResponse(nodeIdentifier, replyTo, accepts));
       }
-      case CatchupResponse _ -> {
-        throw new AssertionError("CatchupResponse not yet implemented");
+      case CatchupResponse cr -> {
+        final var results = cr.catchup().stream().map(this::paxos).toList();
+        for (final var result : results) {
+          messages.addAll(result.messages());
+        }
+        commands.putAll(cr.catchup().stream().collect(Collectors.toMap(Accept::logIndex, Accept::command)));
       }
     }
     return new TrexResult(messages, commands);
@@ -315,9 +353,15 @@ public class TrexNode {
    * @param accept The accept message to acknowledge.
    */
   AcceptResponse ack(Accept accept) {
+    final var vote = new Vote(
+        nodeIdentifier,
+        accept.number().nodeIdentifier(),
+        accept.logIndex(),
+        true,
+        accept.number());
     return
         new AcceptResponse(
-            new Vote(nodeIdentifier, accept.number().nodeIdentifier(), accept.logIndex(), true, accept.number())
+            vote
             , progress);
   }
 
@@ -429,7 +473,7 @@ public class TrexNode {
   Commit currentCommitMessage() {
     final var highestCommitted = highestCommitted();
     final var commitedAccept = journal.loadAccept(highestCommitted).orElseThrow();
-    return new Commit(nodeIdentifier, highestCommitted, commitedAccept.number(), highestAccepted());
+    return new Commit(highestCommitted, commitedAccept.number(), nodeIdentifier);
   }
 
   private Prepare currentPrepareMessage() {

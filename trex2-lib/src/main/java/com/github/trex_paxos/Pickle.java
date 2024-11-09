@@ -161,18 +161,16 @@ public class Pickle {
   public static Catchup readCatchup(DataInputStream dis) throws IOException {
     final var from = dis.readByte();
     final var to = dis.readByte();
-    final var highestCommittedIndex = dis.readLong();
     final var length = dis.readShort();
     final long[] slotGaps = IntStream.range(0, length)
         .mapToLong(_ -> uncheckedReadLong(dis))
         .toArray();
-    return new Catchup(from, to, highestCommittedIndex, slotGaps);
+    return new Catchup(from, to, slotGaps);
   }
 
   public static void write(Catchup m, DataOutputStream dos) throws IOException {
     dos.writeByte(m.from());
     dos.writeByte(m.to());
-    dos.writeLong(m.highestCommittedIndex());
     final var length = Math.min(m.slotGaps().length, Short.MAX_VALUE);
     dos.writeShort(length);
     IntStream.range(0, length).forEach(i -> uncheckedWriteLong(dos, m.slotGaps()[i]));
@@ -206,7 +204,6 @@ public class Pickle {
     dos.writeByte(m.from());
     dos.writeLong(m.logIndex());
     write(m.number(), dos);
-    dos.writeLong(m.highestAcceptedIndex());
   }
 
   public static Commit readCommit(DataInputStream dis)
@@ -214,8 +211,7 @@ public class Pickle {
     final var from = dis.readByte();
     final var logIndex = dis.readLong();
     final var number = readBallotNumber(dis);
-    final var highestAcceptedIndex = dis.readLong();
-    return new Commit(from, logIndex, number, highestAcceptedIndex);
+    return new Commit(logIndex, number, from);
   }
 
   public static Prepare readPrepare(DataInputStream dataInputStream) throws IOException {

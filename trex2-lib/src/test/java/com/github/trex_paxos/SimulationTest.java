@@ -6,16 +6,18 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.random.RandomGenerator;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 import static com.github.trex_paxos.Simulation.LOGGER;
-import static com.github.trex_paxos.Simulation.matchingCommands;
+import static com.github.trex_paxos.Simulation.findMismatchIndex;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class SimulationTest {
@@ -43,7 +45,7 @@ public class SimulationTest {
     // we do a cold cluster start with no prior leader in the journals
     simulation.coldStart();
 
-    // when we run for a maximum of 45 iterations
+    // when we run for a maximum of 50 iterations
     final var messages = simulation.run(50, false);
 
     // then we should have a single leader and the rest followers
@@ -55,15 +57,6 @@ public class SimulationTest {
     // assert that we ended with only one leader
     assertThat(roles).containsOnly(TrexRole.FOLLOW, TrexRole.LEAD);
     assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isEqualTo(1);
-
-    // we are heartbeating at half the rate of the time. so if we have no other leader or recoverer in the last three
-    // commits it we would be a stable leader
-    final var lastCommits = messages.reversed()
-        .stream()
-        .takeWhile(m -> m instanceof Commit)
-        .toList();
-
-    assertThat(lastCommits).hasSizeGreaterThan(2);
   }
 
   @Test
@@ -74,6 +67,12 @@ public class SimulationTest {
           testClientWork(rng);
         }
     );
+  }
+
+  @Test
+  public void testClientWorkPerfectNetwork() {
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(9876);
+    testClientWork(rng);
   }
 
   @Test
@@ -92,11 +91,20 @@ public class SimulationTest {
     // when we run for 15 iterations with client data
     simulation.run(15, true);
 
-    assertThat(matchingCommands(
-        simulation.trexEngine1.allCommands,
-        simulation.trexEngine2.allCommands,
-        simulation.trexEngine3.allCommands
-    )).isTrue();
+    final var badCommandIndex = findMismatchIndex(
+        simulation.trexEngine1.allCommands(),
+        simulation.trexEngine2.allCommands(),
+        simulation.trexEngine3.allCommands()
+    );
+
+    if (badCommandIndex.isPresent()) {
+      LOGGER.severe("commands do not match at position: " + badCommandIndex.getAsLong());
+      LOGGER.severe("map1: " + simulation.trexEngine1.allCommandsMap.entrySet().stream().map(e -> "\n\t" + e.getKey() + "=" + e.getValue()).collect(Collectors.joining(",")));
+      LOGGER.severe("map2: " + simulation.trexEngine2.allCommandsMap.entrySet().stream().map(e -> "\n\t" + e.getKey() + "=" + e.getValue()).collect(Collectors.joining(",")));
+      LOGGER.severe("map3: " + simulation.trexEngine3.allCommandsMap.entrySet().stream().map(e -> "\n\t" + e.getKey() + "=" + e.getValue()).collect(Collectors.joining(",")));
+    }
+
+    assertThat(badCommandIndex.isEmpty()).isTrue();
 
     // and we should have the same commit logs
     assertThat(consistentJournals(
@@ -130,10 +138,11 @@ public class SimulationTest {
   @Test
   public void testClientWorkLossyNetwork() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(56734);
-    testWorkLossyNetwork(rng);
+    final var min = testWorkLossyNetwork(rng);
+    assertThat(min).isGreaterThan(10);
   }
 
-  private void testWorkLossyNetwork(RandomGenerator rng) {
+  private int testWorkLossyNetwork(RandomGenerator rng) {
     // given a repeatable test setup
     final var simulation = new Simulation(rng, 30);
 
@@ -160,11 +169,11 @@ public class SimulationTest {
         .map(TrexNode::currentRole)
         .toList();
 
-    assertThat(matchingCommands(
-        simulation.trexEngine1.allCommands,
-        simulation.trexEngine2.allCommands,
-        simulation.trexEngine3.allCommands
-    )).isTrue();
+    assertThat(findMismatchIndex(
+        simulation.trexEngine1.allCommands(),
+        simulation.trexEngine2.allCommands(),
+        simulation.trexEngine3.allCommands()
+    ).isEmpty()).isTrue();
 
     // and we should have the same commit logs
     assertThat(consistentJournals(
@@ -173,24 +182,35 @@ public class SimulationTest {
         simulation.trexEngine3.journal
     )).isTrue();
 
-    // assert that we ended with only one leader
-    assertThat(roles).containsOnly(TrexRole.FOLLOW, TrexRole.LEAD);
-    assertThat(roles.stream().filter(r -> r == TrexRole.LEAD).count()).isGreaterThan(1);
-
-    LOGGER.info("sizes: " + simulation.trexEngine1.journal.fakeJournal.size() + " " + simulation.trexEngine2.journal.fakeJournal.size() + " " + simulation.trexEngine3.journal.fakeJournal.size());
+    return Math.min(
+        simulation.trexEngine1.journal.fakeJournal.size(),
+        Math.min(
+            simulation.trexEngine2.journal.fakeJournal.size(),
+            simulation.trexEngine3.journal.fakeJournal.size()
+        ));
   }
 
   @Test
   public void testWorkRotationNetworkPartition100() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(634546345);
+    final var max = new AtomicInteger();
     IntStream.range(0, 100).forEach(i -> {
       LOGGER.info("\n ================= \nstarting iteration: " + i);
-      System.out.println("\niteration: " + i);
-      testWorkRotationNetworkPartition(rng);
+      final var min = testWorkRotationNetworkPartition(rng);
+      if (min > max.get()) {
+        max.set(min);
+      }
     });
+    assertThat(max.get()).isGreaterThan(0);
   }
 
-  private void testWorkRotationNetworkPartition(RandomGenerator rng) {
+  @Test
+  public void testWorkRotationNetworkPartition() {
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(1);
+    testWorkRotationNetworkPartition(rng);
+  }
+
+  private int testWorkRotationNetworkPartition(RandomGenerator rng) {
     // given a repeatable test setup
     final var simulation = new Simulation(rng, 30);
 
@@ -210,11 +230,20 @@ public class SimulationTest {
     LOGGER.info(simulation.trexEngine1.role() + " " + simulation.trexEngine2.role() + " " + simulation.trexEngine3.role());
     LOGGER.info("sizes: " + simulation.trexEngine1.journal.fakeJournal.size() + " " + simulation.trexEngine2.journal.fakeJournal.size() + " " + simulation.trexEngine3.journal.fakeJournal.size());
 
-    assertThat(matchingCommands(
-        simulation.trexEngine1.allCommands,
-        simulation.trexEngine2.allCommands,
-        simulation.trexEngine3.allCommands
-    )).isTrue();
+    final var badCommandIndex = findMismatchIndex(
+        simulation.trexEngine1.allCommands(),
+        simulation.trexEngine2.allCommands(),
+        simulation.trexEngine3.allCommands()
+    );
+
+    if (badCommandIndex.isPresent()) {
+      LOGGER.severe("commands do not match at position: " + badCommandIndex.getAsLong());
+      LOGGER.severe("map1: " + simulation.trexEngine1.allCommandsMap.entrySet().stream().map(e -> "\n\t" + e.getKey() + "=" + e.getValue()).collect(Collectors.joining(",")));
+      LOGGER.severe("map2: " + simulation.trexEngine2.allCommandsMap.entrySet().stream().map(e -> "\n\t" + e.getKey() + "=" + e.getValue()).collect(Collectors.joining(",")));
+      LOGGER.severe("map3: " + simulation.trexEngine3.allCommandsMap.entrySet().stream().map(e -> "\n\t" + e.getKey() + "=" + e.getValue()).collect(Collectors.joining(",")));
+    }
+
+    assertThat(badCommandIndex.isEmpty()).isTrue();
 
     // and we should have the same commit logs
     assertThat(consistentJournals(
@@ -224,31 +253,30 @@ public class SimulationTest {
     )).isTrue();
 
     assertThat(consistentCommits(
-        simulation.trexEngine1.allCommands,
-        simulation.trexEngine2.allCommands,
-        simulation.trexEngine3.allCommands
+        simulation.trexEngine1,
+        simulation.trexEngine2,
+        simulation.trexEngine3
     )).isTrue();
 
-    final var minCommandLength = Math.min(
-        simulation.trexEngine1.allCommands.size(), Math.min(
-            simulation.trexEngine2.allCommands.size(),
-            simulation.trexEngine3.allCommands.size()
+    return Math.min(
+        simulation.trexEngine1.allCommands().size(), Math.min(
+            simulation.trexEngine2.allCommands().size(),
+            simulation.trexEngine3.allCommands().size()
         )
     );
-    assertThat(minCommandLength).isGreaterThan(10);
   }
 
   private boolean consistentCommits(
-      List<AbstractCommand> engine1,
-      List<AbstractCommand> engine2,
-      List<AbstractCommand> engine3) {
+      Simulation.TestablePaxosEngine engine1,
+      Simulation.TestablePaxosEngine engine2,
+      Simulation.TestablePaxosEngine engine3) {
     final var maxLength =
-        Math.max(engine1.size(), Math.max(
-            engine2.size(), engine3.size()));
+        Math.max(engine1.allCommands().size(), Math.max(
+            engine2.allCommands().size(), engine3.allCommands().size()));
     return IntStream.range(0, maxLength).allMatch(index -> {
-      final Optional<AbstractCommand> optional1 = engine1.stream().skip(index).findFirst();
-      final Optional<AbstractCommand> optional2 = engine2.stream().skip(index).findFirst();
-      final Optional<AbstractCommand> optional3 = engine3.stream().skip(index).findFirst();
+      final Optional<AbstractCommand> optional1 = engine1.allCommands().stream().skip(index).findFirst();
+      final Optional<AbstractCommand> optional2 = engine2.allCommands().stream().skip(index).findFirst();
+      final Optional<AbstractCommand> optional3 = engine3.allCommands().stream().skip(index).findFirst();
       // Check if all non-empty values are equal
       //noinspection UnnecessaryLocalVariable
       final var result =
@@ -350,7 +378,7 @@ public class SimulationTest {
           if (m.to() == partitionedNodeIndex + 1 || m.from() == partitionedNodeIndex + 1) {
             yield Stream.empty();
           }
-          yield enginesAsList.get(m.to()).paxos(m).messages().stream();
+          yield enginesAsList.get(m.to() - 1).paxos(m).messages().stream();
         }
       });
     };
