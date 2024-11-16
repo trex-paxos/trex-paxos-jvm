@@ -186,17 +186,8 @@ public class TrexNode {
                       // run the callback
                       for (var slot : committedSlots) {
                         final var accept = journal.loadAccept(slot).orElseThrow();
-                        switch (accept) {
-                          case Accept(_, final long s, _, NoOperation noop) -> {
-                            assert s == slot;
-                            commands.put(logIndex, noop);
-                          }
-                          case Accept(_, final long s, _, final Command command) -> {
-                            assert s == slot;
-                            LOGGER.info(() -> "COMMIT logIndex=" + logIndex + " nodeIdentifier=" + nodeIdentifier() + " clientMsgUuid=" + command.clientMsgUuid());
-                            commands.put(logIndex, command);
-                          }
-                        }
+                        assert slot == accept.logIndex();
+                        commit(accept, commands, logIndex);
                       }
                       // free the memory and stop heartbeating out the accepts
                       for (final var deletableId : deletable) {
@@ -299,11 +290,7 @@ public class TrexNode {
 
           // make the callback to the main application
           Optional.ofNullable(commitableAccept).ifPresent(accept -> {
-            switch (accept) {
-              case Accept(_, _, _, NoOperation _) -> {
-              }
-              case Accept(_, final long logIndex, _, final Command command) -> commands.put(logIndex, command);
-            }
+            commit(accept, commands, commitSlot);
             progress = progress.withHighestCommitted(commitSlot);
             journal.saveProgress(progress);
 
@@ -338,6 +325,16 @@ public class TrexNode {
       }
     }
     return new TrexResult(messages, commands);
+  }
+
+  private void commit(Accept accept, Map<Long, AbstractCommand> commands, long logIndex) {
+    switch (accept) {
+      case Accept(_, _, _, NoOperation noop) -> commands.put(logIndex, noop);
+      case Accept(_, _, _, final Command command) -> {
+        LOGGER.info(() -> "COMMIT logIndex=" + logIndex + " nodeIdentifier=" + nodeIdentifier() + " clientMsgUuid=" + command.clientMsgUuid());
+        commands.put(logIndex, command);
+      }
+    }
   }
 
   void backdown() {

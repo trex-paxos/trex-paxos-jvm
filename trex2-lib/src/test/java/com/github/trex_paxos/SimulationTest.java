@@ -16,8 +16,7 @@ import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
-import static com.github.trex_paxos.Simulation.LOGGER;
-import static com.github.trex_paxos.Simulation.findMismatchIndex;
+import static com.github.trex_paxos.Simulation.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class SimulationTest {
@@ -46,7 +45,7 @@ public class SimulationTest {
     simulation.coldStart();
 
     // when we run for a maximum of 50 iterations
-    final var messages = simulation.run(50, false);
+    simulation.run(50, false);
 
     // then we should have a single leader and the rest followers
     final var roles = simulation.engines.values().stream()
@@ -163,12 +162,6 @@ public class SimulationTest {
     // when we run for 15 iterations with client data
     simulation.run(runLength, true, nemesis);
 
-    // then we should have a single leader and the rest followers
-    final var roles = simulation.engines.values().stream()
-        .map(TrexEngine::trexNode)
-        .map(TrexNode::currentRole)
-        .toList();
-
     assertThat(findMismatchIndex(
         simulation.trexEngine1.allCommands(),
         simulation.trexEngine2.allCommands(),
@@ -228,20 +221,17 @@ public class SimulationTest {
 
     LOGGER.info("\n\nEMD ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ END\n\n");
     LOGGER.info(simulation.trexEngine1.role() + " " + simulation.trexEngine2.role() + " " + simulation.trexEngine3.role());
-    LOGGER.info("sizes: " + simulation.trexEngine1.journal.fakeJournal.size() + " " + simulation.trexEngine2.journal.fakeJournal.size() + " " + simulation.trexEngine3.journal.fakeJournal.size());
+    LOGGER.info("command sizes: " + simulation.trexEngine1.allCommands().size() + " "
+        + simulation.trexEngine2.allCommands().size() + " "
+        + simulation.trexEngine3.allCommands().size());
+    LOGGER.info("journal sizes: " + simulation.trexEngine1.journal.fakeJournal.size() + " " + simulation.trexEngine2.journal.fakeJournal.size() + " " + simulation.trexEngine3.journal.fakeJournal.size());
 
-    final var badCommandIndex = findMismatchIndex(
-        simulation.trexEngine1.allCommands(),
-        simulation.trexEngine2.allCommands(),
-        simulation.trexEngine3.allCommands()
+    final var badCommandIndex = findMismatchIndex2(
+        simulation.trexEngine1.allCommandsMap,
+        simulation.trexEngine2.allCommandsMap,
+        simulation.trexEngine3.allCommandsMap
     );
 
-    if (badCommandIndex.isPresent()) {
-      LOGGER.severe("commands do not match at position: " + badCommandIndex.getAsLong());
-      LOGGER.severe("map1: " + simulation.trexEngine1.allCommandsMap.entrySet().stream().map(e -> "\n\t" + e.getKey() + "=" + e.getValue()).collect(Collectors.joining(",")));
-      LOGGER.severe("map2: " + simulation.trexEngine2.allCommandsMap.entrySet().stream().map(e -> "\n\t" + e.getKey() + "=" + e.getValue()).collect(Collectors.joining(",")));
-      LOGGER.severe("map3: " + simulation.trexEngine3.allCommandsMap.entrySet().stream().map(e -> "\n\t" + e.getKey() + "=" + e.getValue()).collect(Collectors.joining(",")));
-    }
 
     assertThat(badCommandIndex.isEmpty()).isTrue();
 

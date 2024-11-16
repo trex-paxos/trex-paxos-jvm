@@ -158,6 +158,39 @@ class Simulation {
     return allMessages;
   }
 
+  static OptionalLong findMismatchIndex2(TreeMap<Long, AbstractCommand> c1,
+                                         TreeMap<Long, AbstractCommand> c2,
+                                         TreeMap<Long, AbstractCommand> c3) {
+    final var maxLength = Math.max(
+        c1.lastKey(), Math.max(
+            c2.lastKey(),
+            c3.lastKey()));
+    return LongStream.range(0, maxLength).filter(i -> {
+      final Optional<AbstractCommand> optC1 = Optional.ofNullable(c1.get(i));
+      final Optional<AbstractCommand> optC2 = Optional.ofNullable(c2.get(i));
+      final Optional<AbstractCommand> optC3 = Optional.ofNullable(c3.get(i));
+
+      // Check if all non-empty values are equal
+      final var result =
+          optC1.map(
+                  // if one is defined check it against the two and three
+                  a1 -> optC2.map(a1::equals).orElse(true) && optC3.map(a1::equals).orElse(true)
+              )
+              // if one is not defined then check two against three
+              .orElse(true)
+              &&
+              optC2.map(
+                  // check two against three
+                  a2 -> optC3.map(a2::equals).orElse(true)
+              ).orElse(true); // if one and two are not defined it does not matter what three is
+      if (!result) {
+        LOGGER.info("command mismatch for logIndex " + i + ":\n\t" + optC1 + "\n\t" + optC2 + "\n\t" + optC3);
+      }
+      return !result;
+    }).findFirst();
+  }
+
+
   static OptionalLong findMismatchIndex(List<AbstractCommand> c1,
                                         List<AbstractCommand> c2,
                                         List<AbstractCommand> c3) {
