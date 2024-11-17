@@ -11,10 +11,12 @@ import java.util.Optional;
 // FIXME seems unsafe or hard to deal with logging if adding in the Ballot Number. An AcceptResponse transmits such info as progress and I think we should add it here at the very least to log.
 
 /// A PrepareResponse is a response to a Prepare message. It contains the vote and the highest uncommitted log entry if any.
-public record PrepareResponse(Vote vote,
-                              long highestCommittedIndex,
-                              Optional<Accept> highestUncommitted
+public record PrepareResponse(
+    Vote vote,
+    long highestCommittedIndex,
+    Optional<Accept> highestUncommitted
 ) implements TrexMessage, DirectMessage {
+
   public byte from() {
     return vote.from();
   }

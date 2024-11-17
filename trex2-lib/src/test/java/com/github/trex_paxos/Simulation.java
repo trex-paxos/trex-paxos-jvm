@@ -56,13 +56,11 @@ class Simulation {
 
   Map<Byte, Long> nodeTimeouts = new HashMap<>();
 
-  public ArrayList<Message> run(
+  public void run(
       int iterations,
       boolean makeClientMessages,
       BiFunction<Send, Long, Stream<TrexMessage>> nemesis
   ) {
-    final var allMessages = new ArrayList<Message>();
-
     if (makeClientMessages) {
       makeClientDataEvents(iterations, eventQueue);
     }
@@ -136,9 +134,6 @@ class Simulation {
           final var nextTimeList = this.eventQueue.computeIfAbsent(nextTime, _ -> new ArrayList<>());
           nextTimeList.add(new Send(newMessages));
         }
-
-        // add the messages to the all messages list
-        allMessages.addAll(newMessages);
       });
       // if the event queue is empty we are done
       var finished = this.eventQueue.isEmpty();
@@ -172,7 +167,6 @@ class Simulation {
       }
       return finished;
     });
-    return allMessages;
   }
 
   static OptionalLong inconsistentCommittedIndex(TreeMap<Long, AbstractCommand> c1,
@@ -424,12 +418,6 @@ class Simulation {
     @Override
     public void sync() {
       // no-op
-    }
-
-    public Optional<Accept> getCommitted(Long logIndex) {
-      return logIndex <= this.progress.highestCommittedIndex() ?
-          Optional.ofNullable(fakeJournal.get(logIndex)) :
-          Optional.empty();
     }
   }
 }

@@ -421,17 +421,6 @@ public class TrexNode {
     return progress.highestCommittedIndex();
   }
 
-  public long highestFixedLogIndex() {
-    assert role == LEAD : "role=" + role;
-    Optional<Map.Entry<Long, AcceptVotes>> first = this.acceptVotesByLogIndex
-        .reversed()
-        .entrySet()
-        .stream()
-        .filter(e -> e.getValue().chosen())
-        .findFirst();
-    return first.isEmpty() ? progress.highestCommittedIndex() : first.get().getKey();
-  }
-
   public byte nodeIdentifier() {
     return nodeIdentifier;
   }

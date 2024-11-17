@@ -1,5 +1,4 @@
 package com.github.trex_paxos.msg;
-
 /// A ballot number is the proposal number used in the Paxos algorithm. Here we are using five bytes. The most significant
 /// are incremented as an integer when a node wishes to become a leader. We encode the
 /// nodeIdentifier in the least significant fifth byte. This works as long as we make the nodeIdentifier unique within the cluster

@@ -187,7 +187,7 @@ public class SimulationTest {
         max.set(min);
       }
     });
-    assertThat(max.get()).isGreaterThan(0);
+    assertThat(max.get()).isGreaterThan(30);
   }
 
   @Test

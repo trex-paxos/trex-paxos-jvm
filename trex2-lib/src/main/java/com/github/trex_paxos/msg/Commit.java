@@ -9,8 +9,6 @@ package com.github.trex_paxos.msg;
 ///                          it does not have the correct accept.
 /// @param committedLogIndex The highest contiguous log index that the leader has learnt to have been fixed and so
 ///                          committed.
-/// @param highestFixedLogIndex The highest log index that the leader has learnt to have been fixed. This may be the
-///                             same as committedLogIndex. Due to lost messages there may be a gap between the two.
 public record Commit(
     byte from,
     BallotNumber number,
