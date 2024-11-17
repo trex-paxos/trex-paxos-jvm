@@ -13,6 +13,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.random.RandomGenerator;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -24,11 +26,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class SimulationTest {
 
   static {
-    LoggerConfig.initialize();
-    //Logger.getLogger("").setLevel(Level.OFF);
+    if (System.getProperty("NO_LOGGING") != null && System.getProperty("NO_LOGGING").equals("true")) {
+      Logger.getLogger("").setLevel(Level.OFF);
+    } else {
+      LoggerConfig.initialize();
+    }
   }
 
-  // TODO this is an perfect network leader election test. We need to add a tests for a partitioned and clients on a code start.
   @Test
   public void testLeaderElection1000() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(1234);
