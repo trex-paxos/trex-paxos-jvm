@@ -341,28 +341,27 @@ class Simulation {
     }
 
     @Override
-    void setRandomTimeout() {
+    protected void setRandomTimeout() {
       Simulation.this.setTimeout(trexNode.nodeIdentifier());
     }
 
     @Override
-    void clearTimeout() {
+    protected void clearTimeout() {
       Simulation.this.clearTimeout(trexNode.nodeIdentifier);
     }
 
     @Override
-    void setHeartbeat() {
+    protected void setHeartbeat() {
       Simulation.this.setHeartbeat(trexNode.nodeIdentifier);
     }
 
-    @Override
-    public TrexResult paxos(TrexMessage input) {
+    TrexResult paxos(TrexMessage input) {
       if (input.from() == trexNode.nodeIdentifier()) {
         return TrexResult.noResult();
       }
       LOGGER.info(trexNode.nodeIdentifier + " <~ " + input);
       final var oldRole = trexNode.getRole();
-      final var result = super.paxos(input);
+      final var result = super.paxosNotThreadSafe(input);
       final var newRole = trexNode.getRole();
       if (oldRole != newRole) {
         LOGGER.info(trexNode.nodeIdentifier() + " == " + newRole);
