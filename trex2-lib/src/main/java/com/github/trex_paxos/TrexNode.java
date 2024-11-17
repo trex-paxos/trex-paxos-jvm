@@ -273,8 +273,7 @@ public class TrexNode {
       case Commit(
           final var commitFrom,
           final var commitNumber,
-          final var commitSlot,
-          final var _
+          final var commitSlot
       ) -> {
         // FIXME it should be possible to do some deduction here to avoid the catchup
         if (commitSlot == highestCommitted() + 1) {
@@ -306,12 +305,6 @@ public class TrexNode {
       }
       case Catchup(final byte replyTo, _, final long[] _, final var highestCommittedIndex) -> {
         final var currentCommitMessage = currentCommitMessage();
-
-        // load all the slots that they know that they are missing
-//        final var slotAccepts = LongStream.of(slotGaps)
-//            .filter(s -> s <= progress.highestCommittedIndex())
-//            .mapToObj(journal::loadAccept)
-//            .flatMap(Optional::stream);
 
         // load the slows they do not know that they are missing
         final var missingAccepts = LongStream.rangeClosed(highestCommittedIndex + 1, progress.highestCommittedIndex())
@@ -491,7 +484,7 @@ public class TrexNode {
   Commit currentCommitMessage() {
     final var highestCommitted = highestCommitted();
     final var commitedAccept = journal.loadAccept(highestCommitted).orElseThrow();
-    return new Commit(nodeIdentifier, commitedAccept.number(), highestCommitted, highestFixedLogIndex());
+    return new Commit(nodeIdentifier, commitedAccept.number(), highestCommitted);
   }
 
   private Prepare currentPrepareMessage() {

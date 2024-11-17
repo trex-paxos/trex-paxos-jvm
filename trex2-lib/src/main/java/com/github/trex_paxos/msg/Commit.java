@@ -14,8 +14,7 @@ package com.github.trex_paxos.msg;
 public record Commit(
     byte from,
     BallotNumber number,
-    long committedLogIndex,
-    long highestFixedLogIndex
+    long committedLogIndex
 ) implements TrexMessage, BroadcastMessage {
 
 }

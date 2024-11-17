@@ -207,7 +207,6 @@ public class Pickle {
   public static void write(Commit m, DataOutputStream dos) throws IOException {
     dos.writeByte(m.from());
     dos.writeLong(m.committedLogIndex());
-    dos.writeLong(m.highestFixedLogIndex());
     write(m.number(), dos);
   }
 
@@ -215,9 +214,8 @@ public class Pickle {
       throws IOException {
     final var from = dis.readByte();
     final var committedLogIndex = dis.readLong();
-    final var highestFixedLogIndex = dis.readLong();
     final var number = readBallotNumber(dis);
-    return new Commit(from, number, committedLogIndex, highestFixedLogIndex);
+    return new Commit(from, number, committedLogIndex);
   }
 
   public static Prepare readPrepare(DataInputStream dataInputStream) throws IOException {

@@ -99,8 +99,8 @@ public class PickleTests {
     Commit commit = new Commit(
         (byte) 3,
         new BallotNumber(10, (byte) 128),
-        5L,
-        6L);
+        5L
+    );
     byte[] pickled = Pickle.writeMessage(commit);
     Commit unpickled = (Commit) Pickle.readMessage(pickled);
     assertEquals(commit, unpickled);
@@ -123,7 +123,7 @@ public class PickleTests {
         new Accept((byte) 1, 2L, new BallotNumber(3, (byte) 4), NoOperation.NOOP),
         new Accept((byte) 5, 6L, new BallotNumber(7, (byte) 8), NoOperation.NOOP)
     };
-    final Commit commit = new Commit((byte) 9, new BallotNumber(10, (byte) 11), 12L, 13L);
+    final Commit commit = new Commit((byte) 9, new BallotNumber(10, (byte) 11), 12L);
     CatchupResponse catchupResponse = new CatchupResponse((byte) 1, (byte) 2, Arrays.asList(accepts), commit);
     byte[] pickled = Pickle.writeMessage(catchupResponse);
     CatchupResponse unpickled = (CatchupResponse) Pickle.readMessage(pickled);
