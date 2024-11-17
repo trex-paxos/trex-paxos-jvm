@@ -3,6 +3,7 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.*;
 
 import java.util.*;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
@@ -16,16 +17,19 @@ import static com.github.trex_paxos.TrexRole.*;
 public class TrexNode {
   static final Logger LOGGER = Logger.getLogger(TrexNode.class.getName());
 
+  private final Level logAtLevel;
+
   /// Create a new TrexNode that will load the current progress from the journal. The journal must have been pre-initialised.
   ///
   /// @param nodeIdentifier The unique node identifier. This must be unique across the cluster and across enough time for prior messages to have been forgotten.
   /// @param quorumStrategy The quorum strategy that may be a simple majority, else things like FPaxos or UPaxos
   /// @param journal        The durable storage and durable log. This must be pre-initialised.
-  public TrexNode(byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal) {
+  public TrexNode(Level logAtLevel, byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal) {
     this.nodeIdentifier = nodeIdentifier;
     this.journal = journal;
     this.quorumStrategy = quorumStrategy;
     this.progress = journal.loadProgress(nodeIdentifier);
+    this.logAtLevel = logAtLevel;
   }
 
   /// The current node identifier. This must be globally unique in the cluster. You can manage that using Paxos itself.
@@ -159,7 +163,7 @@ public class TrexNode {
                     quorumStrategy.assessAccepts(logIndex, vs);
                 switch (quorumOutcome) {
                   case WIN -> {
-                    LOGGER.info(() ->
+                    LOGGER.log(logAtLevel, () ->
                         "WIN logIndex==" + logIndex +
                             " nodeIdentifier==" + nodeIdentifier() +
                             " number==" + acceptVotes.accept().number() +
@@ -333,7 +337,7 @@ public class TrexNode {
   private void commit(Accept accept, Map<Long, AbstractCommand> commands) {
     final var cmd = accept.command();
     final var logIndex = accept.logIndex();
-    LOGGER.info(() ->
+    LOGGER.log(logAtLevel, () ->
         "COMMIT logIndex==" + logIndex +
             " nodeIdentifier==" + nodeIdentifier() +
             " command==" + cmd);

@@ -22,6 +22,11 @@ public record TrexResult(List<TrexMessage> messages, Map<Long, AbstractCommand> 
   }
 
   static TrexResult merge(List<TrexResult> results) {
+    if (results.isEmpty()) {
+      return noResult();
+    } else if (results.size() == 1) {
+      return results.getFirst();
+    }
     final var allMessages = results.stream().flatMap(r -> r.messages().stream()).toList();
     final var allCommands = results.stream()
         .flatMap(r -> r.commands().entrySet().stream())

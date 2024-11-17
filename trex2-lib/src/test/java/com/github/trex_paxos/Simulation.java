@@ -4,10 +4,7 @@ import com.github.trex_paxos.msg.*;
 
 import java.util.*;
 import java.util.function.BiFunction;
-import java.util.logging.Handler;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
-import java.util.logging.SimpleFormatter;
+import java.util.logging.*;
 import java.util.random.RandomGenerator;
 import java.util.random.RandomGeneratorFactory;
 import java.util.stream.Collectors;
@@ -336,7 +333,7 @@ class Simulation {
     }
 
     public TestablePaxosEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy, TransparentJournal journal) {
-      super(new TrexNode(nodeIdentifier, quorumStrategy, journal));
+      super(new TrexNode(Level.INFO, nodeIdentifier, quorumStrategy, journal));
       this.journal = journal;
     }
 
@@ -359,12 +356,12 @@ class Simulation {
       if (input.from() == trexNode.nodeIdentifier()) {
         return TrexResult.noResult();
       }
-      LOGGER.info(trexNode.nodeIdentifier + " <~ " + input);
+      LOGGER.finer(() -> trexNode.nodeIdentifier + " <~ " + input);
       final var oldRole = trexNode.getRole();
       final var result = super.paxosNotThreadSafe(input);
       final var newRole = trexNode.getRole();
       if (oldRole != newRole) {
-        LOGGER.info(trexNode.nodeIdentifier() + " == " + newRole);
+        LOGGER.info(() -> "Node has changed role:" + trexNode.nodeIdentifier() + " == " + newRole);
       }
       if (!result.commands().isEmpty()) {
         allCommandsMap.putAll(result.commands());

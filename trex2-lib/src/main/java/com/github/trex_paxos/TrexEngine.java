@@ -8,10 +8,9 @@ import java.util.Optional;
 import java.util.concurrent.Semaphore;
 import java.util.logging.Logger;
 
-/// The TrexEngine manages the timeout behaviours and aggregates strategies that surround the core Paxos algorithm.
-/// The core paxos algorithm is implemented in the TrexNode class that is wrapped by this class. A TrexEngine is
-/// abstract. Subclasses must override methods to manage the timeout and heartbeat mechanisms. This is because
-/// we do not use threads or wall clock time in the unit tests.
+/// The TrexEngine manages the timeout behaviours that surround the core Paxos algorithm.
+/// Subclasses must implement the timeout and heartbeat methods.
+/// The core paxos algorithm is implemented in the TrexNode class that is wrapped by this class.
 public abstract class TrexEngine {
   static final Logger LOGGER = Logger.getLogger(TrexEngine.class.getName());
 
@@ -25,18 +24,20 @@ public abstract class TrexEngine {
     this.trexNode = trexNode;
   }
 
-  /// Set a random timeout for the current node. This method is called when the node is not the leader. It must first
-  /// rest any existing timeout by calling clearTimeout. It must then set a new timeout.
+  /// This method must schedule a call to the timeout method at some point in the future.
+  /// It should first clear any existing timeout by calling clearTimeout.
+  /// The timeout should be a random value between a high and low value that is specific to your message latency.
   protected abstract void setRandomTimeout();
 
-  /// Reset the timeout for the current node. This method is called when the node is not the leader when it receives a
-  /// message from the leader.
+  /// Reset the timeout for the current node to call calling the timeout method.
+  /// This should cancel any existing timeout that was created by setRandomTimeout.
   protected abstract void clearTimeout();
 
-  /// Set the heartbeat for the current node. This method is called when the node is the leader or a recoverer.
+  /// This method must schedule a call to the heartbeat method at some point in the future.
+  /// The heartbeat should be a fixed period which is less than the minimum of the random timeout minimal value.
   protected abstract void setHeartbeat();
 
-  /// Process an application command sent from a client. This is only done by a leader. It will return a single accept
+  /// Process an application command sent from a client. This is only actioned by a leader. It will return a single accept
   /// then append a commit message as it is very cheap for another node to filter out commits it has already seen.
   public List<TrexMessage> command(Command command) {
     if (trexNode.isLeader()) {
@@ -76,8 +77,8 @@ public abstract class TrexEngine {
             .toList();
         // the progress must be synced to durable storage before any messages are sent out.
         trexNode.journal.sync();
-        //
-        return results.size() == 1 ? results.getFirst() : TrexResult.merge(results);
+        // merge all the results into one
+        return TrexResult.merge(results);
       } finally {
         mutex.release();
       }
@@ -96,7 +97,6 @@ public abstract class TrexEngine {
     if (evidenceOfLeader(trexMessage)) {
       if (trexNode.getRole() != TrexRole.FOLLOW)
         trexNode.backdown();
-      clearTimeout();
       setRandomTimeout();
     }
 
@@ -107,8 +107,6 @@ public abstract class TrexEngine {
     final var newRole = trexNode.getRole();
 
     if (trexNode.isLeader()) {
-      // this line says we must always see our own heartbeat to set a new heartbeat.
-      clearTimeout();
       setHeartbeat();
       // TODO recoverer should heartbeat prepares until the network is stable.
     } else if (trexNode.isRecover()) {
@@ -118,6 +116,8 @@ public abstract class TrexEngine {
     if (oldRole != newRole) {
       if (oldRole == TrexRole.LEAD) {
         setRandomTimeout();
+      } else if (newRole == TrexRole.LEAD) {
+        clearTimeout();
       }
     }
 
@@ -150,7 +150,7 @@ public abstract class TrexEngine {
   protected Optional<Prepare> timeout() {
     var result = trexNode.timeout();
     if (result.isPresent()) {
-      LOGGER.fine(() -> "timeout:\n\t" + trexNode.nodeIdentifier() + " " + trexNode.getRole());
+      LOGGER.fine(() -> "Timeout: " + trexNode.nodeIdentifier() + " " + trexNode.getRole());
       setRandomTimeout();
     }
     return result;
@@ -160,7 +160,7 @@ public abstract class TrexEngine {
     var result = trexNode.heartbeat();
     if (!result.isEmpty()) {
       setHeartbeat();
-      LOGGER.fine(() -> "heartbeat: " + trexNode.nodeIdentifier() + " " + trexNode.getRole() + " " + result);
+      LOGGER.finer(() -> "Heartbeat: " + trexNode.nodeIdentifier() + " " + trexNode.getRole() + " " + result);
     }
     return result;
   }
