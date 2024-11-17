@@ -40,8 +40,13 @@ public abstract class TrexEngine {
   /// then append a commit message as it is very cheap for another node to filter out commits it has already seen.
   List<TrexMessage> command(Command command) {
     if (trexNode.isLeader()) {
+      // only if we are leader do we create the next accept message into the next log index
       final var nextAcceptMessage = trexNode.nextAcceptMessage(command);
-      trexNode.paxos(nextAcceptMessage);
+      // we self accept
+      final var r = trexNode.paxos(nextAcceptMessage);
+      // the result is ignorable a self ack so does not need to be transmitted.
+      assert r.commands().isEmpty() && r.messages().size() == 1 && r.messages().getFirst() instanceof AcceptResponse;
+      // forward to the cluster the new accept and at the same time heatbeat a commit message.
       return List.of(nextAcceptMessage, trexNode.currentCommitMessage());
     } else {
       return Collections.emptyList();

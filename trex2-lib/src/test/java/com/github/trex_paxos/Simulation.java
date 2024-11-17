@@ -65,8 +65,9 @@ class Simulation {
       makeClientDataEvents(iterations, eventQueue);
     }
 
-    final var _ = IntStream.range(0, iterations).anyMatch(i1 -> {
-      Optional.ofNullable(eventQueue.pollFirstEntry()).ifPresent(timeWithEvents -> {
+    final var _ = IntStream.range(0, iterations).anyMatch(iteration -> {
+      Optional.ofNullable(eventQueue.pollFirstEntry())
+          .ifPresent(timeWithEvents -> {
         // advance the clock
         tick(timeWithEvents.getKey());
 
@@ -138,7 +139,7 @@ class Simulation {
       // if the event queue is empty we are done
       var finished = this.eventQueue.isEmpty();
       if (finished) {
-        LOGGER.info("finished as empty iteration: " + i1);
+        LOGGER.info("finished as empty iteration: " + iteration);
       }
       final var inconsistentCommittedIndex = inconsistentCommittedIndex(
           trexEngine1.allCommandsMap,
