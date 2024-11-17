@@ -12,6 +12,7 @@ import java.util.random.RandomGenerator;
 import java.util.random.RandomGeneratorFactory;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 class Simulation {
@@ -68,13 +69,14 @@ class Simulation {
 
     final var _ = IntStream.range(0, iterations).anyMatch(i1 -> {
       Optional.ofNullable(eventQueue.pollFirstEntry()).ifPresent(timeWithEvents -> {
-
         // advance the clock
         tick(timeWithEvents.getKey());
 
         LOGGER.info("------------------");
-        LOGGER.info("tick: " + now + "\t" + trexEngine1.role() + " " + trexEngine2.role() + " " + trexEngine3.role());
-
+        LOGGER.info("tick: " + now + "\n\t" + trexEngine1.role() + " " + trexEngine1.trexNode().progress.toString()
+            + "\n\t" + trexEngine2.role() + " " + trexEngine2.trexNode().progress.toString()
+            + "\n\t" + trexEngine3.role() + " " + trexEngine3.trexNode().progress.toString()
+        );
 
         // grab the events at this time
         final var events = timeWithEvents.getValue();
@@ -84,7 +86,7 @@ class Simulation {
           LOGGER.fine(() -> "event: " + event);
           switch (event) {
             case Timeout timeout -> {
-              // if it is a timeout collect the prepare message if the node is still a follower at this time
+              // if it is a timeout collect the prepare messages if the node is still a follower at this time
               final var prepare = switch (timeout.nodeIdentifier) {
                 case 1 -> trexEngine1.timeout();
                 case 2 -> trexEngine2.timeout();
@@ -95,12 +97,12 @@ class Simulation {
               return prepare.stream();
             }
 
-            // if it is a message that has arrived run paxos
+            // if it is a messages that has arrived run paxos
             case Send send -> {
               return networkSimulation(send, now, nemesis);
             }
             case Heartbeat heartbeat -> {
-              // if it is a timeout collect the prepare message if the node is still a follower at this time
+              // if it is a timeout collect the prepare messages if the node is still a follower at this time
               final var commitWithAccepts = switch (heartbeat.nodeIdentifier) {
                 case 1 -> trexEngine1.heartbeat();
                 case 2 -> trexEngine2.heartbeat();
@@ -122,7 +124,7 @@ class Simulation {
           }
         }).toList();
 
-        // the message arrive in the next time unit
+        // the messages arrive in the next time unit
         if (!newMessages.isEmpty()) {
           LOGGER.fine(() -> "\tnewMessages:\n\t" + newMessages.stream()
               .map(Object::toString)
@@ -132,7 +134,7 @@ class Simulation {
           final var nextTime = now + 1;
           // we add the messages to the event queue at that time
           final var nextTimeList = this.eventQueue.computeIfAbsent(nextTime, _ -> new ArrayList<>());
-          nextTimeList.addAll(newMessages.stream().map(Send::new).toList());
+          nextTimeList.add(new Send(newMessages));
         }
 
         // add the messages to the all messages list
@@ -143,13 +145,73 @@ class Simulation {
       if (finished) {
         LOGGER.info("finished as empty iteration: " + i1);
       }
+      final var inconsistentCommittedIndex = inconsistentCommittedIndex(
+          trexEngine1.allCommandsMap,
+          trexEngine2.allCommandsMap,
+          trexEngine3.allCommandsMap);
+      finished = finished || inconsistentCommittedIndex.isPresent();
+      if (inconsistentCommittedIndex.isPresent()) {
+        LOGGER.info("finished as not matching commands:" +
+            "\n\t" + trexEngine1.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
+            + "\n\t" + trexEngine2.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
+            + "\n\t" + trexEngine3.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")));
+        throw new AssertionError("commands not matching");
+      }
+      boolean commitLengthNotEqualToCommandLength =
+          trexEngine1.allCommandsMap.size() != trexEngine1.trexNode.progress.highestCommittedIndex() ||
+              trexEngine2.allCommandsMap.size() != trexEngine2.trexNode.progress.highestCommittedIndex() ||
+              trexEngine3.allCommandsMap.size() != trexEngine3.trexNode.progress.highestCommittedIndex();
+      finished = finished || commitLengthNotEqualToCommandLength;
+      if (commitLengthNotEqualToCommandLength) {
+        LOGGER.info("finished as commit length not equal to command length:\n" +
+            "\t highestCommittedIndex=" + trexEngine1.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine1.allCommands().size() + "\n" +
+            "\t highestCommittedIndex=" + trexEngine2.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine2.allCommands().size() + "\n" +
+            "\t highestCommittedIndex=" + trexEngine3.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine3.allCommands().size() + "\n"
+        );
+        throw new AssertionError("commit length not equal to command length");
+      }
       return finished;
     });
     return allMessages;
   }
 
-  public ArrayList<Message> run(int i, boolean b) {
-    return run(i, b, DEFAULT_NETWORK_SIMULATION);
+  static OptionalLong inconsistentCommittedIndex(TreeMap<Long, AbstractCommand> c1,
+                                                 TreeMap<Long, AbstractCommand> c2,
+                                                 TreeMap<Long, AbstractCommand> c3) {
+    final var c1last = !c1.isEmpty() ? c1.lastKey() : 0;
+    final var c2last = !c2.isEmpty() ? c2.lastKey() : 0;
+    final var c3last = !c3.isEmpty() ? c3.lastKey() : 0;
+    final var maxLength = Math.max(
+        c1last, Math.max(
+            c2last,
+            c3last));
+    return LongStream.range(0, maxLength).filter(i -> {
+      final Optional<AbstractCommand> optC1 = Optional.ofNullable(c1.get(i));
+      final Optional<AbstractCommand> optC2 = Optional.ofNullable(c2.get(i));
+      final Optional<AbstractCommand> optC3 = Optional.ofNullable(c3.get(i));
+
+      // Check if all non-empty values are equal
+      final var result =
+          optC1.map(
+                  // if one is defined check it against the two and three
+                  a1 -> optC2.map(a1::equals).orElse(true) && optC3.map(a1::equals).orElse(true)
+              )
+              // if one is not defined then check two against three
+              .orElse(true)
+              &&
+              optC2.map(
+                  // check two against three
+                  a2 -> optC3.map(a2::equals).orElse(true)
+              ).orElse(true); // if one and two are not defined it does not matter what three is
+      if (!result) {
+        LOGGER.info("command mismatch logIndex=" + i + ":\n\t" + optC1 + "\n\t" + optC2 + "\n\t" + optC3);
+      }
+      return !result;
+    }).findFirst();
+  }
+
+  public void run(int i, boolean b) {
+    run(i, b, DEFAULT_NETWORK_SIMULATION);
   }
 
   sealed interface Event permits Heartbeat, Send, Timeout, ClientCommand {
@@ -158,7 +220,7 @@ class Simulation {
   record Timeout(byte nodeIdentifier) implements Event {
   }
 
-  record Send(Message message) implements Event {
+  record Send(List<TrexMessage> messages) implements Event {
   }
 
   record Heartbeat(byte nodeIdentifier) implements Event {
@@ -235,23 +297,23 @@ class Simulation {
     trexEngine3.start();
   }
 
-  /// This is how we can inject network failures into the simulation. The default implementation is to pass the message
+  /// This is how we can inject network failures into the simulation. The default implementation is to pass the messages
   /// without any errors. It is intended that this method is override with a method that will simulate network failures.
   /// This sort of testing is inspired by the Jepsen testing framework which calls the errors a Nemesis.
   ///
-  /// @param send The message to simulate sending.
+  /// @param send The messages to simulate sending.
   /// @param now  The current time in the simulation.
   /// @return The messages that will be sent to the network having been interfered with to simulate network failures.
   protected Stream<TrexMessage> networkSimulation(Send send, Long now, BiFunction<Send, Long, Stream<TrexMessage>> nemesis) {
     return nemesis.apply(send, now);
   }
 
-  final BiFunction<Send, Long, Stream<TrexMessage>> DEFAULT_NETWORK_SIMULATION = (send, _) -> switch (send.message()) {
-    case BroadcastMessage m -> engines.values().stream()
-        .flatMap(engine -> engine.paxos(m).messages().stream());
-    case DirectMessage m -> engines.get(m.to()).paxos(m).messages().stream();
-    case AbstractCommand abstractCommand -> throw new AssertionError("Unexpected command message: " + abstractCommand);
-  };
+  final BiFunction<Send, Long, Stream<TrexMessage>> DEFAULT_NETWORK_SIMULATION =
+      (send, _) ->
+          send.messages.stream().flatMap(x -> switch (x) {
+            case BroadcastMessage m -> engines.values().stream().flatMap(engine -> engine.paxos(m).messages().stream());
+            case DirectMessage m -> engines.get(m.to()).paxos(m).messages().stream();
+          });
 
   private void makeClientDataEvents(int iterations, NavigableMap<Long, List<Event>> eventQueue) {
     IntStream.range(0, iterations).forEach(i -> {
@@ -272,7 +334,11 @@ class Simulation {
 
     final TransparentJournal journal;
 
-    final List<AbstractCommand> allCommands = new ArrayList<>();
+    final TreeMap<Long, AbstractCommand> allCommandsMap = new TreeMap<>();
+
+    public List<AbstractCommand> allCommands() {
+      return new ArrayList<>(allCommandsMap.values());
+    }
 
     public TestablePaxosEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy, TransparentJournal journal) {
       super(new TrexNode(nodeIdentifier, quorumStrategy, journal));
@@ -306,7 +372,9 @@ class Simulation {
       if (oldRole != newRole) {
         LOGGER.info(trexNode.nodeIdentifier() + " == " + newRole);
       }
-      allCommands.addAll(result.commands());
+      if (!result.commands().isEmpty()) {
+        allCommandsMap.putAll(result.commands());
+      }
       return result;
     }
 

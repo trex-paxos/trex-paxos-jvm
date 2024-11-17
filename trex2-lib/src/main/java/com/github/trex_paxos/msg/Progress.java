@@ -1,5 +1,7 @@
 package com.github.trex_paxos.msg;
 
+import com.github.trex_paxos.Pickle;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -36,15 +38,15 @@ public record Progress(byte nodeIdentifier,
       return new Progress(nodeIdentifier, p, highestCommittedIndex, highestAcceptedIndex);
     }
 
-    public void writeTo(DataOutputStream dos) throws IOException {
-      dos.writeByte(nodeIdentifier);
-      highestPromised.writeTo(dos);
-      dos.writeLong(highestCommittedIndex);
-      dos.writeLong(highestAcceptedIndex);
+  public static void writeTo(Progress m, DataOutputStream dos) throws IOException {
+    dos.writeByte(m.nodeIdentifier());
+    Pickle.write(m.highestPromised(), dos);
+    dos.writeLong(m.highestCommittedIndex());
+    dos.writeLong(m.highestAcceptedIndex());
     }
 
     public static Progress readFrom(DataInputStream dis) throws IOException {
-      return new Progress(dis.readByte(), BallotNumber.readFrom(dis), dis.readLong(), dis.readLong());
+      return new Progress(dis.readByte(), Pickle.readBallotNumber(dis), dis.readLong(), dis.readLong());
     }
 
     @Override

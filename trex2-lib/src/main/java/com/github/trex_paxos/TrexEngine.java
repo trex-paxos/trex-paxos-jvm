@@ -42,7 +42,7 @@ public abstract class TrexEngine {
     if (trexNode.isLeader()) {
       final var nextAcceptMessage = trexNode.nextAcceptMessage(command);
       trexNode.paxos(nextAcceptMessage);
-      return List.of(nextAcceptMessage, trexNode.makeCommitMessage());
+      return List.of(nextAcceptMessage, trexNode.currentCommitMessage());
     } else {
       return Collections.emptyList();
     }
@@ -129,13 +129,17 @@ public abstract class TrexEngine {
     return switch (input) {
       case Commit commit -> !trexNode.isLeader()
           && commit.from() != trexNode.nodeIdentifier()
-          && (commit.highestAcceptedIndex() >= trexNode.highestAccepted()
-          || commit.highestCommittedIndex() >= trexNode.highestCommitted())
+          && commit.committedLogIndex() >= trexNode.highestCommitted()
       ;
       case Accept accept -> !trexNode.isLeader()
           && accept.from() != trexNode.nodeIdentifier()
           && (accept.logIndex() > trexNode.highestAccepted()
           || accept.logIndex() > trexNode.highestCommitted());
+
+      case AcceptResponse acceptResponse -> trexNode.isLeader()
+          && acceptResponse.from() != trexNode.nodeIdentifier()
+          && acceptResponse.progress().highestCommittedIndex() > trexNode.highestCommitted();
+      
       default -> false;
     };
   }
@@ -147,7 +151,7 @@ public abstract class TrexEngine {
   public Optional<Prepare> timeout() {
     var result = trexNode.timeout();
     if (result.isPresent()) {
-      LOGGER.info("timeout:\n\t" + trexNode.nodeIdentifier() + " " + trexNode.getRole());
+      LOGGER.fine("timeout:\n\t" + trexNode.nodeIdentifier() + " " + trexNode.getRole());
       setRandomTimeout();
     }
     return result;

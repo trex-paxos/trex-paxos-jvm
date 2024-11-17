@@ -1,9 +1,5 @@
 package com.github.trex_paxos.msg;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-
 /// A ballot number is the proposal number used in the Paxos algorithm. Here we are using five bytes. The most significant
 /// are incremented as an integer when a node wishes to become a leader. We encode the
 /// nodeIdentifier in the least significant fifth byte. This works as long as we make the nodeIdentifier unique within the cluster
@@ -14,42 +10,33 @@ public record BallotNumber(int counter, byte nodeIdentifier) implements Comparab
   public static final BallotNumber MIN = new BallotNumber(Integer.MIN_VALUE, Byte.MIN_VALUE);
 
   @Override
-    public int compareTo(BallotNumber that) {
-        if (this == that) {
-            return 0;
-        }
-        if (this.counter > that.counter) {
-            return 1;
-        } else if (this.counter < that.counter) {
-            return -1;
-        } else {
-            return Integer.compare(this.nodeIdentifier, that.nodeIdentifier);
-        }
+  public int compareTo(BallotNumber that) {
+    if (this == that) {
+      return 0;
     }
+    if (this.counter > that.counter) {
+      return 1;
+    } else if (this.counter < that.counter) {
+      return -1;
+    } else {
+      return Integer.compare(this.nodeIdentifier, that.nodeIdentifier);
+    }
+  }
 
-    @Override
-    public String toString() {
-        return String.format("N(c=%d,n=%d)", counter, nodeIdentifier);
-    }
+  @Override
+  public String toString() {
+    return String.format("N(c=%d,n=%d)", counter, nodeIdentifier);
+  }
 
-    public void writeTo(DataOutputStream daos) throws IOException {
-        daos.writeInt(counter);
-        daos.writeByte(nodeIdentifier);
-    }
+  public Boolean lessThan(BallotNumber ballotNumber) {
+    return this.compareTo(ballotNumber) < 0;
+  }
 
-    public static BallotNumber readFrom(DataInputStream dataInputStream) throws IOException {
-        return new BallotNumber(dataInputStream.readInt(), dataInputStream.readByte());
-    }
+  public Boolean greaterThan(BallotNumber ballotNumber) {
+    return this.compareTo(ballotNumber) > 0;
+  }
 
-    public Boolean lessThan(BallotNumber ballotNumber) {
-        return this.compareTo(ballotNumber) < 0;
-    }
-
-    public Boolean greaterThan(BallotNumber ballotNumber) {
-        return this.compareTo(ballotNumber) > 0;
-    }
-
-    public boolean lessThanOrEqualTo(BallotNumber number) {
-        return this.compareTo(number) <= 0;
-    }
+  public boolean lessThanOrEqualTo(BallotNumber number) {
+    return this.compareTo(number) <= 0;
+  }
 }

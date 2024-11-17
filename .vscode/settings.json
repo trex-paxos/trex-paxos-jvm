@@ -1,16 +1,18 @@
 {
-
-
-    "java.configuration.runtimes": [
+  "java.configuration.runtimes": [
     {
       "name": "JavaSE-23",
       "path": "/usr/local/sdkman/candidates/java/23-open"
     }
-  ],"java.jdt.ls.java.home": "/usr/local/sdkman/candidates/java/23-open",
+  ],
+  "java.jdt.ls.java.home": "/usr/local/sdkman/candidates/java/23-open",
   "java.configuration.updateBuildConfiguration": "automatic",
-    "java.compile.nullAnalysis.mode": "disabled",
-    "java.problem.ignore": [
-  "redundant-superinterface"
-]
-
+  "java.compile.nullAnalysis.mode": "disabled",
+  "java.problem.ignore": [
+    "redundant-superinterface"
+  ],
+  "java.debug.settings.onBuildFailureProceed": true,
+  "java.test.config": {
+    "vmArgs": []
   }
+}

@@ -11,7 +11,8 @@ public enum MessageType {
   Accept(3),
   AcceptResponse(4),
   Commit(5),
-  Catchup(6);
+  Catchup(6),
+  CatchupResponse(7);
 
   private final byte id;
 
@@ -70,6 +71,7 @@ public enum MessageType {
       case AcceptResponse _ -> AcceptResponse;
       case Commit _ -> Commit;
       case Catchup _ -> Catchup;
+      case CatchupResponse _ -> CatchupResponse;
     };
   }
 }
