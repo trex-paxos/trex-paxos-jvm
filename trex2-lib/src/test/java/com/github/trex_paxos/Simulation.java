@@ -65,8 +65,9 @@ class Simulation {
       makeClientDataEvents(iterations, eventQueue);
     }
 
-    final var _ = IntStream.range(0, iterations).anyMatch(i1 -> {
-      Optional.ofNullable(eventQueue.pollFirstEntry()).ifPresent(timeWithEvents -> {
+    final var _ = IntStream.range(0, iterations).anyMatch(iteration -> {
+      Optional.ofNullable(eventQueue.pollFirstEntry())
+          .ifPresent(timeWithEvents -> {
         // advance the clock
         tick(timeWithEvents.getKey());
 
@@ -138,7 +139,7 @@ class Simulation {
       // if the event queue is empty we are done
       var finished = this.eventQueue.isEmpty();
       if (finished) {
-        LOGGER.info("finished as empty iteration: " + i1);
+        LOGGER.info("finished as empty iteration: " + iteration);
       }
       final var inconsistentCommittedIndex = inconsistentCommittedIndex(
           trexEngine1.allCommandsMap,
@@ -340,28 +341,27 @@ class Simulation {
     }
 
     @Override
-    void setRandomTimeout() {
+    protected void setRandomTimeout() {
       Simulation.this.setTimeout(trexNode.nodeIdentifier());
     }
 
     @Override
-    void clearTimeout() {
+    protected void clearTimeout() {
       Simulation.this.clearTimeout(trexNode.nodeIdentifier);
     }
 
     @Override
-    void setHeartbeat() {
+    protected void setHeartbeat() {
       Simulation.this.setHeartbeat(trexNode.nodeIdentifier);
     }
 
-    @Override
-    public TrexResult paxos(TrexMessage input) {
+    TrexResult paxos(TrexMessage input) {
       if (input.from() == trexNode.nodeIdentifier()) {
         return TrexResult.noResult();
       }
       LOGGER.info(trexNode.nodeIdentifier + " <~ " + input);
       final var oldRole = trexNode.getRole();
-      final var result = super.paxos(input);
+      final var result = super.paxosNotThreadSafe(input);
       final var newRole = trexNode.getRole();
       if (oldRole != newRole) {
         LOGGER.info(trexNode.nodeIdentifier() + " == " + newRole);
