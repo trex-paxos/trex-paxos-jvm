@@ -165,7 +165,8 @@ public class Pickle {
     final long[] slotGaps = IntStream.range(0, length)
         .mapToLong(_ -> uncheckedReadLong(dis))
         .toArray();
-    return new Catchup(from, to, slotGaps);
+    final var highestCommitedIndex = dis.readLong();
+    return new Catchup(from, to, slotGaps, highestCommitedIndex);
   }
 
   public static void write(Catchup m, DataOutputStream dos) throws IOException {
@@ -174,12 +175,13 @@ public class Pickle {
     final var length = Math.min(m.slotGaps().length, Short.MAX_VALUE);
     dos.writeShort(length);
     IntStream.range(0, length).forEach(i -> uncheckedWriteLong(dos, m.slotGaps()[i]));
+    dos.writeLong(m.highestCommitedIndex());
   }
 
   public static CatchupResponse readCatchupResponse(DataInputStream dis) throws IOException {
     final byte from = dis.readByte();
     final byte to = dis.readByte();
-    int catchupSize = dis.readInt();
+    final int catchupSize = dis.readInt();
     List<Accept> catchup = new ArrayList<>();
     IntStream.range(0, catchupSize).forEach(_ -> {
       try {
@@ -188,7 +190,8 @@ public class Pickle {
         throw new UncheckedIOException(e);
       }
     });
-    return new CatchupResponse(from, to, catchup);
+    final var commit = readCommit(dis);
+    return new CatchupResponse(from, to, catchup, commit);
   }
 
   public static void write(CatchupResponse m, DataOutputStream dos) throws IOException {
@@ -198,20 +201,23 @@ public class Pickle {
     for (Accept accept : m.catchup()) {
       write(accept, dos);
     }
+    write(m.commit(), dos);
   }
 
   public static void write(Commit m, DataOutputStream dos) throws IOException {
     dos.writeByte(m.from());
-    dos.writeLong(m.logIndex());
+    dos.writeLong(m.committedLogIndex());
+    dos.writeLong(m.highestFixedLogIndex());
     write(m.number(), dos);
   }
 
   public static Commit readCommit(DataInputStream dis)
       throws IOException {
     final var from = dis.readByte();
-    final var logIndex = dis.readLong();
+    final var committedLogIndex = dis.readLong();
+    final var highestFixedLogIndex = dis.readLong();
     final var number = readBallotNumber(dis);
-    return new Commit(logIndex, number, from);
+    return new Commit(from, number, committedLogIndex, highestFixedLogIndex);
   }
 
   public static Prepare readPrepare(DataInputStream dataInputStream) throws IOException {

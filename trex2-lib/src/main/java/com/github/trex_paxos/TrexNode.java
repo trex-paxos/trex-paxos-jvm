@@ -141,17 +141,18 @@ public class TrexNode {
           throw new AssertionError("unreachable progress={" + progress + "}, nextPrepareMessage={" + prepare + "}");
         }
       }
-      case AcceptResponse acceptResponse -> {
+      case AcceptResponse(final var vote, final var otherProgress) -> {
+        // FIXME reorder this to be more readable
         // Both Leader and Recoverer can receive AcceptResponses
-        if (FOLLOW != role && acceptResponse.vote().to() == nodeIdentifier) {
+        if (FOLLOW != role && vote.to() == nodeIdentifier) {
           // An isolated leader rejoining must back down
-          if (LEAD == role && acceptResponse.progress().highestCommittedIndex() > progress.highestCommittedIndex()) {
+          if (LEAD == role && otherProgress.highestCommittedIndex() > progress.highestCommittedIndex()) {
             backdown();
           } else {
-            final var logIndex = acceptResponse.vote().logIndex();
+            final var logIndex = vote.logIndex();
             Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex)).ifPresent(acceptVotes -> {
               if (!acceptVotes.chosen()) {
-                acceptVotes.responses().put(acceptResponse.from(), acceptResponse);
+                acceptVotes.responses().put(vote.from(), (AcceptResponse) input);
                 Set<Vote> vs = acceptVotes.responses().values().stream()
                     .map(AcceptResponse::vote).collect(Collectors.toSet());
                 final var quorumOutcome =
@@ -159,42 +160,35 @@ public class TrexNode {
                 switch (quorumOutcome) {
                   case WIN -> {
                     LOGGER.info(() ->
-                        "WIN logIndex=" + logIndex +
-                            " nodeIdentifier=" + nodeIdentifier() +
-                            " number=" + acceptVotes.accept().number() +
-                            " value=" + acceptVotes.accept().command().toString() +
-                            " vs=" + vs);
+                        "WIN logIndex==" + logIndex +
+                            " nodeIdentifier==" + nodeIdentifier() +
+                            " number==" + acceptVotes.accept().number() +
+                            " value==" + acceptVotes.accept().command() +
+                            " vs==" + vs);
 
                     // we have a quorum at that log index but due to lost messages we may have gaps before it.
                     acceptVotesByLogIndex.put(logIndex, AcceptVotes.chosen(acceptVotes.accept()));
-                    // we must commit in log order so we must go from our current commit to the new commit and stop on any gaps
-                    Optional<Long> highestCommitable = Optional.empty();
-                    List<Long> deletable = new ArrayList<>();
-                    List<Long> committedSlots = new ArrayList<>();
-                    for (final var votesByIdMapEntry :
-                        acceptVotesByLogIndex.entrySet()) {
-                      if (votesByIdMapEntry.getValue().chosen()) {
-                        highestCommitable = Optional.of(votesByIdMapEntry.getKey());
-                        deletable.add(votesByIdMapEntry.getKey());
-                        committedSlots.add(votesByIdMapEntry.getKey());
-                      } else {
-                        break;
-                      }
-                    }
+
+                    final var committed = LongStream.rangeClosed(progress.highestCommittedIndex() + 1, logIndex)
+                        .mapToObj(i -> Optional.ofNullable(acceptVotesByLogIndex.get(i)))
+                        .takeWhile(Optional::isPresent)
+                        .flatMap(Optional::stream)
+                        .map(AcceptVotes::accept)
+                        .filter(accept -> accept.number().equals(vote.number()))
+                        .toList();
+
                     // only if we have some contiguous slots that we can commit which might still not be all slots
-                    if (highestCommitable.isPresent()) {
+                    if (!committed.isEmpty()) {
                       // run the callback
-                      for (var slot : committedSlots) {
-                        final var accept = journal.loadAccept(slot).orElseThrow();
-                        assert slot == accept.logIndex();
-                        commit(accept, commands, logIndex);
+                      for (var accept : committed) {
+                        commit(accept, commands);
+                        // free the memory and stop heartbeating out the accepts
+                        acceptVotesByLogIndex.remove(accept.logIndex());
                       }
-                      // free the memory and stop heartbeating out the accepts
-                      for (final var deletableId : deletable) {
-                        acceptVotesByLogIndex.remove(deletableId);
-                      }
+
                       // we have committed
-                      this.progress = progress.withHighestCommitted(highestCommitable.get());
+                      this.progress = progress.withHighestCommitted(committed.getLast().logIndex());
+
                       // let the cluster know
                       messages.add(currentCommitMessage());
                     }
@@ -208,7 +202,6 @@ public class TrexNode {
                 }
               }
             });
-
           }
         }
       }
@@ -278,63 +271,80 @@ public class TrexNode {
         }
       }
       case Commit(
-          final var commitSlot, BallotNumber commitNumber, final var commitFrom
+          final var commitFrom,
+          final var commitNumber,
+          final var commitSlot,
+          final var _
       ) -> {
-        final var lastCommittedIndex = highestCommitted();
-        if (commitSlot == lastCommittedIndex + 1) {
-          // we may have gaps, so we must find the ones that we have in the log
-          final var commitableAccept =
-              journal.loadAccept(commitSlot)
+        // FIXME it should be possible to do some deduction here to avoid the catchup
+        if (commitSlot == highestCommitted() + 1) {
+          // we must have the correct number at the slot
+          final var commitableAccept = journal.loadAccept(commitSlot)
                   .filter(accept -> accept.number().equals(commitNumber))
                   .orElse(null);
 
           // make the callback to the main application
           Optional.ofNullable(commitableAccept).ifPresent(accept -> {
-            commit(accept, commands, commitSlot);
+            commit(accept, commands);
             progress = progress.withHighestCommitted(commitSlot);
             journal.saveProgress(progress);
-
             if (!role.equals(FOLLOW)) {
               backdown();
             }
           });
         }
-        // deal with having a missing accept or an accept that was not chosen (i.e. isolated leader)
-        final var newHighestCommitted = progress.highestCommittedIndex();
-        final var slotGaps = LongStream.range(newHighestCommitted, commitSlot + 1)
+
+        final var highestCommittedIndex = progress.highestCommittedIndex();
+
+        if (commitSlot > highestCommittedIndex) {
+          final var slotGaps = LongStream.range(progress.highestCommittedIndex(), commitSlot + 1)
             .toArray();
-        if (slotGaps.length > 0) {
-          messages.add(new Catchup(nodeIdentifier, commitFrom, slotGaps));
+          if (slotGaps.length > 0) {
+            messages.add(new Catchup(nodeIdentifier, commitFrom, slotGaps, progress.highestCommittedIndex()));
+          }
         }
       }
-      case Catchup(byte replyTo, _, long[] slotGaps) -> {
-        // load all the slots that they are missing
-        final var accepts = LongStream.of(slotGaps)
-            .filter(s -> s <= progress.highestCommittedIndex())
+      case Catchup(final byte replyTo, _, final long[] _, final var highestCommittedIndex) -> {
+        final var currentCommitMessage = currentCommitMessage();
+
+        // load all the slots that they know that they are missing
+//        final var slotAccepts = LongStream.of(slotGaps)
+//            .filter(s -> s <= progress.highestCommittedIndex())
+//            .mapToObj(journal::loadAccept)
+//            .flatMap(Optional::stream);
+
+        // load the slows they do not know that they are missing
+        final var missingAccepts = LongStream.rangeClosed(highestCommittedIndex + 1, progress.highestCommittedIndex())
             .mapToObj(journal::loadAccept)
             .flatMap(Optional::stream)
             .toList();
-        messages.add(new CatchupResponse(nodeIdentifier, replyTo, accepts));
+
+        messages.add(new CatchupResponse(nodeIdentifier, replyTo, missingAccepts, currentCommitMessage));
       }
       case CatchupResponse cr -> {
-        final var results = cr.catchup().stream().map(this::paxos).toList();
-        for (final var result : results) {
-          messages.addAll(result.messages());
-        }
-        commands.putAll(cr.catchup().stream().collect(Collectors.toMap(Accept::logIndex, Accept::command)));
+        // drop anything we have already committed
+        cr.catchup().stream()
+            .dropWhile(accept -> accept.logIndex() <= progress.highestCommittedIndex())
+            .forEach(accept -> {
+              journal.journalAccept(accept);
+              commit(accept, commands);
+            });
+
+        progress = progress.withHighestCommitted(cr.commit().committedLogIndex());
+        journal.saveProgress(progress);
       }
     }
     return new TrexResult(messages, commands);
   }
 
-  private void commit(Accept accept, Map<Long, AbstractCommand> commands, long logIndex) {
-    switch (accept) {
-      case Accept(_, _, _, NoOperation noop) -> commands.put(logIndex, noop);
-      case Accept(_, _, _, final Command command) -> {
-        LOGGER.info(() -> "COMMIT logIndex=" + logIndex + " nodeIdentifier=" + nodeIdentifier() + " clientMsgUuid=" + command.clientMsgUuid());
-        commands.put(logIndex, command);
-      }
-    }
+  private void commit(Accept accept, Map<Long, AbstractCommand> commands) {
+    final var cmd = accept.command();
+    final var logIndex = accept.logIndex();
+    LOGGER.info(() ->
+        "COMMIT logIndex==" + logIndex +
+            " nodeIdentifier==" + nodeIdentifier() +
+            " command==" + cmd);
+    commands.put(logIndex, cmd);
   }
 
   void backdown() {
@@ -418,6 +428,17 @@ public class TrexNode {
     return progress.highestCommittedIndex();
   }
 
+  public long highestFixedLogIndex() {
+    assert role == LEAD : "role=" + role;
+    Optional<Map.Entry<Long, AcceptVotes>> first = this.acceptVotesByLogIndex
+        .reversed()
+        .entrySet()
+        .stream()
+        .filter(e -> e.getValue().chosen())
+        .findFirst();
+    return first.isEmpty() ? progress.highestCommittedIndex() : first.get().getKey();
+  }
+
   public byte nodeIdentifier() {
     return nodeIdentifier;
   }
@@ -470,7 +491,7 @@ public class TrexNode {
   Commit currentCommitMessage() {
     final var highestCommitted = highestCommitted();
     final var commitedAccept = journal.loadAccept(highestCommitted).orElseThrow();
-    return new Commit(highestCommitted, commitedAccept.number(), nodeIdentifier);
+    return new Commit(nodeIdentifier, commitedAccept.number(), highestCommitted, highestFixedLogIndex());
   }
 
   private Prepare currentPrepareMessage() {

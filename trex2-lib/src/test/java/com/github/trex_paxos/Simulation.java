@@ -145,26 +145,46 @@ class Simulation {
       if (finished) {
         LOGGER.info("finished as empty iteration: " + i1);
       }
-      final var matchingCommands = findMismatchIndex(trexEngine1.allCommands(), trexEngine2.allCommands(), trexEngine3.allCommands());
-      finished = finished || matchingCommands.isPresent();
-      if (matchingCommands.isPresent()) {
+      final var inconsistentCommittedIndex = inconsistentCommittedIndex(
+          trexEngine1.allCommandsMap,
+          trexEngine2.allCommandsMap,
+          trexEngine3.allCommandsMap);
+      finished = finished || inconsistentCommittedIndex.isPresent();
+      if (inconsistentCommittedIndex.isPresent()) {
         LOGGER.info("finished as not matching commands:" +
             "\n\t" + trexEngine1.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
             + "\n\t" + trexEngine2.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
             + "\n\t" + trexEngine3.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")));
+        throw new AssertionError("commands not matching");
+      }
+      boolean commitLengthNotEqualToCommandLength =
+          trexEngine1.allCommandsMap.size() != trexEngine1.trexNode.progress.highestCommittedIndex() ||
+              trexEngine2.allCommandsMap.size() != trexEngine2.trexNode.progress.highestCommittedIndex() ||
+              trexEngine3.allCommandsMap.size() != trexEngine3.trexNode.progress.highestCommittedIndex();
+      finished = finished || commitLengthNotEqualToCommandLength;
+      if (commitLengthNotEqualToCommandLength) {
+        LOGGER.info("finished as commit length not equal to command length:\n" +
+            "\t highestCommittedIndex=" + trexEngine1.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine1.allCommands().size() + "\n" +
+            "\t highestCommittedIndex=" + trexEngine2.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine2.allCommands().size() + "\n" +
+            "\t highestCommittedIndex=" + trexEngine3.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine3.allCommands().size() + "\n"
+        );
+        throw new AssertionError("commit length not equal to command length");
       }
       return finished;
     });
     return allMessages;
   }
 
-  static OptionalLong findMismatchIndex2(TreeMap<Long, AbstractCommand> c1,
-                                         TreeMap<Long, AbstractCommand> c2,
-                                         TreeMap<Long, AbstractCommand> c3) {
+  static OptionalLong inconsistentCommittedIndex(TreeMap<Long, AbstractCommand> c1,
+                                                 TreeMap<Long, AbstractCommand> c2,
+                                                 TreeMap<Long, AbstractCommand> c3) {
+    final var c1last = !c1.isEmpty() ? c1.lastKey() : 0;
+    final var c2last = !c2.isEmpty() ? c2.lastKey() : 0;
+    final var c3last = !c3.isEmpty() ? c3.lastKey() : 0;
     final var maxLength = Math.max(
-        c1.lastKey(), Math.max(
-            c2.lastKey(),
-            c3.lastKey()));
+        c1last, Math.max(
+            c2last,
+            c3last));
     return LongStream.range(0, maxLength).filter(i -> {
       final Optional<AbstractCommand> optC1 = Optional.ofNullable(c1.get(i));
       final Optional<AbstractCommand> optC2 = Optional.ofNullable(c2.get(i));
@@ -184,47 +204,14 @@ class Simulation {
                   a2 -> optC3.map(a2::equals).orElse(true)
               ).orElse(true); // if one and two are not defined it does not matter what three is
       if (!result) {
-        LOGGER.info("command mismatch for logIndex " + i + ":\n\t" + optC1 + "\n\t" + optC2 + "\n\t" + optC3);
+        LOGGER.info("command mismatch logIndex=" + i + ":\n\t" + optC1 + "\n\t" + optC2 + "\n\t" + optC3);
       }
       return !result;
     }).findFirst();
   }
 
-
-  static OptionalLong findMismatchIndex(List<AbstractCommand> c1,
-                                        List<AbstractCommand> c2,
-                                        List<AbstractCommand> c3) {
-    final var maxLength = Math.max(
-        c1.size(), Math.max(
-            c2.size(),
-            c3.size()));
-    return LongStream.range(0, maxLength).filter(i -> {
-      final Optional<AbstractCommand> optC1 = i < c1.size() ? Optional.of(c1.get((int) i)) : Optional.empty();
-      final Optional<AbstractCommand> optC2 = i < c2.size() ? Optional.of(c2.get((int) i)) : Optional.empty();
-      final Optional<AbstractCommand> optC3 = i < c3.size() ? Optional.of(c3.get((int) i)) : Optional.empty();
-
-      // Check if all non-empty values are equal
-      final var result =
-          optC1.map(
-                  // if one is defined check it against the two and three
-                  a1 -> optC2.map(a1::equals).orElse(true) && optC3.map(a1::equals).orElse(true)
-              )
-              // if one is not defined then check two against three
-              .orElse(true)
-              &&
-              optC2.map(
-                  // check two against three
-                  a2 -> optC3.map(a2::equals).orElse(true)
-              ).orElse(true); // if one and two are not defined it does not matter what three is
-      if (!result) {
-        LOGGER.info("command mismatch:\n\t" + optC1 + "\n\t" + optC2 + "\n\t" + optC3);
-      }
-      return !result;
-    }).findFirst();
-  }
-
-  public ArrayList<Message> run(int i, boolean b) {
-    return run(i, b, DEFAULT_NETWORK_SIMULATION);
+  public void run(int i, boolean b) {
+    run(i, b, DEFAULT_NETWORK_SIMULATION);
   }
 
   sealed interface Event permits Heartbeat, Send, Timeout, ClientCommand {

@@ -1,6 +1,9 @@
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.msg.*;
+import com.github.trex_paxos.msg.AbstractCommand;
+import com.github.trex_paxos.msg.BroadcastMessage;
+import com.github.trex_paxos.msg.DirectMessage;
+import com.github.trex_paxos.msg.TrexMessage;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -11,12 +14,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.random.RandomGenerator;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
-import static com.github.trex_paxos.Simulation.*;
+import static com.github.trex_paxos.Simulation.LOGGER;
+import static com.github.trex_paxos.Simulation.inconsistentCommittedIndex;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class SimulationTest {
@@ -90,26 +92,18 @@ public class SimulationTest {
     // when we run for 15 iterations with client data
     simulation.run(15, true);
 
-    final var badCommandIndex = findMismatchIndex(
-        simulation.trexEngine1.allCommands(),
-        simulation.trexEngine2.allCommands(),
-        simulation.trexEngine3.allCommands()
+    final var badCommandIndex = inconsistentCommittedIndex(
+        simulation.trexEngine1.allCommandsMap,
+        simulation.trexEngine2.allCommandsMap,
+        simulation.trexEngine3.allCommandsMap
     );
-
-    if (badCommandIndex.isPresent()) {
-      LOGGER.severe("commands do not match at position: " + badCommandIndex.getAsLong());
-      LOGGER.severe("map1: " + simulation.trexEngine1.allCommandsMap.entrySet().stream().map(e -> "\n\t" + e.getKey() + "=" + e.getValue()).collect(Collectors.joining(",")));
-      LOGGER.severe("map2: " + simulation.trexEngine2.allCommandsMap.entrySet().stream().map(e -> "\n\t" + e.getKey() + "=" + e.getValue()).collect(Collectors.joining(",")));
-      LOGGER.severe("map3: " + simulation.trexEngine3.allCommandsMap.entrySet().stream().map(e -> "\n\t" + e.getKey() + "=" + e.getValue()).collect(Collectors.joining(",")));
-    }
 
     assertThat(badCommandIndex.isEmpty()).isTrue();
 
-    // and we should have the same commit logs
-    assertThat(consistentJournals(
-        simulation.trexEngine1.journal,
-        simulation.trexEngine2.journal,
-        simulation.trexEngine3.journal
+    assertThat(consistentCommits(
+        simulation.trexEngine1,
+        simulation.trexEngine2,
+        simulation.trexEngine3
     )).isTrue();
 
     // then we should have a single leader and the rest followers
@@ -162,17 +156,16 @@ public class SimulationTest {
     // when we run for 15 iterations with client data
     simulation.run(runLength, true, nemesis);
 
-    assertThat(findMismatchIndex(
-        simulation.trexEngine1.allCommands(),
-        simulation.trexEngine2.allCommands(),
-        simulation.trexEngine3.allCommands()
+    assertThat(inconsistentCommittedIndex(
+        simulation.trexEngine1.allCommandsMap,
+        simulation.trexEngine2.allCommandsMap,
+        simulation.trexEngine3.allCommandsMap
     ).isEmpty()).isTrue();
 
-    // and we should have the same commit logs
-    assertThat(consistentJournals(
-        simulation.trexEngine1.journal,
-        simulation.trexEngine2.journal,
-        simulation.trexEngine3.journal
+    assertThat(consistentCommits(
+        simulation.trexEngine1,
+        simulation.trexEngine2,
+        simulation.trexEngine3
     )).isTrue();
 
     return Math.min(
@@ -199,7 +192,7 @@ public class SimulationTest {
 
   @Test
   public void testWorkRotationNetworkPartition() {
-    RandomGenerator rng = Simulation.repeatableRandomGenerator(1);
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(5);
     testWorkRotationNetworkPartition(rng);
   }
 
@@ -224,23 +217,9 @@ public class SimulationTest {
     LOGGER.info("command sizes: " + simulation.trexEngine1.allCommands().size() + " "
         + simulation.trexEngine2.allCommands().size() + " "
         + simulation.trexEngine3.allCommands().size());
-    LOGGER.info("journal sizes: " + simulation.trexEngine1.journal.fakeJournal.size() + " " + simulation.trexEngine2.journal.fakeJournal.size() + " " + simulation.trexEngine3.journal.fakeJournal.size());
-
-    final var badCommandIndex = findMismatchIndex2(
-        simulation.trexEngine1.allCommandsMap,
-        simulation.trexEngine2.allCommandsMap,
-        simulation.trexEngine3.allCommandsMap
-    );
-
-
-    assertThat(badCommandIndex.isEmpty()).isTrue();
-
-    // and we should have the same commit logs
-    assertThat(consistentJournals(
-        simulation.trexEngine1.journal,
-        simulation.trexEngine2.journal,
-        simulation.trexEngine3.journal
-    )).isTrue();
+    LOGGER.info("journal sizes: " + simulation.trexEngine1.journal.fakeJournal.size() +
+        " " + simulation.trexEngine2.journal.fakeJournal.size() +
+        " " + simulation.trexEngine3.journal.fakeJournal.size());
 
     assertThat(consistentCommits(
         simulation.trexEngine1,
@@ -280,37 +259,6 @@ public class SimulationTest {
               optional2.map(
                   // check two against three
                   a2 -> optional3.map(a2::equals).orElse(true)
-              ).orElse(true); // if one and two are not defined it does not matter what three is
-      return result;
-    });
-  }
-
-  private boolean consistentJournals(
-      Simulation.TransparentJournal journal1,
-      Simulation.TransparentJournal journal2,
-      Simulation.TransparentJournal journal3) {
-    final var maxLength = Math.max(
-        journal1.fakeJournal.size(), Math.max(
-            journal2.fakeJournal.size(),
-            journal3.fakeJournal.size()));
-    return LongStream.range(0, maxLength).allMatch(e -> {
-      final Optional<Accept> accept1 = journal1.getCommitted(e);
-      final Optional<Accept> accept2 = journal2.getCommitted(e);
-      final Optional<Accept> accept3 = journal3.getCommitted(e);
-
-      // Check if all non-empty values are equal
-      //noinspection UnnecessaryLocalVariable
-      final var result =
-          accept1.map(
-                  // if one is defined check it against the two and three
-                  a1 -> accept2.map(a1::equals).orElse(true) && accept3.map(a1::equals).orElse(true)
-              )
-              // if one is not defined then check two against three
-              .orElse(true)
-              &&
-              accept2.map(
-                  // check two against three
-                  a2 -> accept3.map(a2::equals).orElse(true)
               ).orElse(true); // if one and two are not defined it does not matter what three is
       return result;
     });

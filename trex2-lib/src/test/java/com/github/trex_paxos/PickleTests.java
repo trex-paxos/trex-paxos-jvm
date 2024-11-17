@@ -96,7 +96,11 @@ public class PickleTests {
 
   @Test
   public void testPickCommit() throws Exception {
-    Commit commit = new Commit(5L, new BallotNumber(10, (byte) 128), (byte) 3);
+    Commit commit = new Commit(
+        (byte) 3,
+        new BallotNumber(10, (byte) 128),
+        5L,
+        6L);
     byte[] pickled = Pickle.writeMessage(commit);
     Commit unpickled = (Commit) Pickle.readMessage(pickled);
     assertEquals(commit, unpickled);
@@ -105,7 +109,7 @@ public class PickleTests {
   @Test
   public void testPickleCatchup() throws Exception {
     long[] slotGaps = {5, 7, 9};
-    Catchup catchup = new Catchup((byte) 2, (byte) 3, slotGaps);
+    Catchup catchup = new Catchup((byte) 2, (byte) 3, slotGaps, 4L);
     byte[] pickled = Pickle.writeMessage(catchup);
     Catchup unpickled = (Catchup) Pickle.readMessage(pickled);
     assertEquals(catchup.from(), unpickled.from());
@@ -115,11 +119,12 @@ public class PickleTests {
 
   @Test
   public void testPickleCatchupResponse() throws Exception {
-    Accept[] accepts = {
+    final Accept[] accepts = {
         new Accept((byte) 1, 2L, new BallotNumber(3, (byte) 4), NoOperation.NOOP),
         new Accept((byte) 5, 6L, new BallotNumber(7, (byte) 8), NoOperation.NOOP)
     };
-    CatchupResponse catchupResponse = new CatchupResponse((byte) 1, (byte) 2, Arrays.asList(accepts));
+    final Commit commit = new Commit((byte) 9, new BallotNumber(10, (byte) 11), 12L, 13L);
+    CatchupResponse catchupResponse = new CatchupResponse((byte) 1, (byte) 2, Arrays.asList(accepts), commit);
     byte[] pickled = Pickle.writeMessage(catchupResponse);
     CatchupResponse unpickled = (CatchupResponse) Pickle.readMessage(pickled);
     assertEquals(catchupResponse.from(), unpickled.from());
