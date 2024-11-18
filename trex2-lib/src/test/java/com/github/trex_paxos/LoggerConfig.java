@@ -4,7 +4,7 @@ import java.util.Optional;
 import java.util.logging.*;
 
 public class LoggerConfig {
-  
+
   static {
     try {
       Logger rootLogger = Logger.getLogger("");
@@ -19,7 +19,7 @@ public class LoggerConfig {
 
       // Get level from environment or default to FINE
       final var levelString = Optional.ofNullable(System.getenv("LOG_LEVEL"))
-          .orElse("FINE");
+          .orElse("INFO");
       Level level = Level.parse(levelString);
 
       // Set level for both handler and logger
