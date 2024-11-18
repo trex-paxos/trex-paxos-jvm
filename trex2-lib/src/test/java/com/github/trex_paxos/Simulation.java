@@ -4,7 +4,8 @@ import com.github.trex_paxos.msg.*;
 
 import java.util.*;
 import java.util.function.BiFunction;
-import java.util.logging.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.random.RandomGenerator;
 import java.util.random.RandomGeneratorFactory;
 import java.util.stream.Collectors;
@@ -13,22 +14,8 @@ import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 class Simulation {
-  static {
-    Logger rootLogger = Logger.getLogger("");
-    Handler[] handlers = rootLogger.getHandlers();
-    for (Handler handler : handlers) {
-      handler.setFormatter(new SimpleFormatter() {
-        @Override
-        public String format(LogRecord record) {
-          return String.format("[%s] %s%n",
-              record.getLevel().getName(),
-              record.getMessage());
-        }
-      });
-    }
-  }
 
-  static final Logger LOGGER = Logger.getLogger(Simulation.class.getName());
+  static final Logger LOGGER = Logger.getLogger("");
 
   private final RandomGenerator rng;
   private final long longMaxTimeout;
@@ -111,9 +98,12 @@ class Simulation {
             case ClientCommand _ -> {
               return engines.entrySet().stream()
                   .flatMap(e -> {
-                    final var data = now + ":" + e.getKey();
-                    final var msg = e.getValue().command(
-                        new Command(data, data.getBytes()));
+                    final var commands = IntStream.range(0, 3).mapToObj(i -> {
+                      final var data = now + ":" + e.getKey() + i;
+                      return new Command(data, data.getBytes());
+                    }).toList();
+
+                    final var msg = e.getValue().command(commands);
                     return msg.stream();
                   });
             }
@@ -157,9 +147,9 @@ class Simulation {
       finished = finished || commitLengthNotEqualToCommandLength;
       if (commitLengthNotEqualToCommandLength) {
         LOGGER.info("finished as commit length not equal to command length:\n" +
-            "\t highestCommittedIndex=" + trexEngine1.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine1.allCommands().size() + "\n" +
-            "\t highestCommittedIndex=" + trexEngine2.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine2.allCommands().size() + "\n" +
-            "\t highestCommittedIndex=" + trexEngine3.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine3.allCommands().size() + "\n"
+            "\t highestAcceptedIndex=" + trexEngine1.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine1.allCommands().size() + "\n" +
+            "\t highestAcceptedIndex=" + trexEngine2.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine2.allCommands().size() + "\n" +
+            "\t highestAcceptedIndex=" + trexEngine3.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine3.allCommands().size() + "\n"
         );
         throw new AssertionError("commit length not equal to command length");
       }

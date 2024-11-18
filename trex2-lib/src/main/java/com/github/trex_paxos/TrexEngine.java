@@ -12,7 +12,7 @@ import java.util.logging.Logger;
 /// Subclasses must implement the timeout and heartbeat methods.
 /// The core paxos algorithm is implemented in the TrexNode class that is wrapped by this class.
 public abstract class TrexEngine {
-  static final Logger LOGGER = Logger.getLogger(TrexEngine.class.getName());
+  static final Logger LOGGER = Logger.getLogger("");
 
   /// The underlying TrexNode that is the actual Part-time Parliament algorithm implementation guarded by this class.
   final protected TrexNode trexNode;
@@ -39,8 +39,7 @@ public abstract class TrexEngine {
 
   /// Process an application command sent from a client. This is only actioned by a leader. It will return a single accept
   /// then append a commit message as it is very cheap for another node to filter out commits it has already seen.
-  public List<TrexMessage> command(Command command) {
-    if (trexNode.isLeader()) {
+  private List<TrexMessage> command(Command command) {
       // only if we are leader do we create the next accept message into the next log index
       final var nextAcceptMessage = trexNode.nextAcceptMessage(command);
       // we self accept
@@ -49,6 +48,11 @@ public abstract class TrexEngine {
       assert r.commands().isEmpty() && r.messages().size() == 1 && r.messages().getFirst() instanceof AcceptResponse;
       // forward to the cluster the new accept and at the same time heartbeat a commit message.
       return List.of(nextAcceptMessage, trexNode.currentCommitMessage());
+  }
+
+  public List<TrexMessage> command(List<Command> command) {
+    if (trexNode.isLeader()) {
+      return command.stream().map(this::command).flatMap(List::stream).toList();
     } else {
       return Collections.emptyList();
     }
@@ -108,7 +112,6 @@ public abstract class TrexEngine {
 
     if (trexNode.isLeader()) {
       setHeartbeat();
-      // TODO recoverer should heartbeat prepares until the network is stable.
     } else if (trexNode.isRecover()) {
       setHeartbeat();
     }

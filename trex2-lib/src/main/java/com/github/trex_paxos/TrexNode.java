@@ -15,7 +15,7 @@ import static com.github.trex_paxos.TrexRole.*;
 /// - A [Journal] which must be crash durable storage. The wrapping [TrexEngine] must flush the journal to durable state (fsync) before sending out any messages.
 /// - A [QuorumStrategy] which may be a simple majority, in the future FPaxos or UPaxos.
 public class TrexNode {
-  static final Logger LOGGER = Logger.getLogger(TrexNode.class.getName());
+  static final Logger LOGGER = Logger.getLogger("");
 
   private final Level logAtLevel;
 
@@ -230,13 +230,13 @@ public class TrexNode {
               case WIN -> {
                 // only if we learn that other nodes have prepared higher slots we must nextPrepareMessage them
                 votes.values().stream()
-                    .map(PrepareResponse::highestCommittedIndex)
+                    .map(PrepareResponse::highestAcceptedIndex)
                     .max(Long::compareTo)
                     .ifPresent(higherAcceptedSlot -> {
                       final long highestLogIndexProbed = prepareResponsesByLogIndex.lastKey();
                       if (higherAcceptedSlot > highestLogIndexProbed) {
                         Optional.ofNullable(term).ifPresent(epoch ->
-                            LongStream.range(higherAcceptedSlot + 1, highestLogIndexProbed + 1)
+                            LongStream.range(highestLogIndexProbed + 1, higherAcceptedSlot + 1)
                                 .forEach(slot -> {
                                   prepareResponsesByLogIndex.put(slot, new HashMap<>());
                                   messages.add(new Prepare(nodeIdentifier, slot, epoch));
@@ -388,7 +388,7 @@ public class TrexNode {
   PrepareResponse ack(Prepare prepare) {
     return new PrepareResponse(
         new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), true, prepare.number()),
-        highestCommitted(), journal.loadAccept(prepare.logIndex())
+        highestAccepted(), journal.loadAccept(prepare.logIndex())
     );
   }
 
@@ -400,7 +400,7 @@ public class TrexNode {
   PrepareResponse nack(Prepare prepare) {
     return new PrepareResponse(
         new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), false, prepare.number()),
-        highestCommitted(), journal.loadAccept(prepare.logIndex())
+        highestAccepted(), journal.loadAccept(prepare.logIndex())
     );
   }
 

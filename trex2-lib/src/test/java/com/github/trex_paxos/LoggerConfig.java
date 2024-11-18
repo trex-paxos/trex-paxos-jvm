@@ -1,30 +1,44 @@
 package com.github.trex_paxos;
 
-import java.util.logging.ConsoleHandler;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.Optional;
+import java.util.logging.*;
 
 public class LoggerConfig {
-  private static final Logger LOGGER = Logger.getLogger(LoggerConfig.class.getName());
-
+  
   static {
     try {
-      // Remove all existing handlers
-      for (Handler handler : Logger.getLogger("").getHandlers()) {
-        Logger.getLogger("").removeHandler(handler);
+      Logger rootLogger = Logger.getLogger("");
+
+      // Remove existing handlers
+      for (Handler handler : rootLogger.getHandlers()) {
+        rootLogger.removeHandler(handler);
       }
 
       // Create and set a new ConsoleHandler
       ConsoleHandler consoleHandler = new ConsoleHandler(){{setOutputStream(System.out);}};
 
-      // Set the handler to the root logger
-      Logger.getLogger("").addHandler(consoleHandler);
+      // Get level from environment or default to FINE
+      final var levelString = Optional.ofNullable(System.getenv("LOG_LEVEL"))
+          .orElse("FINE");
+      Level level = Level.parse(levelString);
 
-      // Set the desired log level (adjust as needed)
-      Logger.getLogger("").setLevel(Level.INFO);
+      // Set level for both handler and logger
+      consoleHandler.setLevel(level);
+      rootLogger.setLevel(level);
 
-      LOGGER.info("Logger configuration completed successfully.");
+      // Add handler to root logger
+      rootLogger.addHandler(consoleHandler);
+
+      // Set formatter for handler
+      consoleHandler.setFormatter(new SimpleFormatter() {
+        @Override
+        public String format(LogRecord record) {
+          return String.format("[%s] %s%n",
+              record.getLevel().getName(),
+              record.getMessage());
+        }
+      });
+
     } catch (Exception e) {
       System.err.println("Failed to configure logger: " + e.getMessage());
       e.printStackTrace();
@@ -32,6 +46,6 @@ public class LoggerConfig {
   }
 
   public static void initialize() {
-    // This method can be called to ensure the static block is executed
+    // Method to trigger static initialization
   }
 }

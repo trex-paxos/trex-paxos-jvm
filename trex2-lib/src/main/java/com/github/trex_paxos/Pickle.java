@@ -5,6 +5,7 @@ import com.github.trex_paxos.msg.*;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.IntStream;
 /// Pickle is a utility class for serializing and deserializing record types.
 /// Java serialization is famously broken but the Java Platform team are working on it.
@@ -33,7 +34,7 @@ public class Pickle {
       MessageType messageType = MessageType.fromMessageId(dis.readByte());
       return switch (messageType) {
         case MessageType.Prepare -> readPrepare(dis);
-        case MessageType.PrepareResponse -> PrepareResponse.readFrom(dis);
+        case MessageType.PrepareResponse -> readPrepareResponse(dis);
         case MessageType.Accept -> readAccept(dis);
         case MessageType.AcceptResponse -> readAcceptResponse(dis);
         case MessageType.Commit -> readCommit(dis);
@@ -45,6 +46,24 @@ public class Pickle {
     }
   }
 
+
+  public static void write(PrepareResponse m, DataOutputStream dos) throws IOException {
+    Pickle.write(m.vote(), dos);
+    dos.writeLong(m.highestAcceptedIndex());
+    dos.writeBoolean(m.highestUncommitted().isPresent());
+    if (m.highestUncommitted().isPresent()) {
+      Pickle.write(m.highestUncommitted().get(), dos);
+    }
+  }
+
+  public static PrepareResponse readPrepareResponse(DataInputStream dis) throws IOException {
+    Vote vote = Pickle.readVote(dis);
+    long highestCommittedIndex = dis.readLong();
+    Optional<Accept> highestUncommitted = dis.readBoolean() ? Optional.of(Pickle.readAccept(dis)) : Optional.empty();
+    return new PrepareResponse(vote, highestCommittedIndex, highestUncommitted);
+  }
+
+
   public static byte[] writeMessage(TrexMessage message) throws IOException {
     try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
          DataOutputStream dos = new DataOutputStream(byteArrayOutputStream)) {
@@ -53,7 +72,7 @@ public class Pickle {
 
       switch (message) {
         case Prepare p -> write(p, dos);
-        case PrepareResponse p -> PrepareResponse.writeTo(p, dos);
+        case PrepareResponse p -> write(p, dos);
         case Accept a -> write(a, dos);
         case AcceptResponse a -> write(a, dos);
         case Commit c -> write(c, dos);
