@@ -23,7 +23,7 @@ import static com.github.trex_paxos.Simulation.LOGGER;
 import static com.github.trex_paxos.Simulation.inconsistentCommittedIndex;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class SimulationTest {
+public class SimulationTests {
 
   static {
     if (System.getProperty("NO_LOGGING") != null && System.getProperty("NO_LOGGING").equals("true")) {
