@@ -176,24 +176,17 @@ public class Pickle {
     return new BallotNumber(dataInputStream.readInt(), dataInputStream.readByte());
   }
 
-  public static Catchup readCatchup(DataInputStream dis) throws IOException {
-    final var from = dis.readByte();
-    final var to = dis.readByte();
-    final var length = dis.readShort();
-    final long[] slotGaps = IntStream.range(0, length)
-        .mapToLong(_ -> uncheckedReadLong(dis))
-        .toArray();
-    final var highestCommitedIndex = dis.readLong();
-    return new Catchup(from, to, slotGaps, highestCommitedIndex);
-  }
-
   public static void write(Catchup m, DataOutputStream dos) throws IOException {
     dos.writeByte(m.from());
     dos.writeByte(m.to());
-    final var length = Math.min(m.slotGaps().length, Short.MAX_VALUE);
-    dos.writeShort(length);
-    IntStream.range(0, length).forEach(i -> uncheckedWriteLong(dos, m.slotGaps()[i]));
     dos.writeLong(m.highestCommitedIndex());
+  }
+
+  public static Catchup readCatchup(DataInputStream dis) throws IOException {
+    final var from = dis.readByte();
+    final var to = dis.readByte();
+    final var highestCommitedIndex = dis.readLong();
+    return new Catchup(from, to, highestCommitedIndex);
   }
 
   public static CatchupResponse readCatchupResponse(DataInputStream dis) throws IOException {

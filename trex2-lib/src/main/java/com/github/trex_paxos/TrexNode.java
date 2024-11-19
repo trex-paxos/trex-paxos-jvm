@@ -279,7 +279,7 @@ public class TrexNode {
           final var commitNumber,
           final var commitSlot
       ) -> {
-        // FIXME it should be possible to do some deduction here to avoid the catchup
+        // TODO is it possible to safely do some deduction here to avoid the catchup?
         if (commitSlot == highestCommitted() + 1) {
           // we must have the correct number at the slot
           final var commitableAccept = journal.loadAccept(commitSlot)
@@ -300,14 +300,10 @@ public class TrexNode {
         final var highestCommittedIndex = progress.highestCommittedIndex();
 
         if (commitSlot > highestCommittedIndex) {
-          final var slotGaps = LongStream.range(progress.highestCommittedIndex(), commitSlot + 1)
-            .toArray();
-          if (slotGaps.length > 0) {
-            messages.add(new Catchup(nodeIdentifier, commitFrom, slotGaps, progress.highestCommittedIndex()));
-          }
+          messages.add(new Catchup(nodeIdentifier, commitFrom, highestCommittedIndex));
         }
       }
-      case Catchup(final byte replyTo, _, final long[] _, final var highestCommittedIndex) -> {
+      case Catchup(final byte replyTo, _, final var highestCommittedIndex) -> {
         final var currentCommitMessage = currentCommitMessage();
 
         // load the slows they do not know that they are missing
@@ -504,5 +500,11 @@ public class TrexNode {
 
   public long highestAccepted() {
     return progress.highestAcceptedIndex();
+  }
+
+  /// This method is for testing purposes only so that we can write unit tests that do not require a TrexEngine.
+  /// It is not expected that users of the library will make subclasses of TrexNode in order to use this method.
+  protected void setRole(TrexRole role) {
+    this.role = role;
   }
 }

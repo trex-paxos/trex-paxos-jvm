@@ -60,6 +60,32 @@ public class SpecificTests {
     // And the node should have updated the progress committed index// And the node should have updated the progress committed index
     assertEquals(2L, node.progress.highestCommittedIndex(), "The node should have updated the progress committed index");
   }
-  
+
+  /// An isolated node will increment its term when it times out and will be higher than a stable leader.
+  /// When the isolated node rejoins it will request a catchup. The leader will respond with the current term.
+  /// The leader must also increment its term to be higher than the isolated node. This is because otherwise the isolated
+  /// will not accept the term and will keep on asking for catch-ups which is wasted network traffic.
+  @Test
+  public void testCatchupWithHigherBallotNumberAndLowerCommittedSlotCausesLeaderToIncrementTheTerm() {
+    // Given that node 1 has accepted a value at slot 1 and has made a very high self promise
+    final var nodeId1 = (byte) 1;
+    final var originalNumber = new BallotNumber(1, nodeId1);
+    final var journal = new Simulation.TransparentJournal(nodeId1);
+    final var acceptPreviouslyCommittedSlot1 = new Accept(nodeId1, 1L, originalNumber, new Command("cmd", "data1".getBytes()));
+    final var acceptPreviouslyCommittedSlot2 = new Accept(nodeId1, 1L, originalNumber, new Command("cmd", "data2".getBytes()));
+    TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {{
+      this.journal.journalAccept(acceptPreviouslyCommittedSlot1);
+      this.journal.journalAccept(acceptPreviouslyCommittedSlot2);
+      this.progress = new Progress(nodeIdentifier, originalNumber, 2L, 2L);
+      this.setRole(TrexRole.LEAD);
+    }};
+
+    // When we get a higher self promise catchup request
+    final var nodeId2 = (byte) 2;
+    final var higherSelfPromiseNumber = new BallotNumber(originalNumber.counter() + 1, nodeId2);
+    final var catchup = new Catchup(nodeId2, nodeId1, 1L);
+
+//    assert false : "Not implemented";
+  }
 
 }

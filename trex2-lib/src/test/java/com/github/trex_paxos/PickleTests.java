@@ -108,13 +108,11 @@ public class PickleTests {
 
   @Test
   public void testPickleCatchup() throws Exception {
-    long[] slotGaps = {5, 7, 9};
-    Catchup catchup = new Catchup((byte) 2, (byte) 3, slotGaps, 4L);
+    Catchup catchup = new Catchup((byte) 2, (byte) 3, 4L);
     byte[] pickled = Pickle.writeMessage(catchup);
     Catchup unpickled = (Catchup) Pickle.readMessage(pickled);
     assertEquals(catchup.from(), unpickled.from());
     assertEquals(catchup.to(), unpickled.to());
-    assertArrayEquals(catchup.slotGaps(), unpickled.slotGaps());
   }
 
   @Test
