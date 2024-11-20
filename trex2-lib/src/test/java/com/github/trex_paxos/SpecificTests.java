@@ -59,6 +59,7 @@ public class SpecificTests {
     assertEquals(higherSelfPromiseNumber, node.progress.highestPromised(), "The node should not have updated its progress to the new ballot number");
     // And the node should have updated the progress committed index// And the node should have updated the progress committed index
     assertEquals(2L, node.progress.highestCommittedIndex(), "The node should have updated the progress committed index");
+    
   }
   
 

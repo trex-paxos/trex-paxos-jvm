@@ -18,6 +18,14 @@ This is a work in progress. It will use the latest Java 22+ for Data Oriented Pr
  - Demonstrate arbitrary Paxos use cases. 
  - Backport to Java 11 LTS. 
 
+## Development Setup
+
+After cloning the repository, run:
+
+```bash
+./setup-hooks.sh
+```
+
 # Releases
 
 TBD
