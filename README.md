@@ -1,16 +1,17 @@
 
-## Trex2: Embeddable Paxos Engine 
+## Trex2: An Embeddable Paxos Engine 
 
 Checkout the [blog posts](https://simbo1905.wordpress.com/2016/01/09/trex-a-paxos-replication-engine/) for a description of this implementation of [Paxos Made Simple](https://courses.cs.washington.edu/courses/cse550/17au/papers/CSE550.paxos-simple.pdf).
 
-This is a work in progress. It will use the latest Java 23+ Data Oriented Programming and Structured Concurrency to build a modular implementation of the Paxos Made Simple algorithm for state replication.
+This is a work in progress. It will use the latest Java 22+ for Data Oriented Programming to build an embeddable implementation of the Paxos Part Time Parliament Protocol using the algorithm described in Paxos Made Simple algorithm for state replication.
 
 ### Goals
 
- - Demonstrate log replication with the Partime Parliment Protocol (aka Multi Paxos).
- - Use zero third-party libraries.
+ - Demonstrate state replication with the Partime Parliment Protocol (aka Multi Paxos).
+ - Ship with zero third-party libraries outside of the java base packages. 
  - Target the Java 25 LTS version for any sophisticated demos. 
- - Target the Java 21 LTS version for the core library. 
+ - Target the Java 22+ version for the core library. 
+ - Consider a backport to Java 21 LTS only when Java 25 LTS is out to see what would be sacrificed. 
 
 ### Non-Goals
 
@@ -29,7 +30,6 @@ The list of tasks:
  - [x] Write a test harness that injects rolling network paritions. 
  - [ ] Implement a trivial replicated stack. 
  - [ ] Implement Implement cluster membership changes as UPaxos. 
- - [ ] Implement cluster membership changes as UPaxos over the base algorithm. 
 
 ## Attribution
 
