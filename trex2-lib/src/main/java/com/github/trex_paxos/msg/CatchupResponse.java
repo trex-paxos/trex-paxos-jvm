@@ -21,7 +21,7 @@ import java.util.List;
 /// lots of uncommitted messages during a partition where an old leader is not yet aware of a new leader.
 public record CatchupResponse(byte from,
                               byte to,
-                              List<Accept> catchup,
+                              List<Accept> catchup, // FIXME using an accept is confusing just end the commands. 
                               Commit commit
 ) implements TrexMessage, DirectMessage {
 }
