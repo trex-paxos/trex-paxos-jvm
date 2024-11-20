@@ -109,7 +109,7 @@ public class TrexNode {
                     final var oldNumber = acceptVotes.accept().number();
                     final var newNumber = accept.number();
                     if (oldNumber.lessThan(newNumber)) {
-                      // we have accepted a higher accept which is a promise as per http://stackoverflow.com/q/29880949/329496
+                      // we have accepted a higher accept which is a promise as per https://stackoverflow.com/a/29929052
                       acceptVotes.responses().put(nodeIdentifier(), nack(acceptVotes.accept()));
                       Set<Vote> vs = acceptVotes.responses().values().stream()
                           .map(AcceptResponse::vote).collect(Collectors.toSet());
