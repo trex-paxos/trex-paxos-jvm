@@ -76,7 +76,7 @@ public class SpecificTests {
     assertEquals(2L, node.progress.highestCommittedIndex(), "The node should have updated the progress committed index");
 
   }
-  // TODO other tests around low ball prepare
+  // TODO other tests around low ball prepare. An isolate node should not be able to prevent progress.
   // TODO other tests around making sure commits are issued for every accept
   
 
