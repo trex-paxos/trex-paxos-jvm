@@ -185,16 +185,15 @@ public class TrexNode {
                             " value==" + acceptVotes.accept().command() +
                             " vs==" + vs);
 
-                    // we have a quorum at that log index but due to lost messages we may have gaps before it.
                     acceptVotesByLogIndex.put(logIndex, AcceptVotes.chosen(acceptVotes.accept()));
 
+                    // only if we have some contiguous slots that have been accepted we can commit
                     final var committed = acceptVotesByLogIndex.values().stream()
                         .takeWhile(AcceptVotes::chosen)
                         .map(AcceptVotes::accept)
                         .filter(a -> a.logIndex() > progress.highestCommittedIndex())
                         .toList();
 
-                    // only if we have some contiguous slots that we can commit which might still not be all slots
                     if (!committed.isEmpty()) {
                       // run the callback
                       for (var accept : committed) {
@@ -330,7 +329,7 @@ public class TrexNode {
 
         if (otherHighestPromised.greaterThan(progress.highestPromised())) {
           if (role == TrexRole.LEAD) {
-            //assert this.term != null;
+            assert this.term != null;
             this.term = new BallotNumber(
                 otherHighestPromised.counter() + 1,
                 nodeIdentifier

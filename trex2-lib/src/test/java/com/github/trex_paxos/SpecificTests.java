@@ -93,6 +93,7 @@ public class SpecificTests {
       this.progress = new Progress(nodeIdentifier, originalNumber, 1L, 1L);
       this.journal.journalAccept(acceptPreviouslyCommittedSlot1);
       this.setRole(TrexRole.LEAD);
+      this.term = originalNumber;
     }};
 
     assert node.progress.highestPromised().equals(originalNumber);
