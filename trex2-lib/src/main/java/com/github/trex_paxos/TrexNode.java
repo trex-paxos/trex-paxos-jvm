@@ -65,7 +65,7 @@ public class TrexNode {
   /// During a recovery we will track all the slots that we are probing to find the highest accepted operationBytes.
   final NavigableMap<Long, Map<Byte, PrepareResponse>> prepareResponsesByLogIndex = new TreeMap<>();
 
-  // When leading we will track the responses to a stream of accept messages.
+  /// When leading we will track the responses to a stream of accept messages.
   final NavigableMap<Long, AcceptVotes> acceptVotesByLogIndex = new TreeMap<>();
 
   /// Lamport's "Paxos Made Simple" uses the terminology 'proposal number'. Here we use the term 'BallotNumber' as it
@@ -86,6 +86,7 @@ public class TrexNode {
   TrexResult paxos(TrexMessage input) {
     List<TrexMessage> messages = new ArrayList<>();
     Map<Long, AbstractCommand> commands = new TreeMap<>();
+
     switch (input) {
       case Accept accept -> {
         if (lowerAccept(progress, accept) || higherAcceptForCommittedSlot(accept, progress)) {
@@ -131,7 +132,7 @@ public class TrexNode {
           }
           messages.add(ack);
         } else {
-          throw new AssertionError("unreachable progress={" + progress + "}, accept={" + accept + "}");
+          assert false;
         }
       }
       case Prepare prepare -> {
@@ -157,146 +158,32 @@ public class TrexNode {
         } else if (number.equals(progress.highestPromised())) {
           messages.add(ack(prepare));
         } else {
-          throw new AssertionError("unreachable progress={" + progress + "}, nextPrepareMessage={" + prepare + "}");
+          assert false;
         }
       }
-      case AcceptResponse(final var vote, final var otherProgress) -> {
-        // FIXME reorder this to be more readable
-        // Both Leader and Recoverer can receive AcceptResponses
-        if (FOLLOW != role && vote.to() == nodeIdentifier) {
+      case AcceptResponse acceptResponse -> {
+        if (FOLLOW != role && acceptResponse.vote().to() == nodeIdentifier) {
           // An isolated leader rejoining must back down
-          if (LEAD == role && otherProgress.highestCommittedIndex() > progress.highestCommittedIndex()) {
+          if (LEAD == role && acceptResponse.progress().highestCommittedIndex() > progress.highestCommittedIndex()) {
             backdown();
           } else {
-            final var logIndex = vote.logIndex();
-            Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex)).ifPresent(acceptVotes -> {
-              if (!acceptVotes.chosen()) {
-                acceptVotes.responses().put(vote.from(), (AcceptResponse) input);
-                Set<Vote> vs = acceptVotes.responses().values().stream()
-                    .map(AcceptResponse::vote).collect(Collectors.toSet());
-                final var quorumOutcome =
-                    quorumStrategy.assessAccepts(logIndex, vs);
-                switch (quorumOutcome) {
-                  case WIN -> {
-                    LOGGER.log(logAtLevel, () ->
-                        "WIN logIndex==" + logIndex +
-                            " nodeIdentifier==" + nodeIdentifier() +
-                            " number==" + acceptVotes.accept().number() +
-                            " value==" + acceptVotes.accept().command() +
-                            " vs==" + vs);
-
-                    acceptVotesByLogIndex.put(logIndex, AcceptVotes.chosen(acceptVotes.accept()));
-
-                    // only if we have some contiguous slots that have been accepted we can commit
-                    final var committed = acceptVotesByLogIndex.values().stream()
-                        .takeWhile(AcceptVotes::chosen)
-                        .map(AcceptVotes::accept)
-                        .filter(a -> a.logIndex() > progress.highestCommittedIndex())
-                        .toList();
-
-                    if (!committed.isEmpty()) {
-                      // run the callback
-                      for (var accept : committed) {
-                        commit(accept, commands);
-                        // free the memory and stop heartbeating out the accepts
-                        acceptVotesByLogIndex.remove(accept.logIndex());
-                      }
-
-                      // we have committed
-                      this.progress = progress.withHighestCommitted(committed.getLast().logIndex());
-
-                      // let the cluster know
-                      messages.add(currentCommitMessage());
-                    }
-                  }
-                  case WAIT -> {
-                    // do nothing as a quorum has not yet been reached.
-                  }
-                  case LOSE ->
-                    // we are unable to achieve a quorum, so we must back down as to another leader
-                      backdown();
-                }
-              }
-            });
+            // Both Leader and Recoverer can receive AcceptResponses
+            processAcceptResponse(acceptResponse, commands, messages);
           }
         }
       }
       case PrepareResponse prepareResponse -> {
-        if (RECOVER == role) {
-          if (prepareResponse.vote().to() == nodeIdentifier) {
-            final byte from = prepareResponse.from();
-            final long logIndex = prepareResponse.vote().logIndex();
-
-            final var votes = prepareResponsesByLogIndex.computeIfAbsent(logIndex, _ -> new HashMap<>());
-            votes.put(from, prepareResponse);
-            Set<Vote> vs = votes.values().stream()
-                .map(PrepareResponse::vote).collect(Collectors.toSet());
-            final var quorumOutcome = quorumStrategy.assessPromises(logIndex, vs);
-            switch (quorumOutcome) {
-              case WAIT ->
-                // do nothing as a quorum has not yet been reached.
-                  prepareResponsesByLogIndex.put(logIndex, votes);
-              case LOSE ->
-                // we are unable to achieve a quorum, so we must back down
-                  backdown();
-              case WIN -> {
-                // only if we learn that other nodes have prepared higher slots we must nextPrepareMessage them
-                votes.values().stream()
-                    .map(PrepareResponse::highestAcceptedIndex)
-                    .max(Long::compareTo)
-                    .ifPresent(higherAcceptedSlot -> {
-                      final long highestLogIndexProbed = prepareResponsesByLogIndex.lastKey();
-                      if (higherAcceptedSlot > highestLogIndexProbed) {
-                        Optional.ofNullable(term).ifPresent(epoch ->
-                            LongStream.range(highestLogIndexProbed + 1, higherAcceptedSlot + 1)
-                                .forEach(slot -> {
-                                  prepareResponsesByLogIndex.put(slot, new HashMap<>());
-                                  messages.add(new Prepare(nodeIdentifier, slot, epoch));
-                                }));
-                      }
-                    });
-
-                // find the highest accepted command if any
-                AbstractCommand highestAcceptedCommand = votes.values().stream()
-                    .map(PrepareResponse::highestUncommitted)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
-                    .max(Accept::compareTo)
-                    .map(Accept::command)
-                    .orElse(NoOperation.NOOP);
-
-                Optional.ofNullable(term).ifPresent(e -> {
-                  // use the highest accepted command to issue an Accept
-                  Accept accept = new Accept(nodeIdentifier, logIndex, e, highestAcceptedCommand);
-                  // issue the accept messages
-                  messages.add(accept);
-                  // create the empty map to track the responses
-                  acceptVotesByLogIndex.put(logIndex, new AcceptVotes(accept));
-                  // send the Accept to ourselves and process the response
-                  paxos(paxos(accept).messages().getFirst());
-                  // we are no longer awaiting the nextPrepareMessage for the current slot
-                  prepareResponsesByLogIndex.remove(logIndex);
-                  // if we have had no evidence of higher accepted operationBytes we can promote
-                  if (prepareResponsesByLogIndex.isEmpty()) {
-                    this.role = LEAD;
-                  }
-                });
-              }
-            }
-          }
+        if (RECOVER == role && prepareResponse.vote().to() == nodeIdentifier) {
+          processPrepareResponse(prepareResponse, messages);
         }
       }
-      case Commit(
-          final var commitFrom,
-          final var commitNumber,
-          final var commitSlot
-      ) -> {
+      case Commit(final var commitFrom, final var commitNumber, final var commitSlot) -> {
         // TODO is it possible to safely do some deduction here to avoid the catchup?
         if (commitSlot == highestCommitted() + 1) {
           // we must have the correct number at the slot
           final var commitableAccept = journal.loadAccept(commitSlot)
-                  .filter(accept -> accept.number().equals(commitNumber))
-                  .orElse(null);
+              .filter(accept -> accept.number().equals(commitNumber))
+              .orElse(null);
 
           // make the callback to the main application
           Optional.ofNullable(commitableAccept).ifPresent(accept -> {
@@ -316,7 +203,6 @@ public class TrexNode {
         }
       }
       case Catchup(final byte replyTo, _, final var otherCommitIndex, final var otherHighestPromised) -> {
-
         final var currentCommitMessage = currentCommitMessage();
 
         // load the slots they do not know that they are missing
@@ -337,20 +223,75 @@ public class TrexNode {
           }
         }
       }
-      case CatchupResponse cr -> {
+      case CatchupResponse(_, _, final var catchup, final var commit) -> {
         // drop anything we have already committed
-        cr.catchup().stream()
+        catchup.stream()
             .dropWhile(accept -> accept.logIndex() <= progress.highestCommittedIndex())
             .forEach(accept -> {
               journal.journalAccept(accept);
               commit(accept, commands);
             });
 
-        progress = progress.withHighestCommitted(cr.commit().committedLogIndex());
+        progress = progress.withHighestCommitted(commit.committedLogIndex());
         journal.saveProgress(progress);
       }
     }
     return new TrexResult(messages, commands);
+  }
+
+  private void processAcceptResponse(AcceptResponse acceptResponse, Map<Long, AbstractCommand> commands, List<TrexMessage> messages) {
+    final var vote = acceptResponse.vote();
+    final var logIndex = vote.logIndex();
+    Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex)).ifPresent(acceptVotes -> {
+      if (!acceptVotes.chosen()) {
+        acceptVotes.responses().put(vote.from(), acceptResponse);
+        Set<Vote> vs = acceptVotes.responses().values().stream()
+            .map(AcceptResponse::vote).collect(Collectors.toSet());
+        final var quorumOutcome =
+            quorumStrategy.assessAccepts(logIndex, vs);
+        switch (quorumOutcome) {
+          case WIN -> {
+            LOGGER.log(logAtLevel, () ->
+                "WIN logIndex==" + logIndex +
+                    " nodeIdentifier==" + nodeIdentifier() +
+                    " number==" + acceptVotes.accept().number() +
+                    " value==" + acceptVotes.accept().command() +
+                    " vs==" + vs);
+
+            acceptVotesByLogIndex.put(logIndex, AcceptVotes.chosen(acceptVotes.accept()));
+
+            // only if we have some contiguous slots that have been accepted we can commit
+            final var committed = acceptVotesByLogIndex.values().stream()
+                .takeWhile(AcceptVotes::chosen)
+                .map(AcceptVotes::accept)
+                .filter(a -> a.logIndex() > progress.highestCommittedIndex())
+                .toList();
+
+            if (!committed.isEmpty()) {
+              // run the callback
+              for (var accept : committed) {
+                commit(accept, commands);
+                // free the memory and stop heartbeating out the accepts
+                acceptVotesByLogIndex.remove(accept.logIndex());
+              }
+
+              // we have committed
+              this.progress = progress.withHighestCommitted(committed.getLast().logIndex());
+
+              // let the cluster know
+              messages.add(currentCommitMessage());
+            }
+          }
+          case WAIT -> {
+            // do nothing as a quorum has not yet been reached.
+          }
+          case LOSE ->
+            // we are unable to achieve a quorum, so we must back down as to another leader
+              backdown();
+        }
+      }
+    });
+
   }
 
   private void commit(Accept accept, Map<Long, AbstractCommand> commands) {
@@ -530,5 +471,70 @@ public class TrexNode {
   @SuppressWarnings("SameParameterValue")
   protected void setRole(TrexRole role) {
     this.role = role;
+  }
+
+  private void processPrepareResponse(PrepareResponse prepareResponse, List<TrexMessage> messages) {
+    final byte from = prepareResponse.from();
+    final long logIndex = prepareResponse.vote().logIndex();
+    final var votes = prepareResponsesByLogIndex.computeIfAbsent(logIndex, _ -> new HashMap<>());
+    votes.put(from, prepareResponse);
+    Set<Vote> vs = votes.values().stream()
+        .map(PrepareResponse::vote).collect(Collectors.toSet());
+    final var quorumOutcome = quorumStrategy.assessPromises(logIndex, vs);
+    switch (quorumOutcome) {
+      case WAIT ->
+        // do nothing as a quorum has not yet been reached.
+          prepareResponsesByLogIndex.put(logIndex, votes);
+      case LOSE ->
+        // we are unable to achieve a quorum, so we must back down
+          backdown();
+      case WIN -> {
+        // only if we learn that other nodes have prepared higher slots we must nextPrepareMessage them
+        votes.values().stream()
+            .map(PrepareResponse::highestAcceptedIndex)
+            .max(Long::compareTo)
+            .ifPresent(higherAcceptedSlot -> {
+              final long highestLogIndexProbed = prepareResponsesByLogIndex.lastKey();
+              if (higherAcceptedSlot > highestLogIndexProbed) {
+                Optional.ofNullable(term).ifPresent(epoch ->
+                    LongStream.range(highestLogIndexProbed + 1, higherAcceptedSlot + 1)
+                        .forEach(slot -> {
+                          prepareResponsesByLogIndex.put(slot, new HashMap<>());
+                          messages.add(new Prepare(nodeIdentifier, slot, epoch));
+                        }));
+              }
+            });
+
+        // find the highest accepted command if any
+        AbstractCommand highestAcceptedCommand = votes.values().stream()
+            .map(PrepareResponse::highestUncommitted)
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .max(Accept::compareTo)
+            .map(Accept::command)
+            .orElse(NoOperation.NOOP);
+
+        Optional.ofNullable(term).ifPresent(e -> {
+          // use the highest accepted command to issue an Accept
+          Accept accept = new Accept(nodeIdentifier, logIndex, e, highestAcceptedCommand);
+          // issue the accept messages
+          messages.add(accept);
+          // create the empty map to track the responses
+          acceptVotesByLogIndex.put(logIndex, new AcceptVotes(accept));
+          // send the Accept to ourselves and process the response
+          paxos(paxos(accept).messages().getFirst());
+          // we are no longer awaiting the nextPrepareMessage for the current slot
+          prepareResponsesByLogIndex.remove(logIndex);
+          // if we have had no evidence of higher accepted operationBytes we can promote
+          if (prepareResponsesByLogIndex.isEmpty()) {
+            role = LEAD;
+          }
+        });
+      }
+    }
+  }
+
+  final class LeaderLike {
+
   }
 }
