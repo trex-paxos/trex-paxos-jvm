@@ -9,9 +9,7 @@ This is a work in progress. It will use the latest Java 22+ for Data Oriented Pr
 
  - Demonstrate state replication with the Partime Parliment Protocol (aka Multi Paxos).
  - Ship with zero third-party libraries outside of the java base packages. 
- - Target the Java 25 LTS version for any sophisticated demos. 
- - Target the Java 22+ version for the core library. 
- - Consider a backport to Java 21 LTS only when Java 25 LTS is out to see what would be sacrificed. 
+ - Target the Java 25 LTS version for the final version. 
 
 ### Non-Goals
 
@@ -36,8 +34,9 @@ The list of tasks:
 
  - [x] Impliment the Paxos Paraliment Protocol for log replication. 
  - [x] Write a test harness that injects rolling network paritions. 
- - [ ] Implement a trivial replicated stack. 
+ - [ ] Implement a trivial replicated k-v store. 
  - [ ] Implement Implement cluster membership changes as UPaxos. 
+ - [ ] Add in optionality so that randomised timeouts can be replaced by some other leader failover detection and voting mechanism (e.g. JGroups).  
 
 ## Attribution
 
