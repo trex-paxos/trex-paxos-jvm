@@ -22,8 +22,8 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SpecificTests {
   static {
@@ -103,11 +103,15 @@ public class SpecificTests {
 
     assert node.progress.highestPromised().lessThan(higherSelfPromiseNumber);
 
-    final var catchup = new Catchup(nodeId2, nodeId1, 1L);
+    final var catchup = new Catchup(nodeId2, nodeId1, 1L, higherSelfPromiseNumber);
     node.paxos(catchup);
 
-    assertThat(node.progress.highestPromised().greaterThan(higherSelfPromiseNumber));
-    //assert !node.progress.highestPromised().equals(originalNumber);
+    final var nextAccept = node.nextAcceptMessage(new Command("cmd", "data2".getBytes()));
+
+    final var finalHighestPromised = nextAccept.number();
+    assertTrue(finalHighestPromised.greaterThan(originalNumber));
+    assertTrue(finalHighestPromised.greaterThan(higherSelfPromiseNumber));
+    assertTrue(finalHighestPromised.greaterThan(originalNumber));
   }
 
   // TODO other tests around low ball prepare. An isolate node should not be able to prevent progress.

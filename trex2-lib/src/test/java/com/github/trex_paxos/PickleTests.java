@@ -123,7 +123,7 @@ public class PickleTests {
 
   @Test
   public void testPickleCatchup() throws Exception {
-    Catchup catchup = new Catchup((byte) 2, (byte) 3, 4L);
+    Catchup catchup = new Catchup((byte) 2, (byte) 3, 4L, new BallotNumber(5, (byte) 6));
     byte[] pickled = Pickle.writeMessage(catchup);
     Catchup unpickled = (Catchup) Pickle.readMessage(pickled);
     assertEquals(catchup.from(), unpickled.from());

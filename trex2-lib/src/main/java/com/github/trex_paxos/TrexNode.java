@@ -188,12 +188,10 @@ public class TrexNode {
                     // we have a quorum at that log index but due to lost messages we may have gaps before it.
                     acceptVotesByLogIndex.put(logIndex, AcceptVotes.chosen(acceptVotes.accept()));
 
-                    final var committed = LongStream.rangeClosed(progress.highestCommittedIndex() + 1, logIndex)
-                        .mapToObj(i -> Optional.ofNullable(acceptVotesByLogIndex.get(i)))
-                        .takeWhile(Optional::isPresent)
-                        .flatMap(Optional::stream)
+                    final var committed = acceptVotesByLogIndex.values().stream()
+                        .takeWhile(AcceptVotes::chosen)
                         .map(AcceptVotes::accept)
-                        .filter(accept -> accept.number().equals(vote.number()))
+                        .filter(a -> a.logIndex() > progress.highestCommittedIndex())
                         .toList();
 
                     // only if we have some contiguous slots that we can commit which might still not be all slots
@@ -315,19 +313,30 @@ public class TrexNode {
         final var highestCommittedIndex = progress.highestCommittedIndex();
 
         if (commitSlot > highestCommittedIndex) {
-          messages.add(new Catchup(nodeIdentifier, commitFrom, highestCommittedIndex));
+          messages.add(new Catchup(nodeIdentifier, commitFrom, highestCommittedIndex, progress.highestPromised()));
         }
       }
-      case Catchup(final byte replyTo, _, final var highestCommittedIndex) -> {
+      case Catchup(final byte replyTo, _, final var otherCommitIndex, final var otherHighestPromised) -> {
+
         final var currentCommitMessage = currentCommitMessage();
 
         // load the slots they do not know that they are missing
-        final var missingAccepts = LongStream.rangeClosed(highestCommittedIndex + 1, progress.highestCommittedIndex())
+        final var missingAccepts = LongStream.rangeClosed(otherCommitIndex + 1, progress.highestCommittedIndex())
             .mapToObj(journal::loadAccept)
             .flatMap(Optional::stream)
             .toList();
 
         messages.add(new CatchupResponse(nodeIdentifier, replyTo, missingAccepts, currentCommitMessage));
+
+        if (otherHighestPromised.greaterThan(progress.highestPromised())) {
+          if (role == TrexRole.LEAD) {
+            //assert this.term != null;
+            this.term = new BallotNumber(
+                otherHighestPromised.counter() + 1,
+                nodeIdentifier
+            );
+          }
+        }
       }
       case CatchupResponse cr -> {
         // drop anything we have already committed
@@ -500,7 +509,7 @@ public class TrexNode {
   }
 
   public Accept nextAcceptMessage(Command command) {
-    final var a = new Accept(nodeIdentifier, progress.highestAcceptedIndex() + 1, progress.highestPromised(), command);
+    final var a = new Accept(nodeIdentifier, progress.highestAcceptedIndex() + 1, term, command);
     this.acceptVotesByLogIndex.put(a.logIndex(), new AcceptVotes(a));
     return a;
   }
@@ -519,6 +528,7 @@ public class TrexNode {
 
   /// This method is for testing purposes only so that we can write unit tests that do not require a TrexEngine.
   /// It is not expected that users of the library will make subclasses of TrexNode in order to use this method.
+  @SuppressWarnings("SameParameterValue")
   protected void setRole(TrexRole role) {
     this.role = role;
   }

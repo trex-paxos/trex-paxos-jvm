@@ -25,16 +25,10 @@ public record BallotNumber(int counter, byte nodeIdentifier) implements Comparab
 
   @Override
   public int compareTo(BallotNumber that) {
-    if (this == that) {
-      return 0;
+    if (this.counter == that.counter) {
+      return Byte.compare(this.nodeIdentifier, that.nodeIdentifier);
     }
-    if (this.counter > that.counter) {
-      return 1;
-    } else if (this.counter < that.counter) {
-      return -1;
-    } else {
-      return Integer.compare(this.nodeIdentifier, that.nodeIdentifier);
-    }
+    return Integer.compare(this.counter, that.counter);
   }
 
   @Override

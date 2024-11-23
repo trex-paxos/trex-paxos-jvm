@@ -100,22 +100,6 @@ public class Pickle {
     }
   }
 
-  public static long uncheckedReadLong(DataInputStream dis) {
-    try {
-      return dis.readLong();
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
-    }
-  }
-
-  static void uncheckedWriteLong(DataOutputStream dos, long i) {
-    try {
-      dos.writeLong(i);
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
-  }
-
   public static void write(AbstractCommand c, DataOutputStream dataStream) throws IOException {
     switch (c) {
       case NoOperation _ ->
@@ -195,13 +179,15 @@ public class Pickle {
     dos.writeByte(m.from());
     dos.writeByte(m.to());
     dos.writeLong(m.highestCommitedIndex());
+    write(m.highestPromised(), dos);
   }
 
   public static Catchup readCatchup(DataInputStream dis) throws IOException {
     final var from = dis.readByte();
     final var to = dis.readByte();
     final var highestCommitedIndex = dis.readLong();
-    return new Catchup(from, to, highestCommitedIndex);
+    final var highestPromised = readBallotNumber(dis);
+    return new Catchup(from, to, highestCommitedIndex, highestPromised);
   }
 
   public static CatchupResponse readCatchupResponse(DataInputStream dis) throws IOException {
