@@ -20,6 +20,7 @@ import com.github.trex_paxos.Vote;
 import java.util.Optional;
 
 /// A PrepareResponse is a response to a Prepare message. It contains the vote and the highest uncommitted log entry if any.
+/// When the vote is possitve then we have made a `promise` to not accept any future Prepare or Accept messages with a lower ballot number.
 public record PrepareResponse(
     Vote vote,
     long highestAcceptedIndex,
