@@ -1,35 +1,30 @@
 
-## Trex2: Embeddable Paxos Engine 
+## Trex2: An Embeddable Paxos Engine 
 
-Checkout the [blog posts](https://simbo1905.wordpress.com/2016/01/09/trex-a-paxos-replication-engine/) for a description of this implementation of [Paxos Made Simple](https://courses.cs.washington.edu/courses/cse550/17au/papers/CSE550.paxos-simple.pdf).
+Checkout the [2014 blog post](https://simbo1905.wordpress.com/2014/10/28/transaction-log-replication-with-paxos/) for a description of this implementation of [Paxos Made Simple](https://courses.cs.washington.edu/courses/cse550/17au/papers/CSE550.paxos-simple.pdf).
 
-This is a work in progress. It will use the latest Java 22+ Data Oriented Programming and Structured Concurrency to build a modular implementation of the Paxos Made Simple algorithm for state replication.
+This is a work in progress. It will use the latest Java 22+ for Data Oriented Programming to build an embeddable implementation of the Paxos Part Time Parliament Protocol using the algorithm described in Paxos Made Simple algorithm for state replication.
 
 ### Goals
 
- - Verify via a 3rd party verification tool (e.g. `maelstrom`).
- - Demonstrate log replication with Paxos.
- - Use minimal (ideally zero) third-party libraries.
- - Keep working on the next LTS Java.
+ - Demonstrate state replication with the Partime Parliment Protocol (aka Multi Paxos).
+ - Ship with zero third-party libraries outside of the java base packages. 
+ - Target the Java 25 LTS version for any sophisticated demos. 
+ - Target the Java 22+ version for the core library. 
+ - Consider a backport to Java 21 LTS only when Java 25 LTS is out to see what would be sacrificed. 
 
 ### Non-Goals
 
- - Demonstrate arbitrary Paxos use cases. A replicated k-v store is a sufficient demo.
- - Backport to Java 21 LTS. Structured concurrency and Virtual Threads are compelling. 
+ - Demonstrate arbitrary Paxos use cases. 
+ - Backport to Java 11 LTS. 
 
-## Docker Maelstrom Testing
+## Development Setup
 
-```shell
-docker build . -t maelstrom-trex
-docker run --rm -it --entrypoint /bin/sh maelstrom-trex
-cd /app/demo/java
+After cloning the repository, run:
+
+```bash
+./setup-hooks.sh
 ```
-
-## Java Spinnaker Demo
-
-TBD
-
-TBD a barebones MVF demo
 
 # Releases
 
@@ -39,18 +34,10 @@ TBD
 
 The list of tasks: 
 
- - [x] Port the paxos protocal messages over from the scala version to be records with serialization. 
- - [ ] Port the scala partial functions of the algorithm over to Java 22 as destructuring switch expressions.
- - [ ] Implement `maelstrom` k-v Raft validation as Paxos. 
+ - [x] Impliment the Paxos Paraliment Protocol for log replication. 
+ - [x] Write a test harness that injects rolling network paritions. 
  - [ ] Implement a trivial replicated stack. 
  - [ ] Implement Implement cluster membership changes as UPaxos. 
- - [ ] Implement Spinnaker k-v store on k8s. 
- - [ ] Write a test harness to test the algorithm. (This could be to simply run the original scala test harness here.)
- - [ ] Implement cluster membership changes as UPaxos over the base algorithm. 
- - [ ] Supply a demo of another application using the paxos engine for a simple distributed map. 
- - [ ] Write a test harness to test the algorithm. (This could be to simply run the original scala test harness here.)
- - [ ] Implement cluster membership changes as UPaxos over the base algorithm. 
- - [ ] Implement leader election as quorum reads over the cluster. 
 
 ## Attribution
 

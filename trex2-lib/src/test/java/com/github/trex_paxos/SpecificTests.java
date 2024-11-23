@@ -1,3 +1,18 @@
+/*
+ * Copyright 2024 Simon Massey
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.*;
@@ -7,6 +22,7 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class SpecificTests {
@@ -63,29 +79,39 @@ public class SpecificTests {
 
   /// An isolated node will increment its term when it times out and will be higher than a stable leader.
   /// When the isolated node rejoins it will request a catchup. The leader will respond with the current term.
-  /// The leader must also increment its term to be higher than the isolated node. This is because otherwise the isolated
-  /// will not accept the term and will keep on asking for catch-ups which is wasted network traffic.
+  /// The leader must also increment its term to be higher than the isolated node. This is because otherwise
+  /// the isolated noe will not accept the term and will keep on asking for catch-ups which is wasted network
+  /// traffic.
   @Test
   public void testCatchupWithHigherBallotNumberAndLowerCommittedSlotCausesLeaderToIncrementTheTerm() {
-    // Given that node 1 has accepted a value at slot 1 and has made a very high self promise
+    // Given leader node 1
     final var nodeId1 = (byte) 1;
     final var originalNumber = new BallotNumber(1, nodeId1);
     final var journal = new Simulation.TransparentJournal(nodeId1);
-    final var acceptPreviouslyCommittedSlot1 = new Accept(nodeId1, 1L, originalNumber, new Command("cmd", "data1".getBytes()));
-    final var acceptPreviouslyCommittedSlot2 = new Accept(nodeId1, 1L, originalNumber, new Command("cmd", "data2".getBytes()));
+    final var acceptPreviouslyCommittedSlot1 = new Accept((byte) 1, 1L, new BallotNumber(1, (byte) 1), new Command("cmd", "data".getBytes()));
     TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {{
+      this.progress = new Progress(nodeIdentifier, originalNumber, 1L, 1L);
       this.journal.journalAccept(acceptPreviouslyCommittedSlot1);
-      this.journal.journalAccept(acceptPreviouslyCommittedSlot2);
-      this.progress = new Progress(nodeIdentifier, originalNumber, 2L, 2L);
       this.setRole(TrexRole.LEAD);
     }};
+
+    assert node.progress.highestPromised().equals(originalNumber);
 
     // When we get a higher self promise catchup request
     final var nodeId2 = (byte) 2;
     final var higherSelfPromiseNumber = new BallotNumber(originalNumber.counter() + 1, nodeId2);
-    final var catchup = new Catchup(nodeId2, nodeId1, 1L);
 
-//    assert false : "Not implemented";
+    assert node.progress.highestPromised().lessThan(higherSelfPromiseNumber);
+
+    final var catchup = new Catchup(nodeId2, nodeId1, 1L);
+    node.paxos(catchup);
+
+    assertThat(node.progress.highestPromised().greaterThan(higherSelfPromiseNumber));
+    //assert !node.progress.highestPromised().equals(originalNumber);
   }
+
+  // TODO other tests around low ball prepare. An isolate node should not be able to prevent progress.
+  // TODO other tests around making sure commits are issued for every accept
+
 
 }
