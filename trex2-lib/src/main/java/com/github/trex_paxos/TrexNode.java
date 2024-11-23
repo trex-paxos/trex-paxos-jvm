@@ -291,7 +291,6 @@ public class TrexNode {
         }
       }
     });
-
   }
 
   private void commit(Accept accept, Map<Long, AbstractCommand> commands) {
@@ -316,17 +315,10 @@ public class TrexNode {
    *
    * @param accept The accept message to acknowledge.
    */
-  AcceptResponse ack(Accept accept) {
-    final var vote = new Vote(
-        nodeIdentifier,
-        accept.number().nodeIdentifier(),
-        accept.logIndex(),
-        true,
-        accept.number());
-    return
-        new AcceptResponse(
-            vote
-            , progress);
+  final AcceptResponse ack(Accept accept) {
+    return new AcceptResponse(
+        new Vote(nodeIdentifier, accept.number().nodeIdentifier(), accept.logIndex(), true, accept.number()),
+        progress);
   }
 
   /**
@@ -334,7 +326,7 @@ public class TrexNode {
    *
    * @param accept The accept message to reject.
    */
-  AcceptResponse nack(Accept accept) {
+  final AcceptResponse nack(Accept accept) {
     return new AcceptResponse(
         new Vote(nodeIdentifier, accept.number().nodeIdentifier(), accept.logIndex(), false, accept.number())
         , progress);
@@ -345,7 +337,7 @@ public class TrexNode {
    *
    * @param prepare The nextPrepareMessage message to acknowledge.
    */
-  PrepareResponse ack(Prepare prepare) {
+  final PrepareResponse ack(Prepare prepare) {
     return new PrepareResponse(
         new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), true, prepare.number()),
         highestAccepted(), journal.loadAccept(prepare.logIndex())
@@ -357,7 +349,7 @@ public class TrexNode {
    *
    * @param prepare The nextPrepareMessage message to reject.
    */
-  PrepareResponse nack(Prepare prepare) {
+  final PrepareResponse nack(Prepare prepare) {
     return new PrepareResponse(
         new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), false, prepare.number()),
         highestAccepted(), journal.loadAccept(prepare.logIndex())
@@ -532,9 +524,5 @@ public class TrexNode {
         });
       }
     }
-  }
-
-  final class LeaderLike {
-
   }
 }
