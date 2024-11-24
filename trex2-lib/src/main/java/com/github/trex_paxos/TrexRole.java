@@ -15,12 +15,18 @@
  */
 package com.github.trex_paxos;
 
-/// The roles used by nodes in the paxos algorithm.
+/// The roles used by nodes in the paxos algorithm. The paper Paxos Made Simple by Leslie Lamport very clearly states:
+///
+/// > A newly chosen leader executes phase 1 for infinitely many instances of the consensus algorithm
+///
+/// This means we have a leader. We also have followers who have not yet timed-out on the leader. Finally, we have the
+/// recover role which is a node that is sending out prepare messages in an attempt to fix the values sent by a prior leader.
 public enum TrexRole {
   /// A follower is a node that is not currently leading the paxos algorithm. We may time out on a follower and attempt to become a leader.
   FOLLOW,
   /// If we are wanting to lead we first run rounds of paxos over all known slots to fix the values sent by any prior leader.
   RECOVER,
-  /// Only after we have recovered all slots will we become a leader and start proposing new commands.
+  /// Only after we have recovered all slots known to have been sent any values by the prior leader will we become a leader
+  /// who no longer needs to recover any slots.
   LEAD
 }

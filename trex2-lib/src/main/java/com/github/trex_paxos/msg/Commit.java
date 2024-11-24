@@ -16,8 +16,8 @@
 package com.github.trex_paxos.msg;
 
 /// A leader sends out a Commit when it learns of a new fixed log index. It will also heartbeat this message to keep
-/// the followers from timing out. If a node was isolated and rejoins it will learn that it has missed out on some
-/// log indexes and will request a Catchup.
+/// the followers from timing out. This message type is one of the three [SlotFixingMessage] types where the progress
+/// of the node in terms of fixing slots and making a up-call to the host is called.
 ///
 /// @param from              The node identifier of the leader.
 /// @param number            The ballot number of the accepted log entry. The follower must request retransmission if
@@ -28,6 +28,6 @@ public record Commit(
     byte from,
     BallotNumber number,
     long committedLogIndex
-) implements TrexMessage, BroadcastMessage {
+) implements TrexMessage, BroadcastMessage, SlotFixingMessage {
 
 }

@@ -162,9 +162,9 @@ class Simulation {
       finished = finished || commitLengthNotEqualToCommandLength;
       if (commitLengthNotEqualToCommandLength) {
         LOGGER.info("finished as commit length not equal to command length:\n" +
-            "\t highestAcceptedIndex=" + trexEngine1.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine1.allCommands().size() + "\n" +
-            "\t highestAcceptedIndex=" + trexEngine2.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine2.allCommands().size() + "\n" +
-            "\t highestAcceptedIndex=" + trexEngine3.trexNode.progress.highestCommittedIndex() + ", commandSize" + trexEngine3.allCommands().size() + "\n"
+            "\tnodeIdentifier==1 highestCommittedIndex==" + trexEngine1.trexNode.progress.highestCommittedIndex() + ", commandSize==" + trexEngine1.allCommands().size() + "\n" +
+            "\tnodeIdentifier==1 highestCommittedIndex==" + trexEngine2.trexNode.progress.highestCommittedIndex() + ", commandSize==" + trexEngine2.allCommands().size() + "\n" +
+            "\tnodeIdentifier==1 highestCommittedIndex==" + trexEngine3.trexNode.progress.highestCommittedIndex() + ", commandSize==" + trexEngine3.allCommands().size() + "\n"
         );
         throw new AssertionError("commit length not equal to command length");
       }

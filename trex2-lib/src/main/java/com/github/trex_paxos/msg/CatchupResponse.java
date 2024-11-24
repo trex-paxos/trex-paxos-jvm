@@ -23,5 +23,5 @@ public record CatchupResponse(byte from,
                               byte to,
                               List<Accept> catchup, // FIXME using an accept is confusing just end the commands. 
                               Commit commit // FIXME just put in the beginning index to apply from 
-) implements TrexMessage, DirectMessage {
+) implements TrexMessage, DirectMessage, SlotFixingMessage {
 }

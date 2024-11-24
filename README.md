@@ -7,9 +7,9 @@ This is a work in progress. It will use the latest Java 22+ for Data Oriented Pr
 
 ### Goals
 
- - Demonstrate state replication with the Partime Parliment Protocol (aka Multi Paxos).
- - Ship with zero third-party libraries outside of the java base packages. 
- - Target the Java 25 LTS version for the final version. 
+- Demonstrate state replication with The Part-Time Parliament Protocol (aka Multi Paxos).
+- Ship with zero third-party libraries outside the java base packages.
+- Target the Java 25 LTS version for the final version.
 
 ### Non-Goals
 
