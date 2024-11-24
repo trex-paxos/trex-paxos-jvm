@@ -24,9 +24,11 @@ import java.util.Optional;
 /// This API is designed to be simple and easy to implement via a NavigableMap interface such as a BTreeMap or MVStore.
 /// Yet you could implement it with a SQL database or a distributed key value store that has ordered keys.
 ///
-/// VERY IMPORTANT: The journal must be crash durable. This means that the journal must commit to disk after every write (fsync).
-/// This must be done before any messages are sent from the node after processing any input messages. The TrexNode will
-/// do this by calling the sync method on the journal.
+/// VERY IMPORTANT: The journal must be crash durable. The TrexNode will the `sync()` method on the journal which must
+/// can only return when the state is persisted.
+///
+/// VERY IMPORTANT: The state of the `Progress` must be flushed last if your store does not support transactions.
+///
 ///
 /// When an empty node is fist created the journal must have a `NoOperation.NOOP` accept journaled at log index 0.
 /// It must also have the nodes progress saved as `new Progress(noteIdentifier)`. When a cold cluster is started up the
