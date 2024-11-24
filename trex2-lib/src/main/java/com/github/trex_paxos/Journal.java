@@ -25,11 +25,18 @@ import java.util.Optional;
 /// Yet you could implement it with a SQL database or a distributed key value store that has ordered keys.
 ///
 /// VERY IMPORTANT: The journal must be crash durable. This means that the journal must commit to disk after every write (fsync).
-/// This must be done before any messages are sent from the node after processing any input messages.
+/// This must be done before any messages are sent from the node after processing any input messages. The TrexNode will
+/// do this by calling the sync method on the journal.
 ///
-/// Only when an empty node is fist created the journal must have a `NoOperation.NOOP` accept journaled at log index 0.
+/// When an empty node is fist created the journal must have a `NoOperation.NOOP` accept journaled at log index 0.
 /// It must also have the nodes progress saved as `new Progress(noteIdentifier)`. When a cold cluster is started up the
 /// nodes will time out to and will attempt to prepare the slot 1 which is why it must container a NOOP.
+///
+/// If you want to clone a node to create a new one you must copy the journal and the application state. Then update
+/// the journal state to have new node identifier. This is because the journal is node specific, and we must
+/// not accidentally load the wrong history when moving nodes between servers. If you are using a sql database to hold
+/// the state this might look like 'update progress set node_identifier = ?' where the node_identifier is the new node.
+/// If you are using an embedded btree you could 'loadProcess', modify the progress with java, then 'saveProgress'.
 public interface Journal {
   /**
    * Save the progress record to durable storage. This method must force the disk.
@@ -62,4 +69,8 @@ public interface Journal {
 
   /// Sync the journal to disk. This method must force the disk. This must be done before any messages are sent out.
   void sync();
+
+  /// Get the highest log index that has been journaled. This is used to speed up recovery from crashes during the
+  /// leader recovery process.
+  long highestLogIndex();
 }

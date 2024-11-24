@@ -44,6 +44,10 @@ public class TrexNode {
     this.journal = journal;
     this.quorumStrategy = quorumStrategy;
     this.progress = journal.loadProgress(nodeIdentifier);
+    if (progress.nodeIdentifier() != nodeIdentifier) {
+      LOGGER.severe("FATAL SEVERE ERROR refusing to run the journal state nodeIdentifier does not match this node: nodeIdentifier=" + nodeIdentifier + ", journal.progress.nodeIdentifier=" + progress.nodeIdentifier());
+      throw new IllegalArgumentException("nodeIdentifier=" + nodeIdentifier + " progress.nodeIdentifier=" + progress.nodeIdentifier());
+    }
     this.logAtLevel = logAtLevel;
   }
 
@@ -94,10 +98,6 @@ public class TrexNode {
         } else if (equalOrHigherAccept(progress, accept)) {
           // always journal first
           journal.journalAccept(accept);
-          // record that we have accepted a higher slot
-          if (accept.logIndex() > progress.highestAcceptedIndex()) {
-            progress = progress.withHighestAccepted(accept.logIndex());
-          }
           if (higherAccept(progress, accept)) {
             // we must update promise on a higher accept http://stackoverflow.com/q/29880949/329496
             this.progress = progress.withHighestPromised(accept.number());
@@ -418,7 +418,7 @@ public class TrexNode {
   private List<Accept> pendingAcceptMessages() {
     return LongStream.range(
             progress.highestCommittedIndex() + 1,
-            progress.highestAcceptedIndex() + 1
+            journal.highestLogIndex() + 1
         )
         .mapToObj(journal::loadAccept)
         .takeWhile(Optional::isPresent)
@@ -441,7 +441,7 @@ public class TrexNode {
   }
 
   public Accept nextAcceptMessage(Command command) {
-    final var a = new Accept(nodeIdentifier, progress.highestAcceptedIndex() + 1, term, command);
+    final var a = new Accept(nodeIdentifier, journal.highestLogIndex() + 1, term, command);
     this.acceptVotesByLogIndex.put(a.logIndex(), new AcceptVotes(a));
     return a;
   }
@@ -455,7 +455,7 @@ public class TrexNode {
   }
 
   public long highestAccepted() {
-    return progress.highestAcceptedIndex();
+    return journal.highestLogIndex();
   }
 
   /// This method is for testing purposes only so that we can write unit tests that do not require a TrexEngine.

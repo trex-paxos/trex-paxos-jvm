@@ -391,6 +391,7 @@ class Simulation {
   static class TransparentJournal implements Journal {
     public TransparentJournal(byte nodeIdentifier) {
       progress = new Progress(nodeIdentifier);
+      fakeJournal.put(0L, new Accept(nodeIdentifier, 0, BallotNumber.MIN, NoOperation.NOOP));
     }
 
     Progress progress;
@@ -420,6 +421,11 @@ class Simulation {
     @Override
     public void sync() {
       // no-op
+    }
+
+    @Override
+    public long highestLogIndex() {
+      return fakeJournal.lastKey();
     }
   }
 }

@@ -67,8 +67,7 @@ public class PickleTests {
         new Vote((byte) 1, (byte) 2, 4L, true, new BallotNumber(13, (byte) 3)),
       new Progress((byte) 0,
         new BallotNumber(6, (byte) 7),
-        11L,
-        12L
+          11L
       ));
     byte[] pickled = Pickle.writeMessage(acceptNack);
     AcceptResponse unpickled = (AcceptResponse) Pickle.readMessage(pickled);
@@ -103,7 +102,7 @@ public class PickleTests {
 
   @Test
   public void testPickleProgress() throws Exception {
-    Progress progress = new Progress((byte) 1, new BallotNumber(2, (byte) 3), 4L, 5L);
+    Progress progress = new Progress((byte) 1, new BallotNumber(2, (byte) 3), 4L);
     byte[] pickled = Pickle.writeProgress(progress);
     Progress unpickled = Pickle.readProgress(pickled);
     assertEquals(progress, unpickled);

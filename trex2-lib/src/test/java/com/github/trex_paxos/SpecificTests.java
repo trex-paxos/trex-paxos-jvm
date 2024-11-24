@@ -53,7 +53,7 @@ public class SpecificTests {
     final var higherSelfPromiseNumber = new BallotNumber(1000, (byte) 1);
     TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {{
       this.journal.journalAccept(acceptPreviouslyCommittedSlot1);
-      this.progress = new Progress(nodeIdentifier, higherSelfPromiseNumber, 1L, 1L);
+      this.progress = new Progress(nodeIdentifier, higherSelfPromiseNumber, 1L);
     }};
 
     // When node 2 sends a catchup response that has commited values made under a previous leaders ballot number
@@ -90,7 +90,7 @@ public class SpecificTests {
     final var journal = new Simulation.TransparentJournal(nodeId1);
     final var acceptPreviouslyCommittedSlot1 = new Accept((byte) 1, 1L, new BallotNumber(1, (byte) 1), new Command("cmd", "data".getBytes()));
     TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {{
-      this.progress = new Progress(nodeIdentifier, originalNumber, 1L, 1L);
+      this.progress = new Progress(nodeIdentifier, originalNumber, 1L);
       this.journal.journalAccept(acceptPreviouslyCommittedSlot1);
       this.setRole(TrexRole.LEAD);
       this.term = originalNumber;

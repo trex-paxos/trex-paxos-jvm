@@ -30,7 +30,9 @@ public class Pickle {
   public static byte[] writeProgress(Progress progress) throws IOException {
     try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
          DataOutputStream dos = new DataOutputStream(byteArrayOutputStream)) {
-      Progress.writeTo(progress, dos);
+      dos.writeByte(progress.nodeIdentifier());
+      write(progress.highestPromised(), dos);
+      dos.writeLong(progress.highestCommittedIndex());
       return byteArrayOutputStream.toByteArray();
     }
   }
@@ -38,7 +40,7 @@ public class Pickle {
   public static Progress readProgress(byte[] pickled) throws IOException {
     try (ByteArrayInputStream bis = new ByteArrayInputStream(pickled);
          DataInputStream dis = new DataInputStream(bis)) {
-      return Progress.readFrom(dis);
+      return new Progress(dis.readByte(), readBallotNumber(dis), dis.readLong());
     }
   }
 
@@ -125,12 +127,15 @@ public class Pickle {
 
   public static void write(AcceptResponse m, DataOutputStream dos) throws IOException {
     write(m.vote(), dos);
-    Progress.writeTo(m.progress(), dos);
+    Progress m1 = m.progress();
+    dos.writeByte(m1.nodeIdentifier());
+    write(m1.highestPromised(), dos);
+    dos.writeLong(m1.highestCommittedIndex());
   }
 
   public static AcceptResponse readAcceptResponse(DataInputStream dis) throws IOException {
     Vote vote = readVote(dis);
-    Progress progress = Progress.readFrom(dis);
+    Progress progress = new Progress(dis.readByte(), readBallotNumber(dis), dis.readLong());
     return new AcceptResponse(vote, progress);
   }
 
