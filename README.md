@@ -1,7 +1,7 @@
 
 ## Trex2: An Embeddable Paxos Engine 
 
-Checkout the [2014 blog post](https://simbo1905.wordpress.com/2014/10/28/transaction-log-replication-with-paxos/) for a description of this implementation of [Paxos Made Simple](https://courses.cs.washington.edu/courses/cse550/17au/papers/CSE550.paxos-simple.pdf).
+Checkout the [wiki]([https://simbo1905.wordpress.com/2014/10/28/transaction-log-replication-with-paxos/](https://github.com/trex-paxos/trex-paxos-jvm/wiki)) for a description of this implementation of [Paxos Made Simple](https://courses.cs.washington.edu/courses/cse550/17au/papers/CSE550.paxos-simple.pdf).
 
 This is a work in progress. It will use the latest Java 22+ for Data Oriented Programming to build an embeddable implementation of the Paxos Part Time Parliament Protocol using the algorithm described in Paxos Made Simple algorithm for state replication.
 
