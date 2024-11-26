@@ -138,7 +138,6 @@ public abstract class TrexEngine {
         clearTimeout();
       }
     }
-
     return result;
   }
 

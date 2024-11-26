@@ -48,7 +48,7 @@ public class SpecificTests {
 
     // Given that node 1 has accepted a value at slot 1 and has made a very high self promise
     final var nodeId1 = (byte) 1;
-    final var journal = new Simulation.TransparentJournal((byte) 1);
+    final var journal = new TransparentJournal((byte) 1);
     final var acceptPreviouslyCommittedSlot1 = new Accept((byte) 1, 1L, new BallotNumber(1, (byte) 1), new Command("cmd", "data".getBytes()));
     final var higherSelfPromiseNumber = new BallotNumber(1000, (byte) 1);
     TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {{
@@ -87,7 +87,7 @@ public class SpecificTests {
     // Given leader node 1
     final var nodeId1 = (byte) 1;
     final var originalNumber = new BallotNumber(1, nodeId1);
-    final var journal = new Simulation.TransparentJournal(nodeId1);
+    final var journal = new TransparentJournal(nodeId1);
     final var acceptPreviouslyCommittedSlot1 = new Accept((byte) 1, 1L, new BallotNumber(1, (byte) 1), new Command("cmd", "data".getBytes()));
     TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {{
       this.progress = new Progress(nodeIdentifier, originalNumber, 1L);

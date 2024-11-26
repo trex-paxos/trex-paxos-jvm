@@ -58,6 +58,12 @@ public class SimulationTests {
     );
   }
 
+  @Test
+  public void testLeaderElection() {
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(1234);
+    testLeaderElection(rng);
+  }
+
   public void testLeaderElection(RandomGenerator rng) {
     // given a repeatable test setup
     final var simulation = new Simulation(rng, 30);
@@ -255,9 +261,9 @@ public class SimulationTests {
   }
 
   private boolean consistentCommits(
-      Simulation.TestablePaxosEngine engine1,
-      Simulation.TestablePaxosEngine engine2,
-      Simulation.TestablePaxosEngine engine3) {
+      TestablePaxosEngine engine1,
+      TestablePaxosEngine engine2,
+      TestablePaxosEngine engine3) {
     final var maxLength =
         Math.max(engine1.allCommands().size(), Math.max(
             engine2.allCommands().size(), engine3.allCommands().size()));
@@ -310,9 +316,9 @@ public class SimulationTests {
 
   private static BiFunction<Simulation.Send, Long, Stream<TrexMessage>> makeNemesis(
       Function<Long, Byte> timeToPartitionedNode,
-      Simulation.TestablePaxosEngine engine1,
-      Simulation.TestablePaxosEngine engine2,
-      Simulation.TestablePaxosEngine engine3) {
+      TestablePaxosEngine engine1,
+      TestablePaxosEngine engine2,
+      TestablePaxosEngine engine3) {
 
     final var enginesAsList = List.of(engine1, engine2, engine3);
 

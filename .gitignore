@@ -2,3 +2,4 @@
 target/
 trex2-lib/target/
 .idea/
+trex2-lib/.jqwik-database

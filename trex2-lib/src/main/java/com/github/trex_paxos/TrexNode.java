@@ -26,13 +26,15 @@ import java.util.stream.LongStream;
 import static com.github.trex_paxos.TrexRole.*;
 
 /// A TrexNode is a single node in a Paxos cluster. It runs the part-time parliament algorithm. It requires
-/// collaborating classes
+/// collaborating classes.
 /// - A [Journal] which must be crash durable storage. The wrapping [TrexEngine] must flush the journal to durable state (fsync) before sending out any messages.
 /// - A [QuorumStrategy] which may be a simple majority, in the future FPaxos or UPaxos.
 public class TrexNode {
   static final Logger LOGGER = Logger.getLogger("");
 
   private final Level logAtLevel;
+
+  private boolean crashed = false;
 
   /// Create a new TrexNode that will load the current progress from the journal. The journal must have been pre-initialised.
   ///
@@ -61,7 +63,8 @@ public class TrexNode {
   final QuorumStrategy quorumStrategy;
 
   /// If we have rebooted then we start off as a follower.
-  private TrexRole role = FOLLOW;
+  /// This is only package private to allow unit tests to set the role.
+  TrexRole role = FOLLOW;
 
   /// The initial progress is loaded from the Journal at startup. It is the last known state of the node prior to a crash.
   Progress progress;
@@ -78,183 +81,214 @@ public class TrexNode {
   BallotNumber term = null;
 
   /// This is the main Paxos Algorithm. It is not public as a TrexEngine will wrap this to handle specifics of resetting
-  /// timeouts. This method will recurse without returning when we need tpo send a message to ourselves. As a side
-  /// effect the progress record will be updated and accept messages will be added into the journal.
+  /// timeouts. This method will recurse without returning when we need to send a message to ourselves. Possible side
+  /// effects:
+  ///
+  /// * The progress record may be updated in memory and saved into the journal.
+  /// * Accept messages may be written into the journal.
   ///
   /// VERY IMPORTANT: The journal *must* be flushed to durable storage before sending out any messages returned from
-  /// this method. That ultimately inhibits throughput but cannot be skipped without breaking the algorithm.
+  /// this method. That ultimately inhibits latency yet batching can be used to maintain throughput. Yet it cannot be
+  /// skipped without breaking the algorithm.
   ///
   /// This method suppresses warnings about finally clauses that do not terminate normally so that it can check for
-  /// protocol violations and throw in the finally block.
+  /// protocol violations and throw in the finally block. We will use jul logging to log any exception thrown in the
+  /// main code. The most likely reason to catch an error is that the journal has a problem such as an IOError. Yet
+  /// we will log then suppress that exception in order to run the finally block to check for protocol violations.
   ///
   /// @param input The message to process.
   /// @return A possibly empty list of messages to send out to the cluster plus a possibly empty list of chosen commands to up-call to the host
   /// application.
+  /// @throws AssertionError if the protocol invariants are violated. This is a none recoverable error. The process should be rebooted so that
+  /// only what is in the durable journal is used as the state of this node.
   @SuppressWarnings("Finally")
   TrexResult paxos(TrexMessage input) {
+    if (crashed) {
+      LOGGER.severe(CRASHED);
+      throw new AssertionError(CRASHED);
+    }
     List<TrexMessage> messages = new ArrayList<>();
-    Map<Long, AbstractCommand> commands = new TreeMap<>();
+    TreeMap<Long, AbstractCommand> commands = new TreeMap<>();
     final var priorProgress = progress;
     try {
-      switch (input) {
-        case Accept accept -> {
-          if (lowerAccept(progress, accept) || higherAcceptForCommittedSlot(accept, progress)) {
-            messages.add(nack(accept));
-          } else if (equalOrHigherAccept(progress, accept)) {
-            // always journal first
-            journal.journalAccept(accept);
-            if (higherAccept(progress, accept)) {
-              // we must update promise on a higher accept http://stackoverflow.com/q/29880949/329496
-              this.progress = progress.withHighestPromised(accept.number());
-              // we must change our own vote if we are an old leader
-              if (this.role == LEAD) {
-                // does this change our prior self vote?
-                final var logIndex = accept.logIndex();
-                Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex))
-                    .ifPresent(acceptVotes -> {
-                      final var oldNumber = acceptVotes.accept().number();
-                      final var newNumber = accept.number();
-                      if (oldNumber.lessThan(newNumber)) {
-                        // we have accepted a higher accept which is a promise as per https://stackoverflow.com/a/29929052
-                        acceptVotes.responses().put(nodeIdentifier(), nack(acceptVotes.accept()));
-                        Set<Vote> vs = acceptVotes.responses().values().stream()
-                            .map(AcceptResponse::vote).collect(Collectors.toSet());
-                        final var quorumOutcome =
-                            quorumStrategy.assessAccepts(logIndex, vs);
-                        if (quorumOutcome == QuorumOutcome.LOSE) {
-                          // this happens in a three node cluster when an isolated split brain leader rejoins
-                          backdown(messages);
-                        }
-                      }
-                    });
-              }
-            }
-            journal.saveProgress(this.progress);
-            final var ack = ack(accept);
-            if (accept.number().nodeIdentifier() == nodeIdentifier) {
-              // we vote for ourself
-              paxos(ack);
-            }
-            messages.add(ack);
-          } else {
-            assert false;
-          }
-        }
-        case Prepare prepare -> {
-          var number = prepare.number();
-          if (number.lessThan(progress.highestPromised()) || prepare.logIndex() <= progress.highestCommittedIndex()) {
-            // nack a low nextPrepareMessage else any nextPrepareMessage for a committed slot sending any accepts they are missing
-            messages.add(nack(prepare));
-          } else if (number.greaterThan(progress.highestPromised())) {
-            // ack a higher nextPrepareMessage
-            final var newProgress = progress.withHighestPromised(prepare.number());
-            journal.saveProgress(newProgress);
-            final var ack = ack(prepare);
-            messages.add(ack);
-            this.progress = newProgress;
-            // leader or recoverer should give way to a higher nextPrepareMessage
-            if (prepare.number().nodeIdentifier() != nodeIdentifier && role != FOLLOW) {
-              backdown(messages);
-            }
-            // we vote for ourself
-            if (prepare.number().nodeIdentifier() == nodeIdentifier) {
-              paxos(ack);
-            }
-          } else if (number.equals(progress.highestPromised())) {
-            messages.add(ack(prepare));
-          } else {
-            assert false;
-          }
-        }
-        case AcceptResponse acceptResponse -> {
-          if (FOLLOW != role && acceptResponse.vote().to() == nodeIdentifier) {
-            // An isolated leader rejoining must back down
-            if (LEAD == role && acceptResponse.progress().highestCommittedIndex() > progress.highestCommittedIndex()) {
-              backdown(messages);
-            } else {
-              // Both Leader and Recoverer can receive AcceptResponses
-              processAcceptResponse(acceptResponse, commands, messages);
-            }
-          }
-        }
-        case PrepareResponse prepareResponse -> {
-          if (RECOVER == role && prepareResponse.vote().to() == nodeIdentifier) {
-            processPrepareResponse(prepareResponse, messages);
-          }
-        }
-        case Commit(final var commitFrom, final var commitNumber, final var commitSlot) -> {
-          // TODO is it possible to safely do some deduction here to avoid the catchup?
-          if (commitSlot == highestCommitted() + 1) {
-            // we must have the correct number at the slot
-            final var commitableAccept = journal.loadAccept(commitSlot)
-                .filter(accept -> accept.number().equals(commitNumber))
-                .orElse(null);
-
-            // make the callback to the main application
-            Optional.ofNullable(commitableAccept).ifPresent(accept -> {
-              commit(accept, commands);
-              progress = progress.withHighestCommitted(commitSlot);
-              journal.saveProgress(progress);
-              if (!role.equals(FOLLOW)) {
-                backdown(messages);
-              }
-            });
-          }
-
-          final var highestCommittedIndex = progress.highestCommittedIndex();
-
-          if (commitSlot > highestCommittedIndex) {
-            messages.add(new Catchup(nodeIdentifier, commitFrom, highestCommittedIndex, progress.highestPromised()));
-          }
-        }
-        case Catchup(final byte replyTo, _, final var otherCommitIndex, final var otherHighestPromised) -> {
-          final var currentCommitMessage = currentCommitMessage();
-
-          // load the slots they do not know that they are missing
-          final var missingAccepts = LongStream.rangeClosed(otherCommitIndex + 1, progress.highestCommittedIndex())
-              .mapToObj(journal::loadAccept)
-              .flatMap(Optional::stream)
-              .toList();
-
-          messages.add(new CatchupResponse(nodeIdentifier, replyTo, missingAccepts, currentCommitMessage));
-
-          if (otherHighestPromised.greaterThan(progress.highestPromised())) {
-            if (role == TrexRole.LEAD) {
-              assert this.term != null;
-              this.term = new BallotNumber(
-                  otherHighestPromised.counter() + 1,
-                  nodeIdentifier
-              );
-            }
-          }
-        }
-        case CatchupResponse(_, _, final var catchup, final var commit) -> {
-          // drop anything we have already committed
-          catchup.stream()
-              .dropWhile(accept -> accept.logIndex() <= progress.highestCommittedIndex())
-              .forEach(accept -> {
-                journal.journalAccept(accept);
-                commit(accept, commands);
-              });
-
-          progress = progress.withHighestCommitted(commit.committedLogIndex());
-          journal.saveProgress(progress);
-        }
-      }
+      algorithm(input, messages, commands);
+    } catch (Throwable e) {
+      // The most probable reason to throw is an IOError from the journal. So we must kill ourselves!
+      crashed = true;
+      // Log that we are crashing and log the reason.
+      LOGGER.severe(CRASHING + e);
+      // We will most likely throw a protocol violation error in the finally block. So here we log the exception to stderr as a last resort.
+      //noinspection CallToPrintStackTrace
+      e.printStackTrace();
     } finally {
       if (priorProgress != progress && !priorProgress.equals(progress)) {
-        // The general advice is tno not throw. In this case the general advice is wrong.
+        // The general advice is not to throw. In this case the general advice is wrong.
         // We must throw as we have violated the protocol and that should be seen as fatal.
         validateProtocolInvariantElseThrowError(input, priorProgress);
+      }
+      if (!commands.isEmpty()) {
+        // TODO make this run all the time
+        assert commands.lastKey() == progress.highestCommittedIndex();
       }
     }
     return new TrexResult(messages, commands);
   }
 
-  static final String PROTOCOL_VIOLATION_PROMISES = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the promise has been changed when the message is not a PaxosMessage type";
-  static final String PROTOCOL_VIOLATION_NUMBER = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the promise has decreased";
-  static final String PROTOCOL_VIOLATION_INDEX = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the committed slot index has decreased";
-  static final String PROTOCOL_VIOLATION_SLOT_FIXING = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the promise has been changed when the message is not a SlotFixingMessage type";
+  private void algorithm(TrexMessage input, List<TrexMessage> messages, TreeMap<Long, AbstractCommand> commands) {
+    switch (input) {
+      case Accept accept -> {
+        if (lowerAccept(progress, accept) || higherAcceptForCommittedSlot(accept, progress)) {
+          messages.add(nack(accept));
+        } else if (equalOrHigherAccept(progress, accept)) {
+          // always journal first
+          journal.journalAccept(accept);
+          if (higherAccept(progress, accept)) {
+            // we must update promise on a higher accept http://stackoverflow.com/q/29880949/329496
+            this.progress = progress.withHighestPromised(accept.number());
+            // we must change our own vote if we are an old leader
+            if (this.role == LEAD) {
+              // does this change our prior self vote?
+              final var logIndex = accept.logIndex();
+              Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex))
+                  .ifPresent(acceptVotes -> {
+                    final var oldNumber = acceptVotes.accept().number();
+                    final var newNumber = accept.number();
+                    if (oldNumber.lessThan(newNumber)) {
+                      // we have accepted a higher accept which is a promise as per https://stackoverflow.com/a/29929052
+                      acceptVotes.responses().put(nodeIdentifier(), nack(acceptVotes.accept()));
+                      Set<Vote> vs = acceptVotes.responses().values().stream()
+                          .map(AcceptResponse::vote).collect(Collectors.toSet());
+                      final var quorumOutcome =
+                          quorumStrategy.assessAccepts(logIndex, vs);
+                      if (quorumOutcome == QuorumOutcome.LOSE) {
+                        // this happens in a three node cluster when an isolated split brain leader rejoins
+                        backdown(messages);
+                      }
+                    }
+                  });
+            }
+          }
+          journal.saveProgress(this.progress);
+          final var ack = ack(accept);
+          if (accept.number().nodeIdentifier() == nodeIdentifier) {
+            // we vote for ourself
+            paxos(ack);
+          }
+          messages.add(ack);
+        } else {
+          assert false;
+        }
+      }
+      case Prepare prepare -> {
+        var number = prepare.number();
+        if (number.lessThan(progress.highestPromised()) || prepare.logIndex() <= progress.highestCommittedIndex()) {
+          // nack a low nextPrepareMessage else any nextPrepareMessage for a committed slot sending any accepts they are missing
+          messages.add(nack(prepare));
+        } else if (number.greaterThan(progress.highestPromised())) {
+          // ack a higher nextPrepareMessage
+          final var newProgress = progress.withHighestPromised(prepare.number());
+          journal.saveProgress(newProgress);
+          final var ack = ack(prepare);
+          messages.add(ack);
+          this.progress = newProgress;
+          // leader or recoverer should give way to a higher nextPrepareMessage
+          if (prepare.number().nodeIdentifier() != nodeIdentifier && role != FOLLOW) {
+            backdown(messages);
+          }
+          // we vote for ourself
+          if (prepare.number().nodeIdentifier() == nodeIdentifier) {
+            paxos(ack);
+          }
+        } else if (number.equals(progress.highestPromised())) {
+          messages.add(ack(prepare));
+        } else {
+          assert false;
+        }
+      }
+      case AcceptResponse acceptResponse -> {
+        if (FOLLOW != role && acceptResponse.vote().to() == nodeIdentifier) {
+          // An isolated leader rejoining must back down
+          if (LEAD == role && acceptResponse.progress().highestCommittedIndex() > progress.highestCommittedIndex()) {
+            backdown(messages);
+          } else {
+            // Both Leader and Recoverer can receive AcceptResponses
+            processAcceptResponse(acceptResponse, commands, messages);
+          }
+        }
+      }
+      case PrepareResponse prepareResponse -> {
+        if (RECOVER == role && prepareResponse.vote().to() == nodeIdentifier) {
+          processPrepareResponse(prepareResponse, messages);
+        }
+      }
+      case Commit(final var commitFrom, final var commitNumber, final var commitSlot) -> {
+        // TODO is it possible to safely do some deduction here to avoid the catchup?
+        if (commitSlot == highestCommitted() + 1) {
+          // we must have the correct number at the slot
+          final var commitableAccept = journal.loadAccept(commitSlot)
+              .filter(accept -> accept.number().equals(commitNumber))
+              .orElse(null);
+
+          // make the callback to the main application
+          Optional.ofNullable(commitableAccept).ifPresent(accept -> {
+            commit(accept, commands);
+            progress = progress.withHighestCommitted(commitSlot);
+            journal.saveProgress(progress);
+            if (!role.equals(FOLLOW)) {
+              backdown(messages);
+            }
+          });
+        }
+
+        final var highestCommittedIndex = progress.highestCommittedIndex();
+
+        if (commitSlot > highestCommittedIndex) {
+          messages.add(new Catchup(nodeIdentifier, commitFrom, highestCommittedIndex, progress.highestPromised()));
+        }
+      }
+      case Catchup(final byte replyTo, _, final var otherCommitIndex, final var otherHighestPromised) -> {
+        final var currentCommitMessage = currentCommitMessage();
+
+        // load the slots they do not know that they are missing
+        final var missingAccepts = LongStream.rangeClosed(otherCommitIndex + 1, progress.highestCommittedIndex())
+            .mapToObj(journal::loadAccept)
+            .flatMap(Optional::stream)
+            .toList();
+
+        messages.add(new CatchupResponse(nodeIdentifier, replyTo, missingAccepts, currentCommitMessage));
+
+        if (otherHighestPromised.greaterThan(progress.highestPromised())) {
+          if (role == TrexRole.LEAD) {
+            assert this.term != null;
+            this.term = new BallotNumber(
+                otherHighestPromised.counter() + 1,
+                nodeIdentifier
+            );
+          }
+        }
+      }
+      case CatchupResponse(_, _, final var catchup, final var commit) -> {
+        // drop anything we have already committed
+        catchup.stream()
+            .dropWhile(accept -> accept.logIndex() <= progress.highestCommittedIndex())
+            .forEach(accept -> {
+              journal.journalAccept(accept);
+              commit(accept, commands);
+            });
+
+        progress = progress.withHighestCommitted(commit.committedLogIndex());
+        journal.saveProgress(progress);
+      }
+    }
+  }
+
+  static final String PROTOCOL_VIOLATION_PROMISES = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the promise has been changed when the message is not a PaxosMessage type.";
+  static final String PROTOCOL_VIOLATION_NUMBER = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the promise has decreased.";
+  static final String PROTOCOL_VIOLATION_INDEX = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the committed slot index has decreased.";
+  static final String PROTOCOL_VIOLATION_SLOT_FIXING = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the promise has been changed when the message is not a SlotFixingMessage type.";
+  static final String CRASHED = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR This node has crashed and must be rebooted. The durable journal state is now the only source of truth.";
+  static final String CRASHING = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR This node has crashed and must be rebooted. The durable journal state is now the only source of truth: ";
+
 
   /// Here we check that we have not violated the Paxos algorithm invariants. If we have then we throw an error.
   /// We also need to check what is described in the wiki page [Cluster Replication With Paxos for the Java Virtual Machine](https://github.com/trex-paxos/trex-paxos-jvm/wiki)
@@ -582,5 +616,4 @@ public class TrexNode {
       }
     }
   }
-
 }

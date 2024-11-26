@@ -19,7 +19,6 @@ import com.github.trex_paxos.msg.*;
 
 import java.util.*;
 import java.util.function.BiFunction;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.random.RandomGenerator;
 import java.util.random.RandomGeneratorFactory;
@@ -168,6 +167,13 @@ class Simulation {
         );
         throw new AssertionError("commit length not equal to command length");
       }
+      engines.values().forEach(
+          engine -> engine.journal.fakeJournal.forEach((k, v) -> {
+            if (v.logIndex() != k) {
+              throw new AssertionError("Journaled accept.logIndex not equal to slot index");
+            }
+          })
+      );
       return finished;
     });
   }
@@ -236,7 +242,7 @@ class Simulation {
     this.now = now;
   }
 
-  private void setTimeout(byte nodeIdentifier) {
+  void setTimeout(byte nodeIdentifier) {
     final var oldTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
     final var timeout = rng.nextInt((int) shortMaxTimeout + 1, (int) longMaxTimeout);
     final var when = Math.max(lastNow, now) + timeout;
@@ -250,7 +256,7 @@ class Simulation {
     LOGGER.fine(() -> "\tsetTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier + "+=" + timeout);
   }
 
-  private void clearTimeout(byte nodeIdentifier) {
+  void clearTimeout(byte nodeIdentifier) {
     final var oldTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
     Optional.ofNullable(nodeTimeouts.get(nodeIdentifier)).ifPresent(timeout -> Optional.ofNullable(eventQueue.get(timeout)).ifPresent(events -> {
           events.remove(new Timeout(nodeIdentifier));
@@ -264,7 +270,7 @@ class Simulation {
     LOGGER.fine(() -> "\tclearTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier);
   }
 
-  private void setHeartbeat(byte nodeIdentifier) {
+  void setHeartbeat(byte nodeIdentifier) {
     final var timeout = rng.nextInt((int) shortMaxTimeout / 2, (int) shortMaxTimeout);
     final var when = Math.max(lastNow, now) + timeout; // TODO no need to max?
     final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
@@ -320,26 +326,10 @@ class Simulation {
     });
   }
 
-  TestablePaxosEngine makeTrexEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy) {
-    return new TestablePaxosEngine(nodeIdentifier,
-        quorumStrategy,
-        new TransparentJournal(nodeIdentifier)
-    );
-  }
+  class SimulationPaxosEngine extends TestablePaxosEngine {
 
-  class TestablePaxosEngine extends TrexEngine {
-
-    final TransparentJournal journal;
-
-    final TreeMap<Long, AbstractCommand> allCommandsMap = new TreeMap<>();
-
-    public List<AbstractCommand> allCommands() {
-      return new ArrayList<>(allCommandsMap.values());
-    }
-
-    public TestablePaxosEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy, TransparentJournal journal) {
-      super(new TrexNode(Level.INFO, nodeIdentifier, quorumStrategy, journal));
-      this.journal = journal;
+    public SimulationPaxosEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy, TransparentJournal transparentJournal) {
+      super(nodeIdentifier, quorumStrategy, transparentJournal);
     }
 
     @Override
@@ -349,83 +339,19 @@ class Simulation {
 
     @Override
     protected void clearTimeout() {
-      Simulation.this.clearTimeout(trexNode.nodeIdentifier);
+      Simulation.this.clearTimeout(trexNode.nodeIdentifier());
     }
 
     @Override
     protected void setHeartbeat() {
-      Simulation.this.setHeartbeat(trexNode.nodeIdentifier);
-    }
-
-    TrexResult paxos(TrexMessage input) {
-      if (input.from() == trexNode.nodeIdentifier()) {
-        return TrexResult.noResult();
-      }
-      LOGGER.finer(() -> trexNode.nodeIdentifier + " <~ " + input);
-      final var oldRole = trexNode.getRole();
-      final var result = super.paxosNotThreadSafe(input);
-      final var newRole = trexNode.getRole();
-      if (oldRole != newRole) {
-        LOGGER.info(() -> "Node has changed role:" + trexNode.nodeIdentifier() + " == " + newRole);
-      }
-      if (!result.commands().isEmpty()) {
-        allCommandsMap.putAll(result.commands());
-      }
-      return result;
-    }
-
-    @Override
-    public String toString() {
-      return "PaxosEngine{" +
-          trexNode.nodeIdentifier() + "=" +
-          trexNode.currentRole().toString() + "," +
-          trexNode.progress +
-          '}';
-    }
-
-    public String role() {
-      return trexNode.currentRole().toString();
+      Simulation.this.setHeartbeat(trexNode.nodeIdentifier());
     }
   }
 
-  static class TransparentJournal implements Journal {
-    public TransparentJournal(byte nodeIdentifier) {
-      progress = new Progress(nodeIdentifier);
-      fakeJournal.put(0L, new Accept(nodeIdentifier, 0, BallotNumber.MIN, NoOperation.NOOP));
-    }
-
-    Progress progress;
-
-    @Override
-    public void saveProgress(Progress progress) {
-      this.progress = progress;
-    }
-
-    NavigableMap<Long, Accept> fakeJournal = new TreeMap<>();
-
-    @Override
-    public void journalAccept(Accept accept) {
-      fakeJournal.put(accept.logIndex(), accept);
-    }
-
-    @Override
-    public Progress loadProgress(byte nodeIdentifier) {
-      return progress;
-    }
-
-    @Override
-    public Optional<Accept> loadAccept(long logIndex) {
-      return Optional.ofNullable(fakeJournal.get(logIndex));
-    }
-
-    @Override
-    public void sync() {
-      // no-op
-    }
-
-    @Override
-    public long highestLogIndex() {
-      return fakeJournal.lastKey();
-    }
+  TestablePaxosEngine makeTrexEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy) {
+    return new SimulationPaxosEngine(nodeIdentifier,
+        quorumStrategy,
+        new TransparentJournal(nodeIdentifier)
+    );
   }
 }
