@@ -55,14 +55,13 @@ The novelty of Paxos was that it did not require real-time clocks. This implemen
 1. Leader sends `prepare(N,S)` for slots not known to be fixed
 2. Nodes respond with promise messages containing any uncommitted `{N,V}` pairs at that slot `S`
 3. Leader selects the `V` that was with the highest `N` value from a majority of responses
-4. Leader sends fresh `accept(S,N',V)` messages with selected commands under new `N'`
-5. Commit messages (optimization) can be piggybacked on subsequent accept messages
+4. Leader sends fresh `accept(S,N,V)` messages with selected commands using its own `N`
 
 Again, whenever a node receives a message with a higher `N` that it replies to positively, it has made a promise to reject any further messages that have a lower `N`. 
 
-Whatever value at a given slot is held by a majority of nodes it can not not change value. The leader listens to the response messages of followers and learns the values is It can then send a short `commit(S,N)` message to let the other nodes know. he concept of a commit message is not covered in the original papers but is a standard optimisation known as a Paxos "phase 3" message. Yet, we do not need to send it in a separate network packet. It can piggyback at the front of the network packet that holds the next `accept` message. 
+Whatever value at a given slot is held by a majority of nodes it can not not change value. The leader listens to the response messages of followers and learns which value has been fixed. It can then send a short `commit(S,N)` message to let the other nodes know. The concept of a commit message is not covered in the original papers but is a standard optimisation known as a Paxos "phase 3" message. Yet, we do not need to send it in a separate network packet. It can piggyback at the front of the network packet of the next `accept` message. 
 
-When each node learns that slot `s` is fixed records this as the maximum committed index. It will then up-call the command value `V` to the host application. This will be an application-specific callback that can do whatever the host application desires. The point is that every node will up-call the same command values in the same order. Nodes will ignore any messages that are less than or equal to their committed index. 
+When each node learns that slot `s` is fixed, it will  up-call the command value `V` to the host application. This will be an application-specific callback that can do whatever the host application desires. The point is that every node will up-call the same command values in the same order. Nodes will ignore any messages that are less than or equal to the highest slot index it has learnt has been fixed. 
 
 This library uses messages similar to the following code to allow nodes to learn about which commands are fixed in slots:
 
@@ -122,7 +121,11 @@ public record CatchupResponse( List<Command> catchup ) {}
 
 It is important to note that additional properties are in the real code. These are used to pass information between nodes. For example; a node trying to lead may not know the full range of slots that a previous leader has possibly fixed a value. One node in any majority does know. So in the `PrepareReponse` messages we add a `higestAcceptedIndex` property. A node that is attempting to load will then learn the maximum range of slows that it must probe with `prepare` messages. 
 
-See the wiki for more detail. 
+The above algorithm has a small mechanical footprint. It is a set of rules that imply a handful of inequality checks. The entire state space of a distributed system is hard to reason about and test. There are a near-infinite number of messages that could be sent. Yet the set of messages that may alter the progress of a node or cause it to commit is pretty small. This implies we can use a brute-force property testing framework to validate that the code correctly implements the protocol documented in the paper. 
+
+There is only one known "gotcha" that is not clear from the paper yet, which is within Lamport's TLA+ definition of the algorithm. You must increment the promise when seeing both a higher `promise` message and a higher `accept` message. Any given `prepare(S,N)` applies to all higher slots. Due to lost messages, a node might have never seen the original `prepare` message. Seeing an `accept` containing an `N` higher than its promise tells a node that it missed the original `prepare` message. It instantly recovers that fact and makes the promise, allowing it to process the `accept` message. 
+
+See the wiki for more details. 
 
 ### Project Goals
 
