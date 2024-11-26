@@ -59,7 +59,7 @@ The novelty of Paxos was that it did not require real-time clocks. This implemen
 
 Again, whenever a node receives a message with a higher `N` that it replies to positively, it has made a promise to reject any further messages that have a lower `N`. 
 
-Whatever value at a given slot is held by a majority of nodes it can not not change value. The leader listens to the response messages of followers and learns which value has been fixed. It can then send a short `commit(S,N)` message to let the other nodes know. The concept of a commit message is not covered in the original papers but is a standard optimisation known as a Paxos "phase 3" message. Yet, we do not need to send it in a separate network packet. It can piggyback at the front of the network packet of the next `accept` message. 
+Whatever value at a given slot is held by a majority of nodes it can not not change value. The leader listens to the response messages of followers and learns which value has been fixed. It can then send a short `commit(S,N)` message to let the other nodes know. This is not covered in the original papers but is a standard optimisation known as a Paxos "phase 3" message. We do not need to send it in a separate network packet. It can piggyback at the front of the network packet of the next `accept` message. 
 
 When each node learns that slot `s` is fixed, it will  up-call the command value `V` to the host application. This will be an application-specific callback that can do whatever the host application desires. The point is that every node will up-call the same command values in the same order. Nodes will ignore any messages that are less than or equal to the highest slot index it has learnt has been fixed. 
 
