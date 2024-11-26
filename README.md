@@ -94,8 +94,7 @@ The state of each node is similar to the following model:
 
 ```java
 public record Progress( BallotNumber highestPromised,
-                        long committedIndex
-) {}
+                        long committedIndex ) {}
 
 public interface Journal {
    void saveProgress(Progress progress);
