@@ -1,15 +1,29 @@
+## Trex2: Paxos Algorithm Strong Consistency for state replication on the Java JVM
 
-## Trex2: An Embeddable Paxos Engine 
+Checkout the
+post [Cluster Replication With Paxos for the Java Virtual Machine](https://simbo1905.wordpress.com/2014/10/28/transaction-log-replication-with-paxos/)
+for a description of this
+implementation
+of [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf).
 
-Checkout the post [Cluster Replication With Paxos for the Java Virtual Machine](https://simbo1905.wordpress.com/2014/10/28/transaction-log-replication-with-paxos/) for a description of this implementation of [Paxos Made Simple](https://courses.cs.washington.edu/courses/cse550/17au/papers/CSE550.paxos-simple.pdf).
+This is a work in progress as more tests are to be written. At this point it is not recommended for production use.
 
-This is a work in progress. It will use the latest Java 22+ for Data Oriented Programming to build an embeddable implementation of the Paxos Part Time Parliament Protocol using the algorithm described in Paxos Made Simple algorithm for state replication.
+It will use the latest Java 22+ for Data Oriented Programming to build an embeddable implementation of the Paxos Part
+Time Parliament Protocol using the algorithm described in Paxos Made Simple algorithm for state replication.
 
 ### Goals
 
-- Demonstrate state replication with The Part-Time Parliament Protocol (aka Multi Paxos).
+- Implement state replication with The Part-Time Parliament Protocol (aka Multi Paxos) as documented by Leslie Lamport
+  in [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf).
+- Implement the protocol in a way that is easy to understand and verify.
+- Write a test harness that can inject rolling network partitions.
+- Write property based tests to exhaustively verify correctness.
 - Ship with zero third-party libraries outside the java base packages.
-- Target the Java 25 LTS version for the final version.
+- Run on Java 22+ for Data Oriented Programming.
+- Virtual thread friendly on Java 22+.
+- Embeddable in other applications.
+- Be paranoid about correctness. This implementation will throw an Error when it can no longer guarantee correctness.
+  incorrect result.
 
 ### Non-Goals
 
@@ -32,11 +46,13 @@ TBD
 
 The list of tasks: 
 
- - [x] Impliment the Paxos Paraliment Protocol for log replication. 
- - [x] Write a test harness that injects rolling network paritions. 
- - [ ] Implement a trivial replicated k-v store. 
- - [ ] Implement Implement cluster membership changes as UPaxos. 
- - [ ] Add in optionality so that randomised timeouts can be replaced by some other leader failover detection and voting mechanism (e.g. JGroups).  
+- [x] Implement the Paxos Parliament Protocol for log replication.
+- [x] Write a test harness that injects rolling network partitions.
+- [ ] Write property based tests to exhaustively verify correctness.
+- [ ] Implement a trivial replicated k-v store.
+- [ ] Implement cluster membership changes as UPaxos.
+- [ ] Add in optionality so that randomised timeouts can be replaced by some other leader failover detection and voting
+  mechanism (e.g. JGroups).
 
 ## Attribution
 
