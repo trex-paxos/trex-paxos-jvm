@@ -106,7 +106,7 @@ public interface Journal {
 
 The progress of each node is it's highest promised `N` and it's highest committed slot `S`. The command values are journaled to a given slot index. Journal writes must be crash-proof (disk flush or equivalent). The `sycn()` method of the journal must first flush any commands into their slots and only then flush the `progress`. 
 
-The final question is what happens when nodes have missed messages. They can request retransmission using a `catchup` message. The additional messages of the protocol are messages to learn which commands have been fixed: 
+The final question is what happens when nodes have missed messages. They can request retransmission using a `catchup` message. This implementation uses messages similar to the following code to learn which commands are fixed into which slots:
 
 ```java
 public record Commit(
