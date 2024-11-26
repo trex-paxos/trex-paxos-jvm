@@ -12,7 +12,7 @@ A common misconception is failing to recognize that Paxos is inherently Multi-Pa
 
 This enables efficient streaming of only `accept` messages until a leader crashes or becomes network isolated. 
 
-To replicate the state of any server we simple need to apply the same command at each server in the same order. The paper states (p. 8):
+To replicate the state of any server we simply need to apply the same stream of commands at each server in the same order. The paper states (p. 8):
 
 > A simple way to implement a distributed system is as a collection of clients that issue commands to a central server. The server can be described as a deterministic state machine that performs client commands in some sequence. The state machine has a current state; it performs a step by taking as input a command and producing an output and a new state.
 
