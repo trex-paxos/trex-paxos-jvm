@@ -6,8 +6,6 @@ This is a work in progress as more tests are to be written. At this point it is 
 
 This library implements Lamport's Paxos protocol for cluster replication, as described in Lamport's 2001 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf). While distributed systems are inherently complex, the core Paxos algorithm is mechanically straightforward when adequately understood. This implementation achieves consistency with the mathematical minimum of message exchanges without requiring external leader election services. 
 
-### Core Concepts
-
 A common misconception is failing to recognize that Paxos is inherently Multi-Paxos. As Lamport states in "Paxos Made Simple" (p. 10):
 
 > A newly chosen leader executes phase 1 for infinitely many instances of the consensus algorithm. Using the same proposal number for all instances, it can do this by sending a single reasonably short message to the other servers.
@@ -20,11 +18,11 @@ To replicate the state of any server we simple need to apply the same command at
 
 For example, in a key-value store, commands might be `put(k,v)`, `get(k)` or `remove(k)` operations. These commands form the "values" that must be applied consistently at each node in the cluster. 
 
-The challenge is to make the stream of commands that are chosen at each server consistent when messages are lost and servers crash. 
-
-Checkout the wiki post [Cluster Replication With Paxos for the Java Virtual Machine](https://github.com/trex-paxos/trex-paxos-jvm/wiki) for the full description of this implementation of [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf).
+The challenge is ensuring the consistency of the command stream across all servers when messages are lost and servers crash. 
 
 ### The Paxos Protocol 
+
+Checkout the wiki post [Cluster Replication With Paxos for the Java Virtual Machine](https://github.com/trex-paxos/trex-paxos-jvm/wiki) for the full description of this implementation of [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf).
 
 We must fix the same commands into the same command log stream index, known as a log slot, at each server: 
 
