@@ -6,13 +6,19 @@ This is a work in progress, as more exhaustive tests will be written. At this po
 
 This library implements Lamport's Paxos protocol for cluster replication, as described in Lamport's 2001 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf). While distributed systems are inherently complex, the core Paxos algorithm is mechanically straightforward when adequately understood. The algorithm and this implementation can achieve consistency across a cluster of nodes using the mathematical minimum number of message exchanges. This is achieved without the need for external leader election services. The net result is an embeddable strong consistency library that can replicate any application state across a cluster of servers. 
 
-The description below explains the algorithm's invariants and the message protocol sufficiently to verify that this implementation is sound. The aim of this documentation is to: 
+The description below explains the algorithm's invariants and the message protocol sufficiently to verify that this implementation is sound. The ambition of this documentation is to: 
 
 1. Provide sufficient detail about the invariants described in the original paper to transcribe them into rigorous tests.
 2. Clarify that the approach taken in this implementation is based on a careful and thorough reading of the original papers. 
 3. Provide sufficient detail around the "learning" messages used by this implementation to understand that they are minimal and do not harm correctness.
 4. Provide sufficient detail to write brute force tests that cover the entire library of messages and all invariants of this implementation.
-5. 
+5. Provide enough documentation so that someone can carefully study the code, the tests, and the papers to verify that they can trust this implementation with far less overall effort than it would take them to write any equivalence implementation.
+
+As of today, the proceeding list is aspirational. When the exhaustive tests are written, I will invite peer review and possibly offer a nominal bug bounty (which would be a folly I would surely come to regret). 
+
+### Cluster Replication With Paxos for the Java Virtual Machine
+
+The full long-form essay version is at the wiki post [Cluster Replication With Paxos for the Java Virtual Machine](https://github.com/trex-paxos/trex-paxos-jvm/wiki) for the full description of this implementation of [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf). If you need clarification on something written here and you want a long explanation, refer to that extended essay version. 
 
 A common misconception is failing to recognize that Paxos is inherently Multi-Paxos. As Lamport states in "Paxos Made Simple" (p. 10):
 
@@ -29,8 +35,6 @@ For example, in a key-value store, commands might be `put(k,v)`, `get(k)` or `re
 The challenge is ensuring the consistency of the command stream across all servers when messages are lost and servers crash. 
 
 ### The Paxos Protocol 
-
-Checkout the wiki post [Cluster Replication With Paxos for the Java Virtual Machine](https://github.com/trex-paxos/trex-paxos-jvm/wiki) for the full description of this implementation of [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf).
 
 We must fix the same commands into the same command log stream index, known as a log slot, at each server: 
 
