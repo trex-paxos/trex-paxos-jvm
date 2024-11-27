@@ -47,7 +47,7 @@ We must fix the same commands into the same command log stream index, known as a
   * V: proposed command/value
 * Upon a majority positive response to any `accept` message the value held in that the slot is fixed by the algorithm and will not change. 
 
-Whenever a node receives a message with a higher `N` that it replies to positively, it has made a promise to reject any further messages that have a lower `N`. 
+Whenever a node receives an `accept` message with a higher `N` that it replies to positively, it has promised to reject any further messages with a lower `N`. Yes, you read that correctly. You expected me to talk about `prepare` messages leading to a promise, yet I led with the little-known subtlety that Lamport only talks about in one video on YouTube. You now know the one detail that Lamport said was left out of the 2001 paper but was not left out of his formal TLA+ specification of the algorithm. I have intentionally reversed my description of talking about the `accept` first. That is how any such complex topic should be taught to engineers. First, describe the steady-state mode. Then, explain the crash recovery modes. Finally, explain the math that proves it's all sound. I will skip the math, as you can read the paper for that. 
 
 As Lamport specifies the proposal number on (p. 8):
 
@@ -65,12 +65,12 @@ On leader election (p. 7):
 
 The novelty of Paxos was that it did not require real-time clocks. This implementation uses random timeouts: 
 
-1. Leader sends `prepare(N,S)` for slots not known to be fixed
+1. Any leader sends `prepare(N,S)` for slots not known to be fixed
 2. Nodes respond with promise messages containing any uncommitted `{N,V}` pairs at that slot `S`
-3. Leader selects the `V` that was with the highest `N` value from a majority of responses
-4. Leader sends fresh `accept(S,N,V)` messages with selected commands using its own `N`
+3. The leader selects the `V` that was with the highest `N` value from a majority of responses
+4. the leader sends fresh `accept(S,N,V)` messages with selected commands using its own `N`
 
-Again, whenever a node receives a message with a higher `N` that it replies to positively, it has made a promise to reject any further messages that have a lower `N`. 
+Again, whenever a node receives either a `prepare` or `accept` message  protocol message with a higher `N` that it replies to positively, it has promised to reject any further protocol messages with a lower `N`. This 
 
 Whatever value at a given slot is held by a majority of nodes it can not not change value. The leader listens to the response messages of followers and learns which value has been fixed. It can then send a short `commit(S,N)` message to let the other nodes know. This is not covered in the original papers but is a standard optimisation known as a Paxos "phase 3" message. We do not need to send it in a separate network packet. It can piggyback at the front of the network packet of the next `accept` message. 
 
