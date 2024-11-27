@@ -13,6 +13,7 @@ The description below explains the algorithm's invariants and the message protoc
 3. Provide sufficient detail around the "learning" messages used by this implementation to understand that they are minimal and do not harm correctness.
 4. Provide sufficient detail to write brute force tests that cover the entire library of messages and all invariants of this implementation.
 5. Provide enough documentation so that someone can carefully study the code, the tests, and the papers to verify that they can trust this implementation with far less overall effort than it would take them to write any equivalence implementation.
+6. Clarify that writing distributed services is complex and how using this library can help. 
 
 As of today, the proceeding list is aspirational. When the exhaustive tests are written, I will invite peer review and possibly offer a nominal bug bounty (which would be a folly I would surely come to regret). 
 
