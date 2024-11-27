@@ -41,13 +41,19 @@ We must fix the same commands into the same command log stream index, known as a
 
 * Commands (aka values) are replicated as byte arrays (supporting JSON, protobuf, Avro)
 * Each command is assigned to a sequential log index (slot)
-* Leaders propose commands using `accept(S,N,V)` where:
+* Once in a steady state, elected leaders send a stream of commands using `accept(S,N,V)` messages where:
   * S: logical log index/slot
   * N: proposal number unique to a leader
   * V: proposed command/value
-* Upon a majority positive response to any `accept` message the value held in that the slot is fixed by the algorithm and will not change. 
+* Upon a majority positive response to any `accept` message, the algorithm ensures the value in the slot will not change. 
 
-Whenever a node receives an `accept` message with a higher `N` that it replies to positively, it has promised to reject any further messages with a lower `N`. Yes, you read that correctly. You expected me to talk about `prepare` messages leading to a promise, yet I led with the little-known subtlety that Lamport only talks about in one video on YouTube. You now know the one detail that Lamport said was left out of the 2001 paper but was not left out of his formal TLA+ specification of the algorithm. I have intentionally reversed my description of talking about the `accept` first. That is how any such complex topic should be taught to engineers. First, describe the steady-state mode. Then, explain the crash recovery modes. Finally, explain the math that proves it's all sound. I will skip the math, as you can read the paper for that. 
+Nodes promise to reject protocol messages associated with a number lower than the last protocol message that they accepted. This means each node stores the highest number it has previously positively responded to. Did you expect me to first discuss `prepare` messages leading to a promise? I have intentionally avoided explaining the algorithm in the traditional order. I am presenting the topic in a way that is natural to engineers rather than the way that is natural to a mathematician. 
+
+If you want to teach this subject, describe the steady-state mode first. Then, explain the crash recovery modes. Finally, explain the math that proves it's all sound. I will skip the math, as you can read the paper for that. 
+
+Did it feel wrong that I lead with the little-known subtlety that Lamport only talks about in one video on YouTube? You now know the one detail that Lamport said was left out of the 2001 paper but was not left out of his formal TLA+ specification of the algorithm. 
+
+I have intentionally avoided explaining the algorithm in the traditional started my  my description of talking about the `accept` first. I am deliberately making someting complex easier to understand by describing the steady state mode first,  complex topic should be taught to engineers. 
 
 As Lamport specifies the proposal number on (p. 8):
 
