@@ -4,7 +4,7 @@ This is a work in progress, as more exhaustive tests will be written. At this po
 
 ### Introduction
 
-This library implements Lamport's Paxos protocol for cluster replication, as described in Lamport's 2001 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf). While distributed systems are inherently complex, the core Paxos algorithm is mechanically straightforward when adequately understood. The algorithm and this implementation can achieve consistency across a cluster of nodes using the mathematical minimum of message exchanges. This is actually achieved without the need for external leader election services. The net result is a compact and embeddable strong consistency library designed to replicate any application across a cluster of servers. 
+This library implements Lamport's Paxos protocol for cluster replication, as described in Lamport's 2001 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf). While distributed systems are inherently complex, the core Paxos algorithm is mechanically straightforward when adequately understood. The algorithm and this implementation can achieve consistency across a cluster of nodes using the mathematical minimum number of message exchanges. This is achieved without the need for external leader election services. The net result is an embeddable strong consistency library that can replicate any application state across a cluster of servers. 
 
 The description below explains the algorithm's invariants and the message protocol sufficiently to verify that this implementation is sound. The aim of this documentation is to: 
 
