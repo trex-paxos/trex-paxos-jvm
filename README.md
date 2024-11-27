@@ -1,10 +1,18 @@
 ## Trex2: Paxos Algorithm Strong Consistency for state replication on the Java JVM
 
-This is a work in progress as more tests are to be written. At this point it is not recommended for production use.
+This is a work in progress, as more exhaustive tests will be written. At this point, it is not recommended for production use. A release candidate will be made when the exhaustive tests mentioned in this readme are implemented. 
 
 ### Introduction
 
-This library implements Lamport's Paxos protocol for cluster replication, as described in Lamport's 2001 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf). While distributed systems are inherently complex, the core Paxos algorithm is mechanically straightforward when adequately understood. This implementation achieves consistency with the mathematical minimum of message exchanges without requiring external leader election services. 
+This library implements Lamport's Paxos protocol for cluster replication, as described in Lamport's 2001 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf). While distributed systems are inherently complex, the core Paxos algorithm is mechanically straightforward when adequately understood. The algorithm and this implementation can achieve consistency across a cluster of nodes using the mathematical minimum of message exchanges. This is actually achieved without the need for external leader election services. The net result is a compact and embeddable strong consistency library designed to replicate any application across a cluster of servers. 
+
+The description below explains the algorithm's invariants and the message protocol sufficiently to verify that this implementation is sound. The aim of this documentation is to: 
+
+1. Provide sufficient detail about the invariants described in the original paper to transcribe them into rigorous tests.
+2. Clarify that the approach taken in this implementation is based on a careful and thorough reading of the original papers. 
+3. Provide sufficient detail around the "learning" messages used by this implementation to understand that they are minimal and do not harm correctness.
+4. Provide sufficient detail to write brute force tests that cover the entire library of messages and all invariants of this implementation.
+5. 
 
 A common misconception is failing to recognize that Paxos is inherently Multi-Paxos. As Lamport states in "Paxos Made Simple" (p. 10):
 
