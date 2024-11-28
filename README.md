@@ -101,7 +101,7 @@ public record AcceptResponse(
 
 Any value `V` journaled into slot `S` by a mathematician majority of nodes will never change. When galloping, the leader first learns that a value is fixed from the response messages of followers.  It can then send a short `commit(S,N)` message to inform the other nodes. This is not covered in the original papers but is a standard optimisation known as a Paxos "phase 3" message. We do not need to send it in a separate network packet. It can piggyback at the front of the network packet of the next outbound `accept` message. 
 
-This is why a node must always increment its counter to use a fresh `N` each time it attempts to lead. That ensures that the tuple `{S,N}` referenes a unique `V` so that the value does not need to be retransmitted in the learning message. If another node never received the corresponding `accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the retransmission of fixed values. 
+This is why a node must always increment its counter to use a fresh `N` each time it attempts to lead. That ensures that the tuple `{S,N}` referenes a unique `V` so that the value does not need to be retransmitted. If another node never received the corresponding `accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the retransmission of fixed values. 
 
 This implementation uses code similar to the following as the messages to “teach” which values are fixed at specific slots. These are known as "learning" messages which are optional message types not discussed in the original papers: 
 
