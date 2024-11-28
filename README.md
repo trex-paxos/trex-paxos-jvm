@@ -103,7 +103,7 @@ Any value `V` journaled into slot `S` by a mathematician majority of nodes will 
 
 This is why a node must always increment its counter to use a fresh `N` each time it attempts to lead. That ensures that the tuple `{S,N}` referenes a unique `V` so that the value does not need to be retransmitted in the learning message. If another node never received the corresponding `accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the retransmission of fixed values. 
 
-This implementation uses code similar to the following as the messages to learn which values are fixed at specific slots. These are known as "learning" messages: 
+This implementation uses code similar to the following as the messages to “teach” which values are fixed at specific slots. These are known as "learning" messages which are optional message types not discussed in the original papers: 
 
 
 ```java
