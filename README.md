@@ -11,9 +11,9 @@ The description below explains the algorithm's invariants and the message protoc
 1. Provide sufficient detail about the invariants described in the original paper to transcribe them into rigorous tests.
 2. Clarify that the approach taken in this implementation is based on a careful and thorough reading of the original papers. 
 3. Provide sufficient detail around the "learning" messages used by this implementation to understand that they are minimal and do not harm correctness.
-4. Provide enough documentation so that someone can carefully study the code, the tests, and the papers to verify this implementation with far less overall effort than it would take them to write any equivalence implementation.
+4. Provide enough documentation so that someone can carefully study the code, the tests, and the papers to verify this implementation with far less overall effort than it would take them to write any equivalent implementation.
 
-As of today, the proceeding list is aspirational. When the exhaustive tests are written, I will invite peer review and possibly offer a nominal bug bounty (which would be a folly I would surely come to regret instantly). 
+As of today, the proceeding list is aspirational. When the exhaustive tests are written, I will invite peer review and possibly offer a nominal bug bounty (which would be a folly I would surely come to instantly regret). 
 
 ### Cluster Replication With Paxos
 
