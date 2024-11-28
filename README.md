@@ -53,7 +53,7 @@ The core algorithm uses only two protocol messages, `prepare(_,N,)` and `accept(
 
 If you have been taught Paxos before, you may be surprised to learn that nodes must make promises to both message types. Lamport talks about this fact in a video lecture. He describes it as the only ambiguity in his 2001 paper Paxos Made Simple. He explains that this detail is included in his formal TLA+ specification of the Paxos Algorithm. 
 
-The number `N` must be unique to a given server for the algorithm to be correct. Lamport writes (p. 8):
+The number `N` must be unique to a given node for the algorithm to be correct. Lamport writes (p. 8):
 
 > Different proposers choose their numbers from disjoint sets of numbers, so two different proposers never issue a proposal with the same number.
 
