@@ -147,8 +147,6 @@ public record Prepare( long logIndex,
 
 public record PrepareResponse(
     long logIndex,
-    BallotNumber number,
-    boolean vote,
     Optional<Accept> highestUncommitted ) {}
 ```
 
@@ -171,6 +169,31 @@ public interface Journal {
 The progress of each node is its highest promised `N` and its highest committed slot `S`. The command values are journaled to a given slot index. Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync ()` method must first flush any commands into their slots and only then flush the `progress`. 
 
 The above algorithm has a small mechanical footprint. It is a set of rules that imply a handful of inequality checks. The entire state space of a distributed system is hard to reason about and test. There are a near-infinite number of messages that could be sent. Yet the set of messages that may alter the progress of a node or cause it to commit is pretty small. This implies we can use a brute-force property testing framework to validate that the code correctly implements the protocol documented in the paper. 
+
+It is important to note that the examples above are the minimum information that a node may transmit. It is entirely acceptable that messages carry more information. This is not a violation of the algorithm as long as the algorithm's invariants are not violated. Transmitting additional information gives the following benefits:
+
+1. Leaders can learn from additional information added onto messages the maximum range of slots any prior leader has attempted to fix. That allows a new leader to move into the steady state galloping mode.
+2. Leaders can learn why they cannot lead, such as using a number much lower than any prior leader or having a lower committed index than another node in the cluster.
+
+It is entirely acceptable to add any information you choose into any message as long as you do not violate the protocol's invariants. This implementation uses the following invariants which apply to each node in the cluster: 
+
+1. The committed index increases sequentially (hence, the up-call of `{S,V}` tuples must be sequential). 
+2. The promise number only increases (yet it may jump forward).
+3. The promised ballot number can only increase.
+4. The promised ballot number can only change when processing a `prepare` or `accept` message.
+5. The committed index can only change when a leader sees a majority `AcceptReponse` message, a follower node sees a `commit` message, or any node learns about a fixed message due to a `CatchupResponse` message.
+
+There are some other trivial invariants; each node should only issue a response message to the corresponding request message. 
+
+The algorithm uses only inequalities, not absolute values or absolute offsets:
+
+* It works similarly for three, five or seven node clusters. This means that the actual node numbers are immaterial; only whether a node number is less than, equal to, or greater than, the current node number.
+* Likewise, it does not matter what the actual value of any specific number is in any specific protocl message. It only matters if it is less than, equal to, or greater than the current promise.
+* A slot in the journal of a node may contain either no value or some value.
+* Each node can be in only one of three states: a follower node, a leader galloping in the steady state node, or a timed-out node attempting to lead by running the recovery protocol.
+* There are only two protocol messages, two protocol response messages, two learning messages, and one message to request retransmission.
+
+That is a relatively small set of test permutations to brute force. 
 
 TO BE CONTINUED
 
