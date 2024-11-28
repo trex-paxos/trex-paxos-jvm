@@ -4,22 +4,20 @@ This is a work in progress, as more exhaustive tests will be written. At this po
 
 ### Introduction
 
-This library implements Lamport's Paxos protocol for cluster replication, as described in Lamport's 2001 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf). While distributed systems are inherently complex, the core Paxos algorithm is mechanically straightforward when adequately understood. The algorithm and this implementation can achieve consistency across a cluster of nodes using the mathematical minimum number of message exchanges. This is achieved without the need for external leader election services. The net result is an embeddable strong consistency library that can replicate any application state across a cluster of servers. 
+This library implements Lamport's Paxos protocol for cluster replication, as described in Lamport's 2001 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf). While distributed systems are inherently complex, the core Paxos algorithm is mechanically straightforward when adequately understood. It is so simple that a well-written implementation can define the invariants as properties and then use a brute-force approach to search for bugs. 
 
 The description below explains the algorithm's invariants and the message protocol sufficiently to verify that this implementation is sound. The ambition of this documentation is to: 
 
 1. Provide sufficient detail about the invariants described in the original paper to transcribe them into rigorous tests.
 2. Clarify that the approach taken in this implementation is based on a careful and thorough reading of the original papers. 
 3. Provide sufficient detail around the "learning" messages used by this implementation to understand that they are minimal and do not harm correctness.
-4. Provide sufficient detail to write brute force tests that cover the entire library of messages and all invariants of this implementation.
-5. Provide enough documentation so that someone can carefully study the code, the tests, and the papers to verify that they can trust this implementation with far less overall effort than it would take them to write any equivalence implementation.
-6. Clarify that writing distributed services is complex and how using this library can help. 
+4. Provide sufficient detail to write brute-force tests that cover the entire library of messages and all invariants of this implementation.
+5. Provide enough documentation so that someone can carefully study the code, the tests, and the papers to verify this implementation with far less overall effort than it would take them to write any equivalence implementation.
+6. Clarify that writing distributed services is inherently complex and explain how using this library may help. 
 
-As of today, the proceeding list is aspirational. When the exhaustive tests are written, I will invite peer review and possibly offer a nominal bug bounty (which would be a folly I would surely come to regret). 
+As of today, the proceeding list is aspirational. When the exhaustive tests are written, I will invite peer review and possibly offer a nominal bug bounty (which would be a folly I would surely come to regret instantly). 
 
 ### Cluster Replication With Paxos for the Java Virtual Machine
-
-The full long-form essay version is at the wiki post [Cluster Replication With Paxos for the Java Virtual Machine](https://github.com/trex-paxos/trex-paxos-jvm/wiki) for the full description of this implementation of [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf). If you need clarification on something written here and you want a long explanation, refer to that extended essay version. 
 
 A common misconception is failing to recognize that Paxos is inherently Multi-Paxos. As Lamport states in "Paxos Made Simple" (p. 10):
 
@@ -27,7 +25,7 @@ A common misconception is failing to recognize that Paxos is inherently Multi-Pa
 
 This enables efficient streaming of only `accept` messages until a leader crashes or becomes network isolated. 
 
-To replicate the state of any server we simply need to apply the same stream of commands at each server in the same order. The paper states (p. 8):
+To replicate the state of any service, we need to apply the same stream of commands to each server in the same order. The paper states (p. 8):
 
 > A simple way to implement a distributed system is as a collection of clients that issue commands to a central server. The server can be described as a deterministic state machine that performs client commands in some sequence. The state machine has a current state; it performs a step by taking as input a command and producing an output and a new state.
 
@@ -35,19 +33,25 @@ For example, in a key-value store, commands might be `put(k,v)`, `get(k)` or `re
 
 The challenge is ensuring the consistency of the command stream across all servers when messages are lost and servers crash. 
 
-### The Paxos Protocol 
+### The Paxos Protocol
 
-We must fix the same commands into the same command log stream index, known as a log slot, at each server: 
+The algorithm uses only two messages, `prepare` and `accept`. I will explain the algorithm in reverse order. It is a pedagogical blunder to introduce the algorithm to engineers in the order you would write a mathematical proof of correctness. This description will explain it in the following order: 
+
+* First, explain the steady state of the algorithm, which uses only `accept` messages.
+* Second, explain how servers may learn that values have been fixed efficiently.
+* Third, explain the leader take-over protocol.
+
+The objective is to fix the same command value into the same command log stream index, known as a log slot, at each server. When the network is healthy and servers have undertaken crash recovery, the algorithm settles into the following steady state: 
 
 * Commands (aka values) are replicated as byte arrays (supporting JSON, protobuf, Avro)
-* Each command is assigned to a sequential log index (slot)
-* Once in a steady state, elected leaders send a stream of commands using `accept(S,N,V)` messages where:
+* The current leader assigns each command to a sequential log index (slot). 
+* In the happy path steady state, an uncontested leader sends a stream of commands using `accept(S,N,V)` messages where:
   * S: logical log index/slot
   * N: proposal number unique to a leader
   * V: proposed command/value
-* Upon a majority positive response to any `accept` message, the algorithm ensures the value in the slot will not change. 
+* Upon a majority positive response to each `accept` message, the algorithm ensures the value in the slot will not change. 
 
-Nodes promise to reject protocol messages associated with a number lower than the last protocol message that they accepted. This means each node stores the highest number it has previously positively responded to. Did you expect me to first discuss `prepare` messages leading to a promise? I have intentionally avoided explaining the algorithm in the traditional order. I am presenting the topic in a way that is natural to engineers rather than the way that is natural to a mathematician. 
+Nodes promise to reject protocol messages associated with a number lower than the last protocol message that they accepted. This means each node stores the highest number it has previously positively responded to. Did you expect me to first discuss `prepare` messages leading to a promise? 
 
 If you want to teach this subject, describe the steady-state mode first. Then, explain the crash recovery modes. Finally, explain the math that proves it's all sound. I will skip the math, as you can read the paper for that. 
 
