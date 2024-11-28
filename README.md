@@ -69,7 +69,7 @@ Nodes never recycle their numbers. They increment their counter each time they a
 
 ### Second: Steady State Galloping 
 
-The objective is to fix the same command value `V` into the same command log stream index `S`, known as a log slot, at each server. When the network is healthy and servers have undertaken crash recovery, an uncontested leader sends a stream of commands using `accept(S,N,V)` messages where:
+The objective is to fix the same command value `V` into the same command log stream index `S`, known as a log slot, at each node in the cluster. When the network is healthy and servers have undertaken crash recovery, an uncontested leader sends a stream of commands using `accept(S,N,V)` messages where:
 
 * `V` is a command value. 
 * `S` is a log index slot the leader assigns to the command value. 
