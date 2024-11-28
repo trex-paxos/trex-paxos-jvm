@@ -4,70 +4,125 @@ This is a work in progress, as more exhaustive tests will be written. At this po
 
 ### Introduction
 
-This library implements Lamport's Paxos protocol for cluster replication, as described in Lamport's 2001 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf). While distributed systems are inherently complex, the core Paxos algorithm is mechanically straightforward when adequately understood. It is so simple that a well-written implementation can define the invariants as properties and then use a brute-force approach to search for bugs. 
+This library implements Lamport's Paxos protocol for cluster replication, as described in Lamport's 2001 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf). While distributed systems are inherently complex, the core Paxos algorithm is mechanically straightforward when adequately understood. It is simple enough that a well-written implementation can define the invariants as properties and then use a brute-force approach to search for bugs. 
 
 The description below explains the algorithm's invariants and the message protocol sufficiently to verify that this implementation is sound. The ambition of this documentation is to: 
 
 1. Provide sufficient detail about the invariants described in the original paper to transcribe them into rigorous tests.
 2. Clarify that the approach taken in this implementation is based on a careful and thorough reading of the original papers. 
 3. Provide sufficient detail around the "learning" messages used by this implementation to understand that they are minimal and do not harm correctness.
-4. Provide sufficient detail to write brute-force tests that cover the entire library of messages and all invariants of this implementation.
-5. Provide enough documentation so that someone can carefully study the code, the tests, and the papers to verify this implementation with far less overall effort than it would take them to write any equivalence implementation.
-6. Clarify that writing distributed services is inherently complex and explain how using this library may help. 
+4. Provide enough documentation so that someone can carefully study the code, the tests, and the papers to verify this implementation with far less overall effort than it would take them to write any equivalence implementation.
 
 As of today, the proceeding list is aspirational. When the exhaustive tests are written, I will invite peer review and possibly offer a nominal bug bounty (which would be a folly I would surely come to regret instantly). 
 
-### Cluster Replication With Paxos for the Java Virtual Machine
-
-A common misconception is failing to recognize that Paxos is inherently Multi-Paxos. As Lamport states in "Paxos Made Simple" (p. 10):
-
-> A newly chosen leader executes phase 1 for infinitely many instances of the consensus algorithm. Using the same proposal number for all instances, it can do this by sending a single reasonably short message to the other servers.
-
-This enables efficient streaming of only `accept` messages until a leader crashes or becomes network isolated. 
+### Cluster Replication With Paxos
 
 To replicate the state of any service, we need to apply the same stream of commands to each server in the same order. The paper states (p. 8):
 
 > A simple way to implement a distributed system is as a collection of clients that issue commands to a central server. The server can be described as a deterministic state machine that performs client commands in some sequence. The state machine has a current state; it performs a step by taking as input a command and producing an output and a new state.
 
-For example, in a key-value store, commands might be `put(k,v)`, `get(k)` or `remove(k)` operations. These commands form the "values" that must be applied consistently at each node in the cluster. 
+For example, in a key-value store, commands might be `put(k,v)`, `get(k)` or `remove(k)` operations. These commands form the "values" that must be applied consistently at each server in the cluster. 
 
-The challenge is ensuring the consistency of the command stream across all servers when messages are lost and servers crash. 
-
-### The Paxos Protocol
-
-The algorithm uses only two messages, `prepare` and `accept`. I will explain the algorithm in reverse order. It is a pedagogical blunder to introduce the algorithm to engineers in the order you would write a mathematical proof of correctness. This description will explain it in the following order: 
-
-* First, explain the steady state of the algorithm, which uses only `accept` messages.
-* Second, explain how servers may learn that values have been fixed efficiently.
-* Third, explain the leader take-over protocol.
-
-The objective is to fix the same command value into the same command log stream index, known as a log slot, at each server. When the network is healthy and servers have undertaken crash recovery, the algorithm settles into the following steady state: 
-
-* Commands (aka values) are replicated as byte arrays (supporting JSON, protobuf, Avro)
-* The current leader assigns each command to a sequential log index (slot). 
-* In the happy path steady state, an uncontested leader sends a stream of commands using `accept(S,N,V)` messages where:
-  * S: logical log index/slot
-  * N: proposal number unique to a leader
-  * V: proposed command/value
-* Upon a majority positive response to each `accept` message, the algorithm ensures the value in the slot will not change. 
-
-Nodes promise to reject protocol messages associated with a number lower than the last protocol message that they accepted. This means each node stores the highest number it has previously positively responded to. Did you expect me to first discuss `prepare` messages leading to a promise? 
-
-If you want to teach this subject, describe the steady-state mode first. Then, explain the crash recovery modes. Finally, explain the math that proves it's all sound. I will skip the math, as you can read the paper for that. 
-
-Did it feel wrong that I lead with the little-known subtlety that Lamport only talks about in one video on YouTube? You now know the one detail that Lamport said was left out of the 2001 paper but was not left out of his formal TLA+ specification of the algorithm. 
-
-I have intentionally avoided explaining the algorithm in the traditional started my  my description of talking about the `accept` first. I am deliberately making someting complex easier to understand by describing the steady state mode first,  complex topic should be taught to engineers. 
-
-As Lamport specifies the proposal number on (p. 8):
-
-> Different proposers choose their numbers from disjoint sets of numbers, so two different proposers never issue a proposal with the same number."
-
-This is achieved by encoding the node identifier in each `N`s lower bits.
-
-Lamport explicitly defines leadership (p. 6):
+Lamport explicitly states that Paxos has a leader (p. 6):
 
 > The algorithm chooses a leader, which plays the roles of the distinguished proposer and the distinguished learner.
+
+This means command values are forwarded to the leader, and the leader assigns the order of the command values.
+
+A common misconception is failing to recognize that Paxos is inherently Multi-Paxos. As Lamport states in "Paxos Made Simple" (p. 10):
+
+> A newly chosen leader executes phase 1 for infinitely many instances of the consensus algorithm. Using the same proposal number for all instances, it can do this by sending a single reasonably short message to the other servers.
+
+This enables the algorithm to enter a steady state of streaming only `accept` messages until a leader crashes or becomes network-isolated. Only then are `prepare` messages necessary for simultaneous leader election and crash recovery. 
+
+The description below refers to server processes as "nodes" within a cluster. This helps to disambiguate the code running the algorithm from the physical server or host process. This repository provides a core library with a node class `TrexNode` that is solely responsible for running the core Paxos algorithm. 
+
+### The Paxos Algorithm
+
+It is a pedagogical blunder to introduce the Paxos algorithm to engineers in the order you would write a mathematical proof of it's correctness. This description will explain it in the following order: 
+
+* First, explain that promises apply to both core message types. 
+* Second, explain the steady state of the algorithm, which uses only `accept` messages.
+* Third, explain how servers may learn that values have been fixed efficiently.
+* Fourth, explain the leader take-over protocol, which is the most complex step that uses both `prepare` and `accept` messages.
+* Fifth, define the invariants of this implementation. 
+
+### First: Promises, Promises
+
+The core algorithm uses only two protocol messages, `prepare(_,N,)` and `accept(_,N,_))` where `N` is called a ballot number or a proposal number. Nodes promise to reject protocol messages associated with a lower number than the last `N` they did not reject. This means each node stores the highest `N` it has previously acknowledged.  
+
+If you have been taught Paxos before, you may be surprised to learn that nodes must make promises to both message types. Lamport talks about this fact in a video lecture. He describes it as the only ambiguity in his 2001 paper Paxos Made Simple. He explains that this detail is included in his formal TLA+ specification of the Paxos Algorithm. 
+
+The number `N` must be unique to a given server for the algorithm to be correct. Lamport writes (p. 8):
+
+> Different proposers choose their numbers from disjoint sets of numbers, so two different proposers never issue a proposal with the same number.
+
+This is achieved by encoding the node identifier in each `N`s lower bits. This library uses the following Java record as `N`: 
+
+```java
+public record BallotNumber(int counter, byte nodeIdentifier) implements Comparable<BallotNumber> { ... }
+```
+
+In that record class, the `compareTo` method treats the four-byte counter as having the most significant bits and the single-byte `nodeIndentifier` as having the least significant bits. The cluster operator must ensure they assign unique `nodeIdentifier` values to every node added to the cluster. 
+
+Nodes never recycle their numbers. They increment their counter each time they attempt to lead. 
+
+### Second: Steady State Galloping 
+
+The objective is to fix the same command value `V` into the same command log stream index `S`, known as a log slot, at each server. When the network is healthy and servers have undertaken crash recovery, an uncontested leader sends a stream of commands using `accept(S,N,V)` messages where:
+
+* `V` is a command value. 
+* `S` is a log index slot the leader assigns to the command value. 
+* `N` is a node's unique ballot number. The reason it is called a ballot number will only become apparent when we describe the crash recovery protocol below. 
+
+The value `V` is fixed at slot `S` when a mathematical majority of nodes journal the value `V` into their log. No matter how many leaders attempt to assign a value to the same slot `S`, they will all assign the same `V` using different unique `N` values. How that works is covered in a later section. 
+
+We can call this steady-state galloping, as things move at top speed using a different stride pattern than when walking (or trotting). A leader will self-accept and transmit the message to the other two nodes in a three-node cluster. It only needs one message response to learn that a mathematical majority of nodes in the cluster have accepted the value. That is the minimum number of message exchanges required to ensure that the value `V` is fixed. Better yet, our leader can stream `accept` messages continuously without awaiting a response to each message. 
+
+This library uses a Java record similar to the following as the `accept` message and its  acknowledgement message: 
+
+```java
+public record Command( String id,
+                       byte[] operationBytes){}
+
+public record BallotNumber(int counter, byte nodeIdentifier) {}
+
+public record Accept( long logIndex,
+                      BallotNumber number,
+                      Command command ) {}
+
+public record AcceptResponse(
+    long logIndex,
+    BallotNumber number,
+    boolean vote ){}
+```
+
+### Third: Learning Which Values Are Fixed
+
+Any value `V` journaled into slow `S` by a mathematician majority of nodes will never change. When galloping, the leader first learns that a value is fixed from the response messages of followers.  It can then send a short `commit(S,N)` message to inform the other nodes. This is not covered in the original papers but is a standard optimisation known as a Paxos "phase 3" message. We do not need to send it in a separate network packet. It can piggyback at the front of the network packet of the next outbound `accept` message. 
+
+This is why a node must always increment its counter to use a fresh `N` each time it attempts to lead. That ensures that the tuple `{S,N}` referenes a unique `V` so that the value does not need to be retransmitted in the learning message. If another node never received the corresponding `accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the retransmission of fixed values. 
+
+This implementation uses code similar to the following as the messages to learn which values are fixed at specific slots. These are known as "learning" messages: 
+
+
+```java
+public record Commit(
+    BallotNumber number,
+    long committedLogIndex ) {}
+
+public record Catchup(long highestCommitedIndex ) {}
+
+public record CatchupResponse( List<Command> catchup ) {}
+```
+
+It is important to note that we can use any possible set of learning messages as long as we do not violate the algorithm's invariants. 
+
+When each node learns that the next contiguous slot `s` is fixed, it will up-call the command value `V` to the host application. This will be an application-specific callback that can do whatever the host application desires. The point is that every node will up-call the same command values in the same order. 
+
+Nodes may ignore any messages associated with slots less than or equal to the highest slot index they have learnt to be fixed. Dropping a message is identical to never receiving a message. That does not violate the safety of the Paxos Algorithm, as it ensures safety in the face of lost messages. 
+
+### Fourth: The Leader Takeover Protocol
 
 On leader election (p. 7):
 
@@ -80,13 +135,7 @@ The novelty of Paxos was that it did not require real-time clocks. This implemen
 3. The leader selects the `V` that was with the highest `N` value from a majority of responses
 4. the leader sends fresh `accept(S,N,V)` messages with selected commands using its own `N`
 
-Again, whenever a node receives either a `prepare` or `accept` message  protocol message with a higher `N` that it replies to positively, it has promised to reject any further protocol messages with a lower `N`. This 
-
-Whatever value at a given slot is held by a majority of nodes it can not not change value. The leader listens to the response messages of followers and learns which value has been fixed. It can then send a short `commit(S,N)` message to let the other nodes know. This is not covered in the original papers but is a standard optimisation known as a Paxos "phase 3" message. We do not need to send it in a separate network packet. It can piggyback at the front of the network packet of the next `accept` message. 
-
-When each node learns that slot `s` is fixed, it will  up-call the command value `V` to the host application. This will be an application-specific callback that can do whatever the host application desires. The point is that every node will up-call the same command values in the same order. Nodes will ignore any messages that are less than or equal to the highest slot index it has learnt has been fixed. 
-
-This library uses messages similar to the following code to allow nodes to learn about which commands are fixed in slots:
+Again, whenever a node receives either a `prepare` or `accept` message  protocol message with a higher `N` that it replies to positively, it has promised to reject any further protocol messages with a lower `N`. This library uses code similar to the following for the `prepare` message and its acknowledgement: 
 
 ```java
 public record Prepare( long logIndex,
@@ -97,21 +146,9 @@ public record PrepareResponse(
     BallotNumber number,
     boolean vote,
     Optional<Accept> highestUncommitted ) {}
-
-public record Accept( long logIndex,
-                      BallotNumber number,
-                      Command command ) {}
-
-public record AcceptResponse(
-    long logIndex,
-    BallotNumber number,
-    boolean vote ){}
-
-public record BallotNumber(int counter, byte nodeIdentifier) {}
-
-public record Command( String id,
-                       byte[] operationBytes){}
 ```
+
+## Fifth, The invariants
 
 The state of each node is similar to the following model: 
 
@@ -127,27 +164,11 @@ public interface Journal {
 }
 ```
 
-The progress of each node is it's highest promised `N` and it's highest committed slot `S`. The command values are journaled to a given slot index. Journal writes must be crash-proof (disk flush or equivalent). The `sycn()` method of the journal must first flush any commands into their slots and only then flush the `progress`. 
-
-The final question is what happens when nodes have missed messages. They can request retransmission using a `catchup` message. This implementation uses messages similar to the following code to learn which commands are fixed into which slots:
-
-```java
-public record Commit(
-    BallotNumber number,
-    long committedLogIndex ) {}
-
-public record Catchup(long highestCommitedIndex ) {}
-
-public record CatchupResponse( List<Command> catchup ) {}
-```
-
-It is important to note that additional properties are in the real code. These are used to pass information between nodes. For example; a node trying to lead may not know the full range of slots that a previous leader has possibly fixed a value. One node in any majority does know. So in the `PrepareReponse` messages we add a `higestAcceptedIndex` property. A node that is attempting to load will then learn the maximum range of slows that it must probe with `prepare` messages. 
+The progress of each node is its highest promised `N` and its highest committed slot `S`. The command values are journaled to a given slot index. Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync ()` method must first flush any commands into their slots and only then flush the `progress`. 
 
 The above algorithm has a small mechanical footprint. It is a set of rules that imply a handful of inequality checks. The entire state space of a distributed system is hard to reason about and test. There are a near-infinite number of messages that could be sent. Yet the set of messages that may alter the progress of a node or cause it to commit is pretty small. This implies we can use a brute-force property testing framework to validate that the code correctly implements the protocol documented in the paper. 
 
-There is only one known gotcha that is not clear from the paper. It is evident in Lamport's TLA+ definition of the algorithm. You must increment the promise when seeing either a higher `promise` message or a higher `accept` message. Any given `prepare(S,N)` applies to all higher slots. Due to lost messages, a node might have never seen the original `prepare` message. An `accept` containing a higher `N` proves the original `prepare` message was lost. The node must make a promise to the lost message. Only then is it allowed to process the `accept` message. 
-
-See the wiki for more details. 
+TO BE CONTINUED
 
 ### Project Goals
 
