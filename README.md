@@ -131,11 +131,15 @@ On leader election (p. 7):
 The novelty of Paxos was that it did not require real-time clocks. This implementation uses random timeouts: 
 
 1. Any leader sends `prepare(N,S)` for slots not known to be fixed
-2. Nodes respond with promise messages containing any uncommitted `{N,V}` pairs at that slot `S`
-3. The leader selects the `V` that was with the highest `N` value from a majority of responses
-4. the leader sends fresh `accept(S,N,V)` messages with selected commands using its own `N`
+2. Nodes respond with promise messages containing any uncommitted `{N,V}` tuple at that slot `S`
+3. The leader selects the `V` that was associated with the highest `N` value from a majority of responses
+4. The leader sends fresh `accept(S,N,V)` messages with chosen commands `V` using its own `N`
 
-Again, whenever a node receives either a `prepare` or `accept` message  protocol message with a higher `N` that it replies to positively, it has promised to reject any further protocol messages with a lower `N`. This library uses code similar to the following for the `prepare` message and its acknowledgement: 
+A node might have no value for the specific slot. We can use `Optional<Command>` to cover that case. If a leader sees no values from a majority of nodes, it is free to pick any value. In practice, a new leader won't yet be accepting client commands until it gets to a steady state. So, it will choose a special “no operation” value, which is an empty command. 
+
+Again, whenever a node receives either a `prepare` or `accept` message  protocol message with a higher `N` that it replies to positively, it has promised to reject any further protocol messages with a lower `N`. 
+
+This library uses code similar to the following for the `prepare` message and its acknowledgement: 
 
 ```java
 public record Prepare( long logIndex,
