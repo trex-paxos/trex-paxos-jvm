@@ -51,7 +51,7 @@ It is a pedagogical blunder to introduce the Paxos algorithm to engineers in the
 
 The core algorithm uses only two protocol messages, `prepare(_,N,)` and `accept(_,N,_))` where `N` is called a ballot number or a proposal number. Nodes promise to reject protocol messages associated with a lower number than the last `N` they did not reject. This means each node stores the highest `N` it has previously acknowledged.  
 
-If you have been taught Paxos before, you may be surprised to learn that nodes must make promises to both message types. Lamport talks about this fact in a video lecture. He describes it as the only ambiguity in his 2001 paper Paxos Made Simple. He explains that this detail is included in his formal TLA+ specification of the Paxos Algorithm. 
+If you have studied Paxos before, you may be surprised to learn that nodes must make promises to both message types. Lamport talks about this fact in a video lecture. He describes it as the only ambiguity in his 2001 paper Paxos Made Simple. He explains that this detail is included in his formal TLA+ specification of the Paxos Algorithm. 
 
 The number `N` must be unique to a given node for the algorithm to be correct. Lamport writes (p. 8):
 
