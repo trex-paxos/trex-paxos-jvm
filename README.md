@@ -79,7 +79,7 @@ The value `V` is fixed at slot `S` when a mathematical majority of nodes journal
 
 We can call this steady-state galloping, as things move at top speed using a different stride pattern than when walking (or trotting). A leader will self-accept and transmit the message to the other two nodes in a three-node cluster. It only needs one message response to learn that a mathematical majority of nodes in the cluster have accepted the value. That is the minimum number of message exchanges required to ensure that the value `V` is fixed. Better yet, our leader can stream `accept` messages continuously without awaiting a response to each message. 
 
-This library uses a Java record similar to the following as the `accept` message and its  acknowledgement message: 
+This library uses code similar to the following as the `accept` message and its acknowledgement: 
 
 ```java
 public record Command( String id,
@@ -99,7 +99,7 @@ public record AcceptResponse(
 
 ### Third: Learning Which Values Are Fixed
 
-Any value `V` journaled into slow `S` by a mathematician majority of nodes will never change. When galloping, the leader first learns that a value is fixed from the response messages of followers.  It can then send a short `commit(S,N)` message to inform the other nodes. This is not covered in the original papers but is a standard optimisation known as a Paxos "phase 3" message. We do not need to send it in a separate network packet. It can piggyback at the front of the network packet of the next outbound `accept` message. 
+Any value `V` journaled into slot `S` by a mathematician majority of nodes will never change. When galloping, the leader first learns that a value is fixed from the response messages of followers.  It can then send a short `commit(S,N)` message to inform the other nodes. This is not covered in the original papers but is a standard optimisation known as a Paxos "phase 3" message. We do not need to send it in a separate network packet. It can piggyback at the front of the network packet of the next outbound `accept` message. 
 
 This is why a node must always increment its counter to use a fresh `N` each time it attempts to lead. That ensures that the tuple `{S,N}` referenes a unique `V` so that the value does not need to be retransmitted in the learning message. If another node never received the corresponding `accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the retransmission of fixed values. 
 
