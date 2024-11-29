@@ -103,7 +103,7 @@ Any value `V` journaled into slot `S` by a mathematician majority of nodes will 
 
 Leaders must always increment their counter to create a fresh `N` each time they attempt to lead. That ensures that each `commit(S,N)` refers to a unique `accept(S,N,VV)` message. If another node never received the corresponding `accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the retransmission of fixed values. 
 
-This implementation uses code similar to the following to enable nodes to learn which values have been fixed: : 
+This implementation uses code similar to the following to enable nodes to learn which values have been fixed:
 
 ```java
 public record Commit(
@@ -112,7 +112,7 @@ public record Commit(
 
 public record Catchup(long highestCommitedIndex ) {}
 
-public record CatchupResponse( List<Command> catchup ) {}
+public record CatchupResponse( List<Accept> catchup ) {}
 ```
 
 It is important to note that we can use any possible set of learning messages as long as we do not violate the algorithm's invariants. 
