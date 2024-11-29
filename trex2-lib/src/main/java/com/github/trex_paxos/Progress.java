@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.trex_paxos.msg;
+package com.github.trex_paxos;
+
+import com.github.trex_paxos.msg.BallotNumber;
 
 /**
  * Progress is a record of the highest ballot number promised or seen on an accepted message which must be crash durable

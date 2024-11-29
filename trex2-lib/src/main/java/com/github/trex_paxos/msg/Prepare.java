@@ -16,12 +16,6 @@
 package com.github.trex_paxos.msg;
 
 /// The Prepare message is the first message in the Paxos protocol named in the paper Paxos Made Simple by Leslie Lamport.
-/// Note that the papers very clearly states:
-///
-/// > A newly chosen leader executes phase 1 for infinitely many instances
-/// of the consensus algorithm ... Using the same proposal number for
-/// all instances, it can do this by sending a single reasonably short message
-/// to the other servers.
 ///
 /// @param from     The node identifier of the proposer used to route the message and self-accept.
 /// @param logIndex The log index slot in the log of total ordering of fixed commands.

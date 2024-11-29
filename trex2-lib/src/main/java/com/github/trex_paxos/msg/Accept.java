@@ -17,7 +17,7 @@ package com.github.trex_paxos.msg;
 
 /// The Accept message is the second message in the Paxos protocol named in the paper Paxos Made Simple by Leslie Lamport.
 ///
-/// @param from     The node identifier of the proposer used to route the message and self-accept.
+/// @param from see {@link TrexMessage}
 /// @param logIndex The log index slot in the log of total ordering of fixed commands.
 /// @param number   The ballot number of the proposer which will be the term of the node attempting to recover or lead.
 /// @param command  The command to be accepted by the acceptor. This may be a NOOP or a client command.
@@ -26,13 +26,7 @@ public record Accept(byte from,
                      BallotNumber number,
                      AbstractCommand command) implements TrexMessage, BroadcastMessage, PaxosMessage {
 
-  public int compareTo(Accept accept) {
-      if (logIndex < accept.logIndex) {
-        return -1;
-      } else if (logIndex > accept.logIndex) {
-        return 1;
-      } else {
-        return number.compareTo(accept.number);
-      }
-    }
+  public int compareNumbers(Accept accept) {
+    return number.compareTo(accept.number);
+  }
 }

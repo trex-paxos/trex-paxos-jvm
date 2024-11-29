@@ -16,7 +16,8 @@
 package com.github.trex_paxos.msg;
 
 import java.util.Arrays;
-/// A client command to be executed by the state machine. As this library is neutral
+
+/// A client command which is the value we are trying to fixe. As this library is neutral
 /// to the application, the command is completely opaque to the library. The
 /// application is responsible for encoding and decoding the commands from and to byte array.
 ///

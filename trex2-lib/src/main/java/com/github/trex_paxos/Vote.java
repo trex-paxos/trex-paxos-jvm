@@ -19,7 +19,9 @@ import com.github.trex_paxos.msg.BallotNumber;
 
 /// Nodes in a cluster vote for whether an accept message is chosen or not. This object tracks such votes.
 public record Vote(
+    // FIXME spookily intellij says there are no usages of this field, but if i remove it everything breaks
     byte from,
+    // FIXME spookily intellij says there are no usages of this field, but if i remove it everything breaks
     byte to,
     long logIndex,
     boolean vote,

@@ -18,9 +18,9 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.*;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 /// Pickle is a utility class for serializing and deserializing record types.
 /// Java serialization is famously broken but the Java Platform team are working on it.
@@ -77,9 +77,9 @@ public class Pickle {
     dos.writeByte(m.to());
     Pickle.write(m.vote(), dos);
     dos.writeLong(m.highestAcceptedIndex());
-    dos.writeBoolean(m.highestUncommitted().isPresent());
-    if (m.highestUncommitted().isPresent()) {
-      Pickle.write(m.highestUncommitted().get(), dos);
+    dos.writeBoolean(m.journaledAccept().isPresent());
+    if (m.journaledAccept().isPresent()) {
+      Pickle.write(m.journaledAccept().get(), dos);
     }
   }
 
@@ -89,7 +89,7 @@ public class Pickle {
     Vote vote = Pickle.readVote(dis);
     long highestCommittedIndex = dis.readLong();
     Optional<Accept> highestUncommitted = dis.readBoolean() ? Optional.of(Pickle.readAccept(dis)) : Optional.empty();
-    return new PrepareResponse(from, to, vote, highestCommittedIndex, highestUncommitted);
+    return new PrepareResponse(from, to, vote, highestUncommitted, highestCommittedIndex);
   }
 
 
@@ -141,20 +141,20 @@ public class Pickle {
     dos.writeByte(m.from());
     dos.writeByte(m.to());
     write(m.vote(), dos);
-    write(m.progress(), dos);
+    dos.writeLong(m.highestCommittedIndex());
   }
 
   public static AcceptResponse readAcceptResponse(DataInputStream dis) throws IOException {
     final var from = dis.readByte();
     final var to = dis.readByte();
     final Vote vote = readVote(dis);
-    final Progress progress = readProgress(dis);
-    return new AcceptResponse(from, to, vote, progress);
+    final long highestCommittedIndex = dis.readLong();
+    return new AcceptResponse(from, to, vote, highestCommittedIndex);
   }
 
   public static Vote readVote(DataInputStream dis) throws IOException {
-    final var from = dis.readByte();
-    final var to = dis.readByte();
+    byte from = dis.readByte();
+    byte to = dis.readByte();
     long logIndex = dis.readLong();
     boolean vote = dis.readBoolean();
     BallotNumber number = readBallotNumber(dis);
@@ -234,7 +234,7 @@ public class Pickle {
 
   public static void write(Commit m, DataOutputStream dos) throws IOException {
     dos.writeByte(m.from());
-    dos.writeLong(m.committedLogIndex());
+    dos.writeLong(m.fixedLogIndex());
     write(m.number(), dos);
   }
 
@@ -243,7 +243,7 @@ public class Pickle {
     final var from = dis.readByte();
     final var committedLogIndex = dis.readLong();
     final var number = readBallotNumber(dis);
-    return new Commit(from, number, committedLogIndex);
+    return new Commit(from, committedLogIndex, number);
   }
 
   public static Prepare readPrepare(DataInputStream dataInputStream) throws IOException {
@@ -258,4 +258,76 @@ public class Pickle {
     dataOutputStream.writeLong(p.logIndex());
     write(p.number(), dataOutputStream);
   }
+
+  public enum MessageType {
+    Prepare(1),
+    PrepareResponse(2),
+    Accept(3),
+    AcceptResponse(4),
+    Commit(5),
+    Catchup(6),
+    CatchupResponse(7);
+
+    private final byte id;
+
+    MessageType(int id) {
+      this.id = (byte) id;
+    }
+
+    public Byte id() {
+      return id;
+    }
+
+    static final Map<Byte, MessageType> ORDINAL_TO_TYPE_MAP = Arrays.stream(values())
+        .collect(Collectors.toMap(MessageType::id, Function.identity()));
+
+    public static MessageType fromMessageId(byte id) {
+      return ORDINAL_TO_TYPE_MAP.get(id);
+    }
+
+    static final Map<Byte, Class<? extends TrexMessage>> ORDINAL_TO_CLASS_MAP = Map.of(
+        (byte) 0, Prepare.class,
+        (byte) 1, PrepareResponse.class,
+        (byte) 2, com.github.trex_paxos.msg.Accept.class,
+        (byte) 3, com.github.trex_paxos.msg.AcceptResponse.class,
+        (byte) 4, com.github.trex_paxos.msg.Commit.class,
+        (byte) 5, com.github.trex_paxos.msg.Catchup.class
+    );
+
+    /**
+     * Host applications may want to use this map to convert ordinal values to message classes for custom deserialization.
+     */
+    @SuppressWarnings("unused")
+    public static Class<? extends TrexMessage> classFromMessageId(byte id) {
+      return ORDINAL_TO_CLASS_MAP.get(id);
+    }
+
+    static final Map<Class<? extends TrexMessage>, Byte> CLASS_TO_ORDINAL_MAP =
+        ORDINAL_TO_CLASS_MAP.entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
+
+    /**
+     * Host applications may want to use this map to convert message classes to ordinal values for custom serialization.
+     */
+    @SuppressWarnings("unused")
+    public static byte idFromMessageTypeClass(Class<? extends TrexMessage> classType) {
+      return CLASS_TO_ORDINAL_MAP.get(classType);
+    }
+
+    /**
+     * Host applications may want to use this map to convert ordinal values to message types for custom serialization.
+     */
+    public static MessageType fromPaxosMessage(TrexMessage trexMessage) {
+      return switch (trexMessage) {
+        case Prepare _ -> Prepare;
+        case PrepareResponse _ -> PrepareResponse;
+        case Accept _ -> Accept;
+        case AcceptResponse _ -> AcceptResponse;
+        case Commit _ -> Commit;
+        case Catchup _ -> Catchup;
+        case CatchupResponse _ -> CatchupResponse;
+      };
+    }
+  }
+
 }

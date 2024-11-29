@@ -208,7 +208,7 @@ public class TrexNode {
       case AcceptResponse acceptResponse -> {
         if (FOLLOW != role && acceptResponse.to() == nodeIdentifier) {
           // An isolated leader rejoining must back down
-          if (LEAD == role && acceptResponse.progress().highestCommittedIndex() > progress.highestCommittedIndex()) {
+          if (LEAD == role && acceptResponse.highestCommittedIndex() > progress.highestCommittedIndex()) {
             backdown(messages);
           } else {
             // Both Leader and Recoverer can receive AcceptResponses
@@ -221,7 +221,7 @@ public class TrexNode {
           processPrepareResponse(prepareResponse, messages);
         }
       }
-      case Commit(final var commitFrom, final var commitNumber, final var commitSlot) -> {
+      case Commit(final var commitFrom, final var commitSlot, final var commitNumber) -> {
         // TODO is it possible to safely do some deduction here to avoid the catchup?
         if (commitSlot == highestCommitted() + 1) {
           // we must have the correct number at the slot
@@ -247,8 +247,6 @@ public class TrexNode {
         }
       }
       case Catchup(final byte replyTo, _, final var otherCommitIndex, final var otherHighestPromised) -> {
-        final var currentCommitMessage = currentCommitMessage();
-
         // load the slots they do not know that they are missing
         final var missingAccepts = LongStream.rangeClosed(otherCommitIndex + 1, progress.highestCommittedIndex())
             .mapToObj(journal::loadAccept)
@@ -413,8 +411,10 @@ public class TrexNode {
   final AcceptResponse ack(Accept accept) {
     return new AcceptResponse(
         nodeIdentifier, accept.number().nodeIdentifier(),
-        new Vote(nodeIdentifier, accept.number().nodeIdentifier(), accept.logIndex(), true, accept.number()),
-        progress);
+        new Vote(nodeIdentifier,
+            accept.number().nodeIdentifier(),
+            accept.logIndex(), true, accept.number()),
+        progress.highestCommittedIndex());
   }
 
   /**
@@ -424,9 +424,14 @@ public class TrexNode {
    */
   final AcceptResponse nack(Accept accept) {
     return new AcceptResponse(
-        nodeIdentifier, accept.number().nodeIdentifier(),
-        new Vote(nodeIdentifier, accept.number().nodeIdentifier(), accept.logIndex(), false, accept.number())
-        , progress);
+        nodeIdentifier,
+        accept.number().nodeIdentifier(),
+        new Vote(nodeIdentifier,
+            accept.number().nodeIdentifier(),
+            accept.logIndex(),
+            false,
+            accept.number())
+        , progress.highestCommittedIndex());
   }
 
   /**
@@ -437,8 +442,14 @@ public class TrexNode {
   final PrepareResponse ack(Prepare prepare) {
     return new PrepareResponse(
         nodeIdentifier, prepare.number().nodeIdentifier(),
-        new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), true, prepare.number()),
-        highestAccepted(), journal.loadAccept(prepare.logIndex())
+        new Vote(nodeIdentifier,
+            prepare.number().nodeIdentifier(),
+            prepare.logIndex(),
+            true,
+            prepare.number()),
+        journal.loadAccept(prepare.logIndex()),
+        highestAccepted()
+
     );
   }
 
@@ -450,8 +461,12 @@ public class TrexNode {
   final PrepareResponse nack(Prepare prepare) {
     return new PrepareResponse(
         nodeIdentifier, prepare.number().nodeIdentifier(),
-        new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), false, prepare.number()),
-        highestAccepted(), journal.loadAccept(prepare.logIndex())
+        new Vote(nodeIdentifier,
+            prepare.number().nodeIdentifier(),
+            prepare.logIndex(),
+            false,
+            prepare.number()),
+        journal.loadAccept(prepare.logIndex()), highestAccepted()
     );
   }
 
@@ -528,7 +543,7 @@ public class TrexNode {
   Commit currentCommitMessage() {
     final var highestCommitted = highestCommitted();
     final var commitedAccept = journal.loadAccept(highestCommitted).orElseThrow();
-    return new Commit(nodeIdentifier, commitedAccept.number(), highestCommitted);
+    return new Commit(nodeIdentifier, highestCommitted, commitedAccept.number());
   }
 
   private Prepare currentPrepareMessage() {
@@ -598,10 +613,10 @@ public class TrexNode {
 
         // find the highest accepted command if any
         AbstractCommand highestAcceptedCommand = votes.values().stream()
-            .map(PrepareResponse::highestUncommitted)
+            .map(PrepareResponse::journaledAccept)
             .filter(Optional::isPresent)
             .map(Optional::get)
-            .max(Accept::compareTo)
+            .max(Accept::compareNumbers)
             .map(Accept::command)
             .orElse(NoOperation.NOOP);
 
@@ -624,4 +639,18 @@ public class TrexNode {
       }
     }
   }
+
+  /**
+   * A record of the votes received by a node from other cluster members.
+   */
+  record AcceptVotes(Accept accept, Map<Byte, AcceptResponse> responses, boolean chosen) {
+    public AcceptVotes(Accept accept) {
+      this(accept, new HashMap<>(), false);
+    }
+
+    public static AcceptVotes chosen(Accept accept) {
+      return new AcceptVotes(accept, Collections.emptyMap(), true);
+    }
+  }
 }
+

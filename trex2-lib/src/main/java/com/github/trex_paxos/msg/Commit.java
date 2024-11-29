@@ -19,15 +19,14 @@ package com.github.trex_paxos.msg;
 /// the followers from timing out. This message type is one of the three [SlotFixingMessage] types where the progress
 /// of the node in terms of fixing slots and making a up-call to the host is called.
 ///
-/// @param from              The node identifier of the leader.
-/// @param number            The ballot number of the accepted log entry. The follower must request retransmission if
-///                          it does not have the correct accept.
-/// @param committedLogIndex The highest contiguous log index that the leader has learnt to have been fixed and so
-///                          committed.
+/// @param from          see {@link TrexMessage}
+/// @param fixedLogIndex The highest contiguous log index that the leader has learnt to have been fixed.
+/// @param number        The ballot number of the accepted log entry. The follower must request retransmission if
+///                                               it does not have the correct accept.
 public record Commit(
     byte from,
-    BallotNumber number,
-    long committedLogIndex
+    long fixedLogIndex,
+    BallotNumber number
 ) implements TrexMessage, BroadcastMessage, SlotFixingMessage {
 
 }

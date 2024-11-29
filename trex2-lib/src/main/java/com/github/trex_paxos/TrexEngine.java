@@ -145,7 +145,7 @@ public abstract class TrexEngine {
     return switch (input) {
       case Commit commit -> !trexNode.isLeader()
           && commit.from() != trexNode.nodeIdentifier()
-          && commit.committedLogIndex() >= trexNode.highestCommitted()
+          && commit.fixedLogIndex() >= trexNode.highestCommitted()
       ;
       case Accept accept -> !trexNode.isLeader()
           && accept.from() != trexNode.nodeIdentifier()
@@ -154,7 +154,7 @@ public abstract class TrexEngine {
 
       case AcceptResponse acceptResponse -> trexNode.isLeader()
           && acceptResponse.from() != trexNode.nodeIdentifier()
-          && acceptResponse.progress().highestCommittedIndex() > trexNode.highestCommitted();
+          && acceptResponse.highestCommittedIndex() > trexNode.highestCommitted();
       
       default -> false;
     };

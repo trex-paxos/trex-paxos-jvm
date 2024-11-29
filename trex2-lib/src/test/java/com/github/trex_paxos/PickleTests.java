@@ -66,10 +66,7 @@ public class PickleTests {
     AcceptResponse acceptNack = new AcceptResponse(
         (byte) 1, (byte) 2,
         new Vote((byte) 1, (byte) 2, 4L, true, new BallotNumber(13, (byte) 3)),
-      new Progress((byte) 0,
-        new BallotNumber(6, (byte) 7),
-          11L
-      ));
+        11L);
     byte[] pickled = Pickle.writeMessage(acceptNack);
     AcceptResponse unpickled = (AcceptResponse) Pickle.readMessage(pickled);
     assertEquals(acceptNack, unpickled);
@@ -81,7 +78,7 @@ public class PickleTests {
     PrepareResponse prepareAck = new PrepareResponse(
         (byte) 1, (byte) 2,
         new Vote((byte) 1, (byte) 2, 3L, true, new BallotNumber(13, (byte) 3)),
-        1234213424L, Optional.of(accept)
+        Optional.of(accept), 1234213424L
     );
     byte[] pickled = Pickle.writeMessage(prepareAck);
     PrepareResponse unpickled = (PrepareResponse) Pickle.readMessage(pickled);
@@ -95,11 +92,11 @@ public class PickleTests {
     PrepareResponse prepareAck = new PrepareResponse(
         (byte) 1, (byte) 2,
         new Vote((byte) 1, (byte) 2, 3L, true, new BallotNumber(13, (byte) 3)),
-        1234213424L, Optional.of(accept)
+        Optional.of(accept), 1234213424L
     );
     byte[] pickled = Pickle.writeMessage(prepareAck);
     PrepareResponse unpickled = (PrepareResponse) Pickle.readMessage(pickled);
-    assertEquals(prepareAck.highestUncommitted(), unpickled.highestUncommitted());
+    assertEquals(prepareAck.journaledAccept(), unpickled.journaledAccept());
     assertEquals(prepareAck, unpickled);
   }
 
@@ -115,8 +112,7 @@ public class PickleTests {
   public void testPickCommit() throws Exception {
     Commit commit = new Commit(
         (byte) 3,
-        new BallotNumber(10, (byte) 128),
-        5L
+        5L, new BallotNumber(10, (byte) 128)
     );
     byte[] pickled = Pickle.writeMessage(commit);
     Commit unpickled = (Commit) Pickle.readMessage(pickled);

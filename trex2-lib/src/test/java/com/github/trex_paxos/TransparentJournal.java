@@ -3,7 +3,6 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.Accept;
 import com.github.trex_paxos.msg.BallotNumber;
 import com.github.trex_paxos.msg.NoOperation;
-import com.github.trex_paxos.msg.Progress;
 
 import java.util.NavigableMap;
 import java.util.Optional;

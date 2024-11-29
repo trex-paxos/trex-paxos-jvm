@@ -17,7 +17,16 @@ package com.github.trex_paxos.msg;
 
 import com.github.trex_paxos.Vote;
 
-public record AcceptResponse(byte from, byte to, Vote vote,
-                             Progress progress) implements TrexMessage, DirectMessage, SlotFixingMessage {
+/// An AcceptResponse response back to a {@link Accept} message. We add the highestCommitedIndex as more information to cause a leader to abdicate if it is behind.
+///
+/// @param from                  see {@link TrexMessage}
+/// @param to                    see {@link DirectMessage}
+/// @param vote                  whether wre have voted for or voted against the Prepare message based on our past promises.
+/// @param highestCommittedIndex additional information about the highest accepted index so that a leader will abdicate if it is behind.
+public record AcceptResponse(byte from,
+                             byte to,
+                             Vote vote,
+                             long highestCommittedIndex
+) implements TrexMessage, DirectMessage, SlotFixingMessage {
 // TODO should we send the highest promise in case it is a nack?
 }
