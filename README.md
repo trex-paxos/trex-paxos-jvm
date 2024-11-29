@@ -99,18 +99,26 @@ public record AcceptResponse(
 
 ### Third: Learning Which Values Are Fixed
 
-Any value `V` journaled into slot `S` by a mathematician majority of nodes will never change. Cloud environments typically only support point-to-point messaging. This means that `AcceptResponse` messages are only sent to the leader. It can then send a short `commit(S,N)` message to inform the other nodes when a value has been fixed. This message can piggyback at the front of the subsequent outbound `accept` message within the same network packet. 
+Any value `V` journaled into slot `S` by a mathematician majority of nodes will never change. Cloud environments
+typically only support point-to-point messaging. This means that `AcceptResponse` messages are only sent to the leader.
+It can then send a short `fixed(S,N)` message to inform the other nodes when a value has been fixed. This message can
+piggyback at the front of the subsequent outbound `accept` message within the same network packet.
 
-Leaders must always increment their counter to create a fresh `N` each time they attempt to lead. That ensures that each `commit(S,N)` refers to a unique `accept(S,N,VV)` message. If another node never received the corresponding `accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the retransmission of fixed values. 
+Leaders must always increment their counter to create a fresh `N` each time they attempt to lead. That ensures that each
+`fixed(S,N)` refers to a unique `accept(S,N,VV)` message. If another node never received the corresponding
+`accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the
+retransmission of fixed values.
 
 This implementation uses code similar to the following to enable nodes to learn which values have been fixed: : 
 
 ```java
-public record Commit(
+public record Fixed(
     BallotNumber number,
-    long committedLogIndex ) {}
+    long fixedLogIndex) {
+}
 
-public record Catchup(long highestCommitedIndex ) {}
+public record Catchup(long highestFixedIndex) {
+}
 
 public record CatchupResponse( List<Command> catchup ) {}
 ```
@@ -130,7 +138,7 @@ On leader election (p. 7):
 The novelty of Paxos was that it did not require real-time clocks. This implementation uses random timeouts: 
 
 1. Any leader sends `prepare(N,S)` for slots not known to be fixed
-2. Nodes respond with promise messages containing any uncommitted `{N,V}` tuple at that slot `S`
+2. Nodes respond with promise messages containing any unfixed `{N,V}` tuple at that slot `S`
 3. The leader selects the `V` that was associated with the highest `N` value from a majority of responses
 4. The leader sends fresh `accept(S,N,V)` messages with chosen commands `V` using its own `N`
 
@@ -146,7 +154,8 @@ public record Prepare( long logIndex,
 
 public record PrepareResponse(
     long logIndex,
-    Optional<Accept> highestUncommitted ) {}
+    Optional<Accept> highestUnfixed) {
+}
 ```
 
 ## Fifth, The invariants
@@ -155,7 +164,8 @@ The state of each node is similar to the following model:
 
 ```java
 public record Progress( BallotNumber highestPromised,
-                        long committedIndex ) {}
+                        long fixedIndex) {
+}
 
 public interface Journal {
    void saveProgress(Progress progress);
@@ -165,22 +175,30 @@ public interface Journal {
 }
 ```
 
-The progress of each node is its highest promised `N` and its highest committed slot `S`. The command values are journaled to a given slot index. Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync ()` method must first flush any commands into their slots and only then flush the `progress`. 
+The progress of each node is its highest promised `N` and its highest fixed slot `S`. The command values are journaled
+to a given slot index. Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync ()` method
+must first flush any commands into their slots and only then flush the `progress`.
 
-The above algorithm has a small mechanical footprint. It is a set of rules that imply a handful of inequality checks. The entire state space of a distributed system is hard to reason about and test. There are a near-infinite number of messages that could be sent. Yet the set of messages that may alter the progress of a node or cause it to commit is pretty small. This implies we can use a brute-force property testing framework to validate that the code correctly implements the protocol documented in the paper. 
+The above algorithm has a small mechanical footprint. It is a set of rules that imply a handful of inequality checks.
+The entire state space of a distributed system is hard to reason about and test. There are a near-infinite number of
+messages that could be sent. Yet the set of messages that may alter the progress of a node or cause it to fixed is
+pretty small. This implies we can use a brute-force property testing framework to validate that the code correctly
+implements the protocol documented in the paper.
 
 It is important to note that the examples above are the minimum information that a node may transmit. It is entirely acceptable that messages carry more information. This is not a violation of the algorithm as long as the algorithm's invariants are not violated. Transmitting additional information gives the following benefits:
 
 1. Leaders can learn from additional information added onto messages the maximum range of slots any prior leader has attempted to fix. That allows a new leader to move into the steady state galloping mode.
-2. Leaders can learn why they cannot lead, such as using a number much lower than any prior leader or having a lower committed index than another node in the cluster.
+2. Leaders can learn why they cannot lead, such as using a number much lower than any prior leader or having a lower
+   fixed index than another node in the cluster.
 
 It is entirely acceptable to add any information you choose into any message as long as you do not violate the protocol's invariants. This implementation uses the following invariants which apply to each node in the cluster: 
 
-1. The committed index increases sequentially (hence, the up-call of `{S,V}` tuples must be sequential). 
+1. The fixed index increases sequentially (hence, the up-call of `{S,V}` tuples must be sequential).
 2. The promise number only increases (yet it may jump forward).
 3. The promised ballot number can only increase.
 4. The promised ballot number can only change when processing a `prepare` or `accept` message.
-5. The committed index can only change when a leader sees a majority `AcceptReponse` message, a follower node sees a `commit` message, or any node learns about a fixed message due to a `CatchupResponse` message.
+5. The fixed index can only change when a leader sees a majority `AcceptReponse` message, a follower node sees a
+   `fixed` message, or any node learns about a fixed message due to a `CatchupResponse` message.
 
 There are some other trivial invariants; each node should only issue a response message to the corresponding request message. 
 

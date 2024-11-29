@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 /// The result of running paxos is a list of messages and a list of commands.
 ///
 /// @param messages A possibly empty list of messages that were generated during the paxos run.
-/// @param commands A possibly empty list of chosen aka fixed aka commited commands.
+/// @param commands A possibly empty list of chosen aka fixed commands.
 public record TrexResult(List<TrexMessage> messages, Map<Long, AbstractCommand> commands) {
   public TrexResult {
     messages = List.copyOf(messages);
@@ -54,7 +54,7 @@ public record TrexResult(List<TrexMessage> messages, Map<Long, AbstractCommand> 
         ));
 
     // Check that the size of unique key-value pairs of the inputs matches the size of allCommands
-    // If this is not the case then we manged to commit different commands at the same slot.
+    // If this is not the case then we manged to fix different commands at the same slot.
     assert allCommands.size() == results.stream()
         .flatMap(r -> r.commands().entrySet().stream())
         .collect(Collectors.toSet()).size();

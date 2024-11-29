@@ -15,7 +15,7 @@
  */
 package com.github.trex_paxos.msg;
 
-/// A leader sends out a Commit when it learns of a new fixed log index. It will also heartbeat this message to keep
+/// A leader sends out a Fixed when it learns of a new fixed log index. It will also heartbeat this message to keep
 /// the followers from timing out. This message type is one of the three [SlotFixingMessage] types where the progress
 /// of the node in terms of fixing slots and making a up-call to the host is called.
 ///
@@ -23,7 +23,7 @@ package com.github.trex_paxos.msg;
 /// @param fixedLogIndex The highest contiguous log index that the leader has learnt to have been fixed.
 /// @param number        The ballot number of the accepted log entry. The follower must request retransmission if
 ///                                               it does not have the correct accept.
-public record Commit(
+public record Fixed(
     byte from,
     long fixedLogIndex,
     BallotNumber number

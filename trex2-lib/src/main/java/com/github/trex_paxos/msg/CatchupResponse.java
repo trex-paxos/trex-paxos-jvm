@@ -17,7 +17,7 @@ package com.github.trex_paxos.msg;
 
 import java.util.List;
 /// CatchupResponse is a message sent by the leader to a replica in response to a Catchup message.
-/// It will only return the accept messages for committed slots.
+/// It will only return the accept messages for fixed slots.
 /// @param from                 see {@link TrexMessage}
 /// @param to                   see {@link DirectMessage}
 /// @param accepts              the list of fixed accepts above the slot index requested.

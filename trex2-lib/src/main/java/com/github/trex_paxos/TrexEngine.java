@@ -53,7 +53,7 @@ public abstract class TrexEngine {
   protected abstract void setHeartbeat();
 
   /// Process an application command sent from a client. This is only actioned by a leader. It will return a single accept
-  /// then append a commit message as it is very cheap for another node to filter out commits it has already seen.
+  /// then append a fixed message as it is very cheap for another node to filter out commits it has already seen.
   private List<TrexMessage> command(Command command) {
       // only if we are leader do we create the next accept message into the next log index
       final var nextAcceptMessage = trexNode.nextAcceptMessage(command);
@@ -61,8 +61,8 @@ public abstract class TrexEngine {
       final var r = trexNode.paxos(nextAcceptMessage);
       // the result is ignorable a self ack so does not need to be transmitted.
       assert r.commands().isEmpty() && r.messages().size() == 1 && r.messages().getFirst() instanceof AcceptResponse;
-      // forward to the cluster the new accept and at the same time heartbeat a commit message.
-      return List.of(nextAcceptMessage, trexNode.currentCommitMessage());
+    // forward to the cluster the new accept and at the same time heartbeat a fixed message.
+    return List.of(nextAcceptMessage, trexNode.currentFixedMessage());
   }
 
   public List<TrexMessage> command(List<Command> command) {
@@ -143,18 +143,18 @@ public abstract class TrexEngine {
 
   boolean evidenceOfLeader(TrexMessage input) {
     return switch (input) {
-      case Commit commit -> !trexNode.isLeader()
-          && commit.from() != trexNode.nodeIdentifier()
-          && commit.fixedLogIndex() >= trexNode.highestCommitted()
+      case Fixed fixed -> !trexNode.isLeader()
+          && fixed.from() != trexNode.nodeIdentifier()
+          && fixed.fixedLogIndex() >= trexNode.highestFixed()
       ;
       case Accept accept -> !trexNode.isLeader()
           && accept.from() != trexNode.nodeIdentifier()
           && (accept.logIndex() > trexNode.highestAccepted()
-          || accept.logIndex() > trexNode.highestCommitted());
+          || accept.logIndex() > trexNode.highestFixed());
 
       case AcceptResponse acceptResponse -> trexNode.isLeader()
           && acceptResponse.from() != trexNode.nodeIdentifier()
-          && acceptResponse.highestCommittedIndex() > trexNode.highestCommitted();
+          && acceptResponse.highestFixedIndex() > trexNode.highestFixed();
       
       default -> false;
     };

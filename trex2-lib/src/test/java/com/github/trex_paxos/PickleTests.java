@@ -109,14 +109,14 @@ public class PickleTests {
   }
 
   @Test
-  public void testPickCommit() throws Exception {
-    Commit commit = new Commit(
+  public void testPickFixed() throws Exception {
+    Fixed fixed = new Fixed(
         (byte) 3,
         5L, new BallotNumber(10, (byte) 128)
     );
-    byte[] pickled = Pickle.writeMessage(commit);
-    Commit unpickled = (Commit) Pickle.readMessage(pickled);
-    assertEquals(commit, unpickled);
+    byte[] pickled = Pickle.writeMessage(fixed);
+    Fixed unpickled = (Fixed) Pickle.readMessage(pickled);
+    assertEquals(fixed, unpickled);
   }
 
   @Test

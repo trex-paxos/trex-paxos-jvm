@@ -42,14 +42,14 @@ public interface Journal {
   /**
    * Save the progress record to durable storage. This method must force the disk.
    *
-   * @param progress The highest promised, committed and accepted operationBytes.
+   * @param progress The highest promised, fixed and accepted operationBytes.
    */
   void saveProgress(Progress progress);
 
   /**
    * Save the accept record to the log. This method must force the disk.
    *
-   * @param accept An accept that is not yet chosen until the log index is committed.
+   * @param accept An accept that is not yet chosen until the log index is fixed.
    */
   void journalAccept(Accept accept);
 

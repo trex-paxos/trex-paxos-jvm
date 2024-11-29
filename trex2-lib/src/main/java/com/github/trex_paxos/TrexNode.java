@@ -128,7 +128,7 @@ public class TrexNode {
       }
       if (!commands.isEmpty()) {
         // TODO make this run all the time
-        assert commands.lastKey() == progress.highestCommittedIndex();
+        assert commands.lastKey() == progress.highestFixedIndex();
       }
     }
     return new TrexResult(messages, commands);
@@ -137,7 +137,7 @@ public class TrexNode {
   private void algorithm(TrexMessage input, List<TrexMessage> messages, TreeMap<Long, AbstractCommand> commands) {
     switch (input) {
       case Accept accept -> {
-        if (lowerAccept(progress, accept) || higherAcceptForCommittedSlot(accept, progress)) {
+        if (lowerAccept(progress, accept) || higherAcceptForFixedSlot(accept, progress)) {
           messages.add(nack(accept));
         } else if (equalOrHigherAccept(progress, accept)) {
           // always journal first
@@ -181,8 +181,8 @@ public class TrexNode {
       }
       case Prepare prepare -> {
         var number = prepare.number();
-        if (number.lessThan(progress.highestPromised()) || prepare.logIndex() <= progress.highestCommittedIndex()) {
-          // nack a low nextPrepareMessage else any nextPrepareMessage for a committed slot sending any accepts they are missing
+        if (number.lessThan(progress.highestPromised()) || prepare.logIndex() <= progress.highestFixedIndex()) {
+          // nack a low nextPrepareMessage else any nextPrepareMessage for a fixed slot sending any accepts they are missing
           messages.add(nack(prepare));
         } else if (number.greaterThan(progress.highestPromised())) {
           // ack a higher nextPrepareMessage
@@ -208,7 +208,7 @@ public class TrexNode {
       case AcceptResponse acceptResponse -> {
         if (FOLLOW != role && acceptResponse.to() == nodeIdentifier) {
           // An isolated leader rejoining must back down
-          if (LEAD == role && acceptResponse.highestCommittedIndex() > progress.highestCommittedIndex()) {
+          if (LEAD == role && acceptResponse.highestFixedIndex() > progress.highestFixedIndex()) {
             backdown(messages);
           } else {
             // Both Leader and Recoverer can receive AcceptResponses
@@ -221,18 +221,18 @@ public class TrexNode {
           processPrepareResponse(prepareResponse, messages);
         }
       }
-      case Commit(final var commitFrom, final var commitSlot, final var commitNumber) -> {
+      case Fixed(final var fixedFrom, final var fixedSlot, final var fixedNumber) -> {
         // TODO is it possible to safely do some deduction here to avoid the catchup?
-        if (commitSlot == highestCommitted() + 1) {
+        if (fixedSlot == highestFixed() + 1) {
           // we must have the correct number at the slot
-          final var commitableAccept = journal.loadAccept(commitSlot)
-              .filter(accept -> accept.number().equals(commitNumber))
+          final var fixedAccept = journal.loadAccept(fixedSlot)
+              .filter(accept -> accept.number().equals(fixedNumber))
               .orElse(null);
 
           // make the callback to the main application
-          Optional.ofNullable(commitableAccept).ifPresent(accept -> {
-            commit(accept, commands);
-            progress = progress.withHighestCommitted(commitSlot);
+          Optional.ofNullable(fixedAccept).ifPresent(accept -> {
+            fixed(accept, commands);
+            progress = progress.withHighestFixed(fixedSlot);
             journal.saveProgress(progress);
             if (!role.equals(FOLLOW)) {
               backdown(messages);
@@ -240,15 +240,15 @@ public class TrexNode {
           });
         }
 
-        final var highestCommittedIndex = progress.highestCommittedIndex();
+        final var highestFixedIndex = progress.highestFixedIndex();
 
-        if (commitSlot > highestCommittedIndex) {
-          messages.add(new Catchup(nodeIdentifier, commitFrom, highestCommittedIndex, progress.highestPromised()));
+        if (fixedSlot > highestFixedIndex) {
+          messages.add(new Catchup(nodeIdentifier, fixedFrom, highestFixedIndex, progress.highestPromised()));
         }
       }
-      case Catchup(final byte replyTo, _, final var otherCommitIndex, final var otherHighestPromised) -> {
+      case Catchup(final byte replyTo, _, final var otherFixedIndex, final var otherHighestPromised) -> {
         // load the slots they do not know that they are missing
-        final var missingAccepts = LongStream.rangeClosed(otherCommitIndex + 1, progress.highestCommittedIndex())
+        final var missingAccepts = LongStream.rangeClosed(otherFixedIndex + 1, progress.highestFixedIndex())
             .mapToObj(journal::loadAccept)
             .flatMap(Optional::stream)
             .toList();
@@ -266,18 +266,18 @@ public class TrexNode {
         }
       }
       case CatchupResponse(_, _, final var catchup) -> {
-        // drop anything we have already committed
+        // drop anything we have already fixed
         final var newAccepts = catchup.stream()
-            .dropWhile(accept -> accept.logIndex() <= progress.highestCommittedIndex())
+            .dropWhile(accept -> accept.logIndex() <= progress.highestFixedIndex())
             .toList();
 
         if (!newAccepts.isEmpty()) {
           newAccepts.forEach(accept -> {
             journal.journalAccept(accept);
-            commit(accept, commands);
+            fixed(accept, commands);
           });
 
-          progress = progress.withHighestCommitted(newAccepts.getLast().logIndex());
+          progress = progress.withHighestFixed(newAccepts.getLast().logIndex());
           journal.saveProgress(progress);
         }
       }
@@ -286,7 +286,7 @@ public class TrexNode {
 
   static final String PROTOCOL_VIOLATION_PROMISES = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the promise has been changed when the message is not a PaxosMessage type.";
   static final String PROTOCOL_VIOLATION_NUMBER = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the promise has decreased.";
-  static final String PROTOCOL_VIOLATION_INDEX = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the committed slot index has decreased.";
+  static final String PROTOCOL_VIOLATION_INDEX = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the fixed slot index has decreased.";
   static final String PROTOCOL_VIOLATION_SLOT_FIXING = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the promise has been changed when the message is not a SlotFixingMessage type.";
   static final String CRASHED = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR This node has crashed and must be rebooted. The durable journal state is now the only source of truth.";
   static final String CRASHING = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR This node has crashed and must be rebooted. The durable journal state is now the only source of truth: ";
@@ -309,10 +309,10 @@ public class TrexNode {
       logSevereAndThrow(PROTOCOL_VIOLATION_NUMBER, input, priorProgress);
     }
 
-    // the committed slot index must only ever increase
-    if (priorProgress.highestCommittedIndex() > progress.highestCommittedIndex()) {
+    // the fixed slot index must only ever increase
+    if (priorProgress.highestFixedIndex() > progress.highestFixedIndex()) {
       logSevereAndThrow(PROTOCOL_VIOLATION_INDEX, input, priorProgress);
-    } else if (priorProgress.highestCommittedIndex() != progress.highestCommittedIndex()) {
+    } else if (priorProgress.highestFixedIndex() != progress.highestFixedIndex()) {
       final var slotFixingMessage = input instanceof SlotFixingMessage;
       if (!slotFixingMessage) {
         logSevereAndThrow(PROTOCOL_VIOLATION_SLOT_FIXING, input, priorProgress);
@@ -352,27 +352,27 @@ public class TrexNode {
 
             acceptVotesByLogIndex.put(logIndex, AcceptVotes.chosen(acceptVotes.accept()));
 
-            // only if we have some contiguous slots that have been accepted we can commit
-            final var committed = acceptVotesByLogIndex.values().stream()
+            // only if we have some contiguous slots that have been accepted we can fix them
+            final var fixed = acceptVotesByLogIndex.values().stream()
                 .takeWhile(AcceptVotes::chosen)
                 .map(AcceptVotes::accept)
-                .filter(a -> a.logIndex() > progress.highestCommittedIndex())
+                .filter(a -> a.logIndex() > progress.highestFixedIndex())
                 .toList();
 
-            if (!committed.isEmpty()) {
+            if (!fixed.isEmpty()) {
               // run the callback
-              for (var accept : committed) {
-                commit(accept, commands);
+              for (var accept : fixed) {
+                fixed(accept, commands);
                 // free the memory and stop heartbeating out the accepts
                 acceptVotesByLogIndex.remove(accept.logIndex());
               }
 
-              // we have committed
-              this.progress = progress.withHighestCommitted(committed.getLast().logIndex());
+              // we have fixed slots
+              this.progress = progress.withHighestFixed(fixed.getLast().logIndex());
               this.journal.saveProgress(progress);
 
               // let the cluster know
-              messages.add(currentCommitMessage());
+              messages.add(currentFixedMessage());
             }
           }
           case WAIT -> {
@@ -386,11 +386,11 @@ public class TrexNode {
     });
   }
 
-  private void commit(Accept accept, Map<Long, AbstractCommand> commands) {
+  private void fixed(Accept accept, Map<Long, AbstractCommand> commands) {
     final var cmd = accept.command();
     final var logIndex = accept.logIndex();
     LOGGER.log(logAtLevel, () ->
-        "COMMIT logIndex==" + logIndex +
+        "FIXED logIndex==" + logIndex +
             " nodeIdentifier==" + nodeIdentifier() +
             " command==" + cmd);
     commands.put(logIndex, cmd);
@@ -414,7 +414,7 @@ public class TrexNode {
         new Vote(nodeIdentifier,
             accept.number().nodeIdentifier(),
             accept.logIndex(), true, accept.number()),
-        progress.highestCommittedIndex());
+        progress.highestFixedIndex());
   }
 
   /**
@@ -431,7 +431,7 @@ public class TrexNode {
             accept.logIndex(),
             false,
             accept.number())
-        , progress.highestCommittedIndex());
+        , progress.highestFixedIndex());
   }
 
   /**
@@ -474,9 +474,9 @@ public class TrexNode {
     return progress.highestPromised().lessThanOrEqualTo(accept.number());
   }
 
-  static boolean higherAcceptForCommittedSlot(Accept accept, Progress progress) {
+  static boolean higherAcceptForFixedSlot(Accept accept, Progress progress) {
     return accept.number().greaterThan(progress.highestPromised()) &&
-        accept.logIndex() <= progress.highestCommittedIndex();
+        accept.logIndex() <= progress.highestFixedIndex();
   }
 
   static Boolean lowerAccept(Progress progress, Accept accept) {
@@ -487,8 +487,8 @@ public class TrexNode {
     return accept.number().greaterThan(progress.highestPromised());
   }
 
-  public long highestCommitted() {
-    return progress.highestCommittedIndex();
+  public long highestFixed() {
+    return progress.highestFixedIndex();
   }
 
   public byte nodeIdentifier() {
@@ -521,7 +521,7 @@ public class TrexNode {
   public List<TrexMessage> heartbeat() {
     final var result = new ArrayList<TrexMessage>();
     if (isLeader()) {
-      result.add(currentCommitMessage());
+      result.add(currentFixedMessage());
       result.addAll(pendingAcceptMessages());
     } else if (isRecover()) {
       result.add(currentPrepareMessage());
@@ -531,7 +531,7 @@ public class TrexNode {
 
   private List<Accept> pendingAcceptMessages() {
     return LongStream.range(
-            progress.highestCommittedIndex() + 1,
+            progress.highestFixedIndex() + 1,
             journal.highestLogIndex() + 1
         )
         .mapToObj(journal::loadAccept)
@@ -540,18 +540,18 @@ public class TrexNode {
         .toList();
   }
 
-  Commit currentCommitMessage() {
-    final var highestCommitted = highestCommitted();
-    final var commitedAccept = journal.loadAccept(highestCommitted).orElseThrow();
-    return new Commit(nodeIdentifier, highestCommitted, commitedAccept.number());
+  Fixed currentFixedMessage() {
+    final var highestFixed = highestFixed();
+    final var fixedAccept = journal.loadAccept(highestFixed).orElseThrow();
+    return new Fixed(nodeIdentifier, highestFixed, fixedAccept.number());
   }
 
   private Prepare currentPrepareMessage() {
-    return new Prepare(nodeIdentifier, progress.highestCommittedIndex(), term);
+    return new Prepare(nodeIdentifier, progress.highestFixedIndex(), term);
   }
 
   private Prepare nextPrepareMessage() {
-    return new Prepare(nodeIdentifier, progress.highestCommittedIndex() + 1, term);
+    return new Prepare(nodeIdentifier, progress.highestFixedIndex() + 1, term);
   }
 
   public Accept nextAcceptMessage(Command command) {

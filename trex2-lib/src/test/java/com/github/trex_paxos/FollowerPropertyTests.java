@@ -20,7 +20,7 @@ public class FollowerPropertyTests {
       Relation promiseRelation,
       Relation messageNumberRelation,
       Relation messageLogRelation,
-      int committedIndex
+      int fixedIndex
   ) {
   }
 
@@ -39,7 +39,7 @@ public class FollowerPropertyTests {
     int promise = calculateValue(maxSlot, testCase.promiseRelation());
 
     int messageNumber = calculateValue(promise, testCase.messageNumberRelation());
-    int messageLogIndex = calculateValue(testCase.committedIndex, testCase.messageLogRelation());
+    int messageLogIndex = calculateValue(testCase.fixedIndex, testCase.messageLogRelation());
 
     Accept accept = new Accept(
         testCase.otherNodeIdentifier(),
@@ -76,7 +76,7 @@ public class FollowerPropertyTests {
           promiseRelation,
           messageNumberRelation,
           messageLogRelation,
-          committedIndex) ->
+          fixedIndex) ->
         nodeIdentifier != null ?
             new TestCase(nodeIdentifier,
                 Optional.ofNullable(otherNodeIdentifier).orElse((byte) 1),
@@ -84,7 +84,7 @@ public class FollowerPropertyTests {
                 promiseRelation,
                 messageNumberRelation,
                 messageLogRelation,
-                Optional.ofNullable(committedIndex).orElse(1)) : null);
+                Optional.ofNullable(fixedIndex).orElse(1)) : null);
   }
 
   private void setupLogState(NavigableMap<Long, Accept> fakeJournal, LogState state) {

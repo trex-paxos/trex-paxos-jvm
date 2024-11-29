@@ -35,7 +35,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static com.github.trex_paxos.Simulation.LOGGER;
-import static com.github.trex_paxos.Simulation.inconsistentCommittedIndex;
+import static com.github.trex_paxos.Simulation.inconsistentFixedIndex;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class SimulationTests {
@@ -117,7 +117,7 @@ public class SimulationTests {
     // when we run for 15 iterations with client data
     simulation.run(15, true);
 
-    final var badCommandIndex = inconsistentCommittedIndex(
+    final var badCommandIndex = inconsistentFixedIndex(
         simulation.trexEngine1.allCommandsMap,
         simulation.trexEngine2.allCommandsMap,
         simulation.trexEngine3.allCommandsMap
@@ -125,7 +125,7 @@ public class SimulationTests {
 
     assertThat(badCommandIndex.isEmpty()).isTrue();
 
-    assertThat(consistentCommits(
+    assertThat(consistentFixed(
         simulation.trexEngine1,
         simulation.trexEngine2,
         simulation.trexEngine3
@@ -181,13 +181,13 @@ public class SimulationTests {
     // when we run for 15 iterations with client data
     simulation.run(runLength, true, nemesis);
 
-    assertThat(inconsistentCommittedIndex(
+    assertThat(inconsistentFixedIndex(
         simulation.trexEngine1.allCommandsMap,
         simulation.trexEngine2.allCommandsMap,
         simulation.trexEngine3.allCommandsMap
     ).isEmpty()).isTrue();
 
-    assertThat(consistentCommits(
+    assertThat(consistentFixed(
         simulation.trexEngine1,
         simulation.trexEngine2,
         simulation.trexEngine3
@@ -246,7 +246,7 @@ public class SimulationTests {
         " " + simulation.trexEngine2.journal.fakeJournal.size() +
         " " + simulation.trexEngine3.journal.fakeJournal.size());
 
-    assertThat(consistentCommits(
+    assertThat(consistentFixed(
         simulation.trexEngine1,
         simulation.trexEngine2,
         simulation.trexEngine3
@@ -260,7 +260,7 @@ public class SimulationTests {
     );
   }
 
-  private boolean consistentCommits(
+  private boolean consistentFixed(
       TestablePaxosEngine engine1,
       TestablePaxosEngine engine2,
       TestablePaxosEngine engine3) {
@@ -363,7 +363,7 @@ public class SimulationTests {
       // we need to send accept messages to the other nodes
       final var r1 = simulation.trexEngine2.paxos(lm.messages().getFirst());
       simulation.trexEngine3.paxos(lm.messages().getFirst());
-      // we only need one accept response to get a commit
+      // we only need one accept response to get a fixed value
       final var r3 = leader.paxos(r1.messages().getFirst());
       simulation.trexEngine2.paxos(r3.messages().getFirst());
       simulation.trexEngine3.paxos(r3.messages().getFirst());

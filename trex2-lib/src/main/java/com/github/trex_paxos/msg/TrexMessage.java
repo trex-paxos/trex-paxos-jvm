@@ -22,7 +22,7 @@ public sealed interface TrexMessage extends Message permits
     BroadcastMessage,
     Catchup,
     CatchupResponse,
-    Commit,
+    Fixed,
     DirectMessage,
     Prepare,
     PrepareResponse {

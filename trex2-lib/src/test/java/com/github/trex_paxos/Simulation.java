@@ -100,14 +100,14 @@ class Simulation {
             }
             case Heartbeat heartbeat -> {
               // if it is a timeout collect the prepare messages if the node is still a follower at this time
-              final var commitWithAccepts = switch (heartbeat.nodeIdentifier) {
+              final var fixedWithAccepts = switch (heartbeat.nodeIdentifier) {
                 case 1 -> trexEngine1.heartbeat();
                 case 2 -> trexEngine2.heartbeat();
                 case 3 -> trexEngine3.heartbeat();
                 default ->
                     throw new IllegalStateException("Unexpected node identifier for heartbeat: " + heartbeat.nodeIdentifier);
               };
-              return commitWithAccepts.stream();
+              return fixedWithAccepts.stream();
             }
             case ClientCommand _ -> {
               return engines.entrySet().stream()
@@ -142,30 +142,30 @@ class Simulation {
       if (finished) {
         LOGGER.info("finished as empty iteration: " + iteration);
       }
-      final var inconsistentCommittedIndex = inconsistentCommittedIndex(
+      final var inconsistentFixedIndex = inconsistentFixedIndex(
           trexEngine1.allCommandsMap,
           trexEngine2.allCommandsMap,
           trexEngine3.allCommandsMap);
-      finished = finished || inconsistentCommittedIndex.isPresent();
-      if (inconsistentCommittedIndex.isPresent()) {
+      finished = finished || inconsistentFixedIndex.isPresent();
+      if (inconsistentFixedIndex.isPresent()) {
         LOGGER.info("finished as not matching commands:" +
             "\n\t" + trexEngine1.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
             + "\n\t" + trexEngine2.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
             + "\n\t" + trexEngine3.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")));
         throw new AssertionError("commands not matching");
       }
-      boolean commitLengthNotEqualToCommandLength =
-          trexEngine1.allCommandsMap.size() != trexEngine1.trexNode.progress.highestCommittedIndex() ||
-              trexEngine2.allCommandsMap.size() != trexEngine2.trexNode.progress.highestCommittedIndex() ||
-              trexEngine3.allCommandsMap.size() != trexEngine3.trexNode.progress.highestCommittedIndex();
-      finished = finished || commitLengthNotEqualToCommandLength;
-      if (commitLengthNotEqualToCommandLength) {
-        LOGGER.info("finished as commit length not equal to command length:\n" +
-            "\tnodeIdentifier==1 highestCommittedIndex==" + trexEngine1.trexNode.progress.highestCommittedIndex() + ", commandSize==" + trexEngine1.allCommands().size() + "\n" +
-            "\tnodeIdentifier==1 highestCommittedIndex==" + trexEngine2.trexNode.progress.highestCommittedIndex() + ", commandSize==" + trexEngine2.allCommands().size() + "\n" +
-            "\tnodeIdentifier==1 highestCommittedIndex==" + trexEngine3.trexNode.progress.highestCommittedIndex() + ", commandSize==" + trexEngine3.allCommands().size() + "\n"
+      boolean fixedLengthNotEqualToCommandLength =
+          trexEngine1.allCommandsMap.size() != trexEngine1.trexNode.progress.highestFixedIndex() ||
+              trexEngine2.allCommandsMap.size() != trexEngine2.trexNode.progress.highestFixedIndex() ||
+              trexEngine3.allCommandsMap.size() != trexEngine3.trexNode.progress.highestFixedIndex();
+      finished = finished || fixedLengthNotEqualToCommandLength;
+      if (fixedLengthNotEqualToCommandLength) {
+        LOGGER.info("finished as fixed length not equal to command length:\n" +
+            "\tnodeIdentifier==1 highestFixedIndex==" + trexEngine1.trexNode.progress.highestFixedIndex() + ", commandSize==" + trexEngine1.allCommands().size() + "\n" +
+            "\tnodeIdentifier==1 highestFixedIndex==" + trexEngine2.trexNode.progress.highestFixedIndex() + ", commandSize==" + trexEngine2.allCommands().size() + "\n" +
+            "\tnodeIdentifier==1 highestFixedIndex==" + trexEngine3.trexNode.progress.highestFixedIndex() + ", commandSize==" + trexEngine3.allCommands().size() + "\n"
         );
-        throw new AssertionError("commit length not equal to command length");
+        throw new AssertionError("fixed length not equal to command length");
       }
       engines.values().forEach(
           engine -> engine.journal.fakeJournal.forEach((k, v) -> {
@@ -178,9 +178,9 @@ class Simulation {
     });
   }
 
-  static OptionalLong inconsistentCommittedIndex(TreeMap<Long, AbstractCommand> c1,
-                                                 TreeMap<Long, AbstractCommand> c2,
-                                                 TreeMap<Long, AbstractCommand> c3) {
+  static OptionalLong inconsistentFixedIndex(TreeMap<Long, AbstractCommand> c1,
+                                             TreeMap<Long, AbstractCommand> c2,
+                                             TreeMap<Long, AbstractCommand> c3) {
     final var c1last = !c1.isEmpty() ? c1.lastKey() : 0;
     final var c2last = !c2.isEmpty() ? c2.lastKey() : 0;
     final var c3last = !c3.isEmpty() ? c3.lastKey() : 0;

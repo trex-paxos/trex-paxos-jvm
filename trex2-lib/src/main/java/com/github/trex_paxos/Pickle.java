@@ -38,7 +38,7 @@ public class Pickle {
   public static void write(Progress progress, DataOutputStream dos) throws IOException {
     dos.writeByte(progress.nodeIdentifier());
     write(progress.highestPromised(), dos);
-    dos.writeLong(progress.highestCommittedIndex());
+    dos.writeLong(progress.highestFixedIndex());
   }
 
   public static Progress readProgress(byte[] pickled) throws IOException {
@@ -62,7 +62,7 @@ public class Pickle {
         case MessageType.PrepareResponse -> readPrepareResponse(dis);
         case MessageType.Accept -> readAccept(dis);
         case MessageType.AcceptResponse -> readAcceptResponse(dis);
-        case MessageType.Commit -> readCommit(dis);
+        case MessageType.Fixed -> readFixed(dis);
         case MessageType.Catchup -> readCatchup(dis);
         case MessageType.CatchupResponse -> readCatchupResponse(dis);
       };
@@ -87,9 +87,9 @@ public class Pickle {
     final var from = dis.readByte();
     final var to = dis.readByte();
     Vote vote = Pickle.readVote(dis);
-    long highestCommittedIndex = dis.readLong();
-    Optional<Accept> highestUncommitted = dis.readBoolean() ? Optional.of(Pickle.readAccept(dis)) : Optional.empty();
-    return new PrepareResponse(from, to, vote, highestUncommitted, highestCommittedIndex);
+    long highestFixedIndex = dis.readLong();
+    Optional<Accept> highestUnfixed = dis.readBoolean() ? Optional.of(Pickle.readAccept(dis)) : Optional.empty();
+    return new PrepareResponse(from, to, vote, highestUnfixed, highestFixedIndex);
   }
 
 
@@ -104,7 +104,7 @@ public class Pickle {
         case PrepareResponse p -> write(p, dos);
         case Accept a -> write(a, dos);
         case AcceptResponse a -> write(a, dos);
-        case Commit c -> write(c, dos);
+        case Fixed c -> write(c, dos);
         case Catchup c -> write(c, dos);
         case CatchupResponse c -> write(c, dos);
       }
@@ -141,15 +141,15 @@ public class Pickle {
     dos.writeByte(m.from());
     dos.writeByte(m.to());
     write(m.vote(), dos);
-    dos.writeLong(m.highestCommittedIndex());
+    dos.writeLong(m.highestFixedIndex());
   }
 
   public static AcceptResponse readAcceptResponse(DataInputStream dis) throws IOException {
     final var from = dis.readByte();
     final var to = dis.readByte();
     final Vote vote = readVote(dis);
-    final long highestCommittedIndex = dis.readLong();
-    return new AcceptResponse(from, to, vote, highestCommittedIndex);
+    final long highestFixedIndex = dis.readLong();
+    return new AcceptResponse(from, to, vote, highestFixedIndex);
   }
 
   public static Vote readVote(DataInputStream dis) throws IOException {
@@ -196,16 +196,16 @@ public class Pickle {
   public static void write(Catchup m, DataOutputStream dos) throws IOException {
     dos.writeByte(m.from());
     dos.writeByte(m.to());
-    dos.writeLong(m.highestCommitedIndex());
+    dos.writeLong(m.highestFixedIndex());
     write(m.highestPromised(), dos);
   }
 
   public static Catchup readCatchup(DataInputStream dis) throws IOException {
     final var from = dis.readByte();
     final var to = dis.readByte();
-    final var highestCommitedIndex = dis.readLong();
+    final var highestFixedIndex = dis.readLong();
     final var highestPromised = readBallotNumber(dis);
-    return new Catchup(from, to, highestCommitedIndex, highestPromised);
+    return new Catchup(from, to, highestFixedIndex, highestPromised);
   }
 
   public static CatchupResponse readCatchupResponse(DataInputStream dis) throws IOException {
@@ -232,18 +232,18 @@ public class Pickle {
     }
   }
 
-  public static void write(Commit m, DataOutputStream dos) throws IOException {
+  public static void write(Fixed m, DataOutputStream dos) throws IOException {
     dos.writeByte(m.from());
     dos.writeLong(m.fixedLogIndex());
     write(m.number(), dos);
   }
 
-  public static Commit readCommit(DataInputStream dis)
+  public static Fixed readFixed(DataInputStream dis)
       throws IOException {
     final var from = dis.readByte();
-    final var committedLogIndex = dis.readLong();
+    final var fixedLogIndex = dis.readLong();
     final var number = readBallotNumber(dis);
-    return new Commit(from, committedLogIndex, number);
+    return new Fixed(from, fixedLogIndex, number);
   }
 
   public static Prepare readPrepare(DataInputStream dataInputStream) throws IOException {
@@ -264,7 +264,7 @@ public class Pickle {
     PrepareResponse(2),
     Accept(3),
     AcceptResponse(4),
-    Commit(5),
+    Fixed(5),
     Catchup(6),
     CatchupResponse(7);
 
@@ -290,7 +290,7 @@ public class Pickle {
         (byte) 1, PrepareResponse.class,
         (byte) 2, com.github.trex_paxos.msg.Accept.class,
         (byte) 3, com.github.trex_paxos.msg.AcceptResponse.class,
-        (byte) 4, com.github.trex_paxos.msg.Commit.class,
+        (byte) 4, Fixed.class,
         (byte) 5, com.github.trex_paxos.msg.Catchup.class
     );
 
@@ -323,7 +323,7 @@ public class Pickle {
         case PrepareResponse _ -> PrepareResponse;
         case Accept _ -> Accept;
         case AcceptResponse _ -> AcceptResponse;
-        case Commit _ -> Commit;
+        case Fixed _ -> Fixed;
         case Catchup _ -> Catchup;
         case CatchupResponse _ -> CatchupResponse;
       };

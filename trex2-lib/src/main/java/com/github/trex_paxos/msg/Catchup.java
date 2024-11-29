@@ -20,11 +20,11 @@ package com.github.trex_paxos.msg;
 ///
 /// @param from                 see {@link TrexMessage}
 /// @param to                   see {@link DirectMessage}
-/// @param highestCommitedIndex the highest index that the replica has committed.
+/// @param highestFixedIndex the highest index that the replica has fixed.
 /// @param highestPromised      the highest ballot number that the replica has promised.
 public record Catchup(byte from,
                       byte to,
-                      long highestCommitedIndex,
+                      long highestFixedIndex,
                       BallotNumber highestPromised
 ) implements DirectMessage, TrexMessage {
 
@@ -33,7 +33,7 @@ public record Catchup(byte from,
     return "Catchup{" +
         "from=" + from +
         ", to=" + to +
-        ", highestCommittedIndex=" + highestCommitedIndex +
+        ", highestFixedIndex=" + highestFixedIndex +
         ", highestPromised=" + highestPromised +
         '}';
   }
