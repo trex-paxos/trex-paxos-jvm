@@ -30,18 +30,26 @@ public class Pickle {
   public static byte[] writeProgress(Progress progress) throws IOException {
     try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
          DataOutputStream dos = new DataOutputStream(byteArrayOutputStream)) {
-      dos.writeByte(progress.nodeIdentifier());
-      write(progress.highestPromised(), dos);
-      dos.writeLong(progress.highestCommittedIndex());
+      write(progress, dos);
       return byteArrayOutputStream.toByteArray();
     }
+  }
+
+  public static void write(Progress progress, DataOutputStream dos) throws IOException {
+    dos.writeByte(progress.nodeIdentifier());
+    write(progress.highestPromised(), dos);
+    dos.writeLong(progress.highestCommittedIndex());
   }
 
   public static Progress readProgress(byte[] pickled) throws IOException {
     try (ByteArrayInputStream bis = new ByteArrayInputStream(pickled);
          DataInputStream dis = new DataInputStream(bis)) {
-      return new Progress(dis.readByte(), readBallotNumber(dis), dis.readLong());
+      return readProgress(dis);
     }
+  }
+
+  private static Progress readProgress(DataInputStream dis) throws IOException {
+    return new Progress(dis.readByte(), readBallotNumber(dis), dis.readLong());
   }
 
   public static TrexMessage readMessage(byte[] bytes) {
@@ -65,6 +73,8 @@ public class Pickle {
 
 
   public static void write(PrepareResponse m, DataOutputStream dos) throws IOException {
+    dos.writeByte(m.from());
+    dos.writeByte(m.to());
     Pickle.write(m.vote(), dos);
     dos.writeLong(m.highestAcceptedIndex());
     dos.writeBoolean(m.highestUncommitted().isPresent());
@@ -74,10 +84,12 @@ public class Pickle {
   }
 
   public static PrepareResponse readPrepareResponse(DataInputStream dis) throws IOException {
+    final var from = dis.readByte();
+    final var to = dis.readByte();
     Vote vote = Pickle.readVote(dis);
     long highestCommittedIndex = dis.readLong();
     Optional<Accept> highestUncommitted = dis.readBoolean() ? Optional.of(Pickle.readAccept(dis)) : Optional.empty();
-    return new PrepareResponse(vote, highestCommittedIndex, highestUncommitted);
+    return new PrepareResponse(from, to, vote, highestCommittedIndex, highestUncommitted);
   }
 
 
@@ -126,22 +138,23 @@ public class Pickle {
   }
 
   public static void write(AcceptResponse m, DataOutputStream dos) throws IOException {
+    dos.writeByte(m.from());
+    dos.writeByte(m.to());
     write(m.vote(), dos);
-    Progress m1 = m.progress();
-    dos.writeByte(m1.nodeIdentifier());
-    write(m1.highestPromised(), dos);
-    dos.writeLong(m1.highestCommittedIndex());
+    write(m.progress(), dos);
   }
 
   public static AcceptResponse readAcceptResponse(DataInputStream dis) throws IOException {
-    Vote vote = readVote(dis);
-    Progress progress = new Progress(dis.readByte(), readBallotNumber(dis), dis.readLong());
-    return new AcceptResponse(vote, progress);
+    final var from = dis.readByte();
+    final var to = dis.readByte();
+    final Vote vote = readVote(dis);
+    final Progress progress = readProgress(dis);
+    return new AcceptResponse(from, to, vote, progress);
   }
 
   public static Vote readVote(DataInputStream dis) throws IOException {
-    byte from = dis.readByte();
-    byte to = dis.readByte();
+    final var from = dis.readByte();
+    final var to = dis.readByte();
     long logIndex = dis.readLong();
     boolean vote = dis.readBoolean();
     BallotNumber number = readBallotNumber(dis);
@@ -207,18 +220,16 @@ public class Pickle {
         throw new UncheckedIOException(e);
       }
     });
-    final var commit = readCommit(dis);
-    return new CatchupResponse(from, to, catchup, commit);
+    return new CatchupResponse(from, to, catchup);
   }
 
   public static void write(CatchupResponse m, DataOutputStream dos) throws IOException {
     dos.writeByte(m.from());
     dos.writeByte(m.to());
-    dos.writeInt(m.catchup().size());
-    for (Accept accept : m.catchup()) {
+    dos.writeInt(m.accepts().size());
+    for (Accept accept : m.accepts()) {
       write(accept, dos);
     }
-    write(m.commit(), dos);
   }
 
   public static void write(Commit m, DataOutputStream dos) throws IOException {

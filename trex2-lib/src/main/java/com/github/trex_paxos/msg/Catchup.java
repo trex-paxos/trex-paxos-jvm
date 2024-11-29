@@ -15,7 +15,13 @@
  */
 package com.github.trex_paxos.msg;
 
-/// Catchup is a message sent by a replica to the leader to request missing committed slots.
+/// Catchup is a message sent by a replica to the leader to request retransmission of lost `Accept` messages
+/// that have been fixed above the last slot the node has previously learnt to be fixed.
+///
+/// @param from                 see {@link TrexMessage}
+/// @param to                   see {@link DirectMessage}
+/// @param highestCommitedIndex the highest index that the replica has committed.
+/// @param highestPromised      the highest ballot number that the replica has promised.
 public record Catchup(byte from,
                       byte to,
                       long highestCommitedIndex,

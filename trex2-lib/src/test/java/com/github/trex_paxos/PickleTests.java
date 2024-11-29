@@ -64,6 +64,7 @@ public class PickleTests {
   @Test
   public void testAcceptNackPickleUnpickle() throws IOException {
     AcceptResponse acceptNack = new AcceptResponse(
+        (byte) 1, (byte) 2,
         new Vote((byte) 1, (byte) 2, 4L, true, new BallotNumber(13, (byte) 3)),
       new Progress((byte) 0,
         new BallotNumber(6, (byte) 7),
@@ -78,6 +79,7 @@ public class PickleTests {
   public void testPrepareResponsePickleUnpickleNoop() throws IOException {
     final var accept = new Accept((byte) 4, 5L, new BallotNumber(6, (byte) 7), NoOperation.NOOP);
     PrepareResponse prepareAck = new PrepareResponse(
+        (byte) 1, (byte) 2,
         new Vote((byte) 1, (byte) 2, 3L, true, new BallotNumber(13, (byte) 3)),
         1234213424L, Optional.of(accept)
     );
@@ -91,6 +93,7 @@ public class PickleTests {
     final var cmd = new Command("cmd", "data".getBytes(StandardCharsets.UTF_8));
     final var accept = new Accept((byte) 4, 5L, new BallotNumber(6, (byte) 7), cmd);
     PrepareResponse prepareAck = new PrepareResponse(
+        (byte) 1, (byte) 2,
         new Vote((byte) 1, (byte) 2, 3L, true, new BallotNumber(13, (byte) 3)),
         1234213424L, Optional.of(accept)
     );
@@ -135,12 +138,11 @@ public class PickleTests {
         new Accept((byte) 1, 2L, new BallotNumber(3, (byte) 4), NoOperation.NOOP),
         new Accept((byte) 5, 6L, new BallotNumber(7, (byte) 8), NoOperation.NOOP)
     };
-    final Commit commit = new Commit((byte) 9, new BallotNumber(10, (byte) 11), 12L);
-    CatchupResponse catchupResponse = new CatchupResponse((byte) 1, (byte) 2, Arrays.asList(accepts), commit);
+    CatchupResponse catchupResponse = new CatchupResponse((byte) 1, (byte) 2, Arrays.asList(accepts));
     byte[] pickled = Pickle.writeMessage(catchupResponse);
     CatchupResponse unpickled = (CatchupResponse) Pickle.readMessage(pickled);
     assertEquals(catchupResponse.from(), unpickled.from());
     assertEquals(catchupResponse.to(), unpickled.to());
-    assertArrayEquals(catchupResponse.catchup().toArray(), unpickled.catchup().toArray());
+    assertArrayEquals(catchupResponse.accepts().toArray(), unpickled.accepts().toArray());
   }
 }

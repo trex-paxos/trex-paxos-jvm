@@ -19,19 +19,14 @@ import com.github.trex_paxos.Vote;
 
 import java.util.Optional;
 
-/// A PrepareResponse is a response to a Prepare message. It contains the vote and the highest uncommitted log entry if any.
-/// When the vote is possitve then we have made a `promise` to not accept any future Prepare or Accept messages with a lower ballot number.
+/// A PrepareResponse is a response to a {@link Prepare} message. It contains the vote and the highest uncommitted log entry if any.
+/// When the vote is positive then we have made a promise to not accept any future Prepare or Accept messages with a lower ballot number.
 public record PrepareResponse(
+    byte from,
+    byte to,
     Vote vote,
     long highestAcceptedIndex,
     Optional<Accept> highestUncommitted
 ) implements TrexMessage, DirectMessage {
-
-  public byte from() {
-    return vote.from();
-  }
-
-  public byte to() {
-    return vote.to();
-  }
+// TODO should we send the highest promise in case it is a nack?
 }

@@ -17,11 +17,11 @@ package com.github.trex_paxos.msg;
 
 import java.util.List;
 /// CatchupResponse is a message sent by the leader to a replica in response to a Catchup message.
-/// It will only return committed slots that the replica has requested. This is to avoid sending
-/// lots of uncommitted messages during a partition where an old leader is not yet aware of a new leader.
+/// It will only return the accept messages for committed slots.
 public record CatchupResponse(byte from,
                               byte to,
-                              List<Accept> catchup, // FIXME using an accept is confusing just end the commands. 
-                              Commit commit // FIXME just put in the beginning index to apply from 
+                              List<Accept> accepts
 ) implements TrexMessage, DirectMessage, SlotFixingMessage {
+  // TODO should we also send the highest promise for when this is a nack to a prepare?
+
 }

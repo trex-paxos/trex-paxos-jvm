@@ -206,7 +206,7 @@ public class TrexNode {
         }
       }
       case AcceptResponse acceptResponse -> {
-        if (FOLLOW != role && acceptResponse.vote().to() == nodeIdentifier) {
+        if (FOLLOW != role && acceptResponse.to() == nodeIdentifier) {
           // An isolated leader rejoining must back down
           if (LEAD == role && acceptResponse.progress().highestCommittedIndex() > progress.highestCommittedIndex()) {
             backdown(messages);
@@ -217,7 +217,7 @@ public class TrexNode {
         }
       }
       case PrepareResponse prepareResponse -> {
-        if (RECOVER == role && prepareResponse.vote().to() == nodeIdentifier) {
+        if (RECOVER == role && prepareResponse.to() == nodeIdentifier) {
           processPrepareResponse(prepareResponse, messages);
         }
       }
@@ -255,7 +255,7 @@ public class TrexNode {
             .flatMap(Optional::stream)
             .toList();
 
-        messages.add(new CatchupResponse(nodeIdentifier, replyTo, missingAccepts, currentCommitMessage));
+        messages.add(new CatchupResponse(nodeIdentifier, replyTo, missingAccepts));
 
         if (otherHighestPromised.greaterThan(progress.highestPromised())) {
           if (role == TrexRole.LEAD) {
@@ -267,17 +267,21 @@ public class TrexNode {
           }
         }
       }
-      case CatchupResponse(_, _, final var catchup, final var commit) -> {
+      case CatchupResponse(_, _, final var catchup) -> {
         // drop anything we have already committed
-        catchup.stream()
+        final var newAccepts = catchup.stream()
             .dropWhile(accept -> accept.logIndex() <= progress.highestCommittedIndex())
-            .forEach(accept -> {
-              journal.journalAccept(accept);
-              commit(accept, commands);
-            });
+            .toList();
 
-        progress = progress.withHighestCommitted(commit.committedLogIndex());
-        journal.saveProgress(progress);
+        if (!newAccepts.isEmpty()) {
+          newAccepts.forEach(accept -> {
+            journal.journalAccept(accept);
+            commit(accept, commands);
+          });
+
+          progress = progress.withHighestCommitted(newAccepts.getLast().logIndex());
+          journal.saveProgress(progress);
+        }
       }
     }
   }
@@ -334,7 +338,7 @@ public class TrexNode {
     final var logIndex = vote.logIndex();
     Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex)).ifPresent(acceptVotes -> {
       if (!acceptVotes.chosen()) {
-        acceptVotes.responses().put(vote.from(), acceptResponse);
+        acceptVotes.responses().put(acceptResponse.from(), acceptResponse);
         Set<Vote> vs = acceptVotes.responses().values().stream()
             .map(AcceptResponse::vote).collect(Collectors.toSet());
         final var quorumOutcome =
@@ -408,6 +412,7 @@ public class TrexNode {
    */
   final AcceptResponse ack(Accept accept) {
     return new AcceptResponse(
+        nodeIdentifier, accept.number().nodeIdentifier(),
         new Vote(nodeIdentifier, accept.number().nodeIdentifier(), accept.logIndex(), true, accept.number()),
         progress);
   }
@@ -419,6 +424,7 @@ public class TrexNode {
    */
   final AcceptResponse nack(Accept accept) {
     return new AcceptResponse(
+        nodeIdentifier, accept.number().nodeIdentifier(),
         new Vote(nodeIdentifier, accept.number().nodeIdentifier(), accept.logIndex(), false, accept.number())
         , progress);
   }
@@ -430,6 +436,7 @@ public class TrexNode {
    */
   final PrepareResponse ack(Prepare prepare) {
     return new PrepareResponse(
+        nodeIdentifier, prepare.number().nodeIdentifier(),
         new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), true, prepare.number()),
         highestAccepted(), journal.loadAccept(prepare.logIndex())
     );
@@ -442,6 +449,7 @@ public class TrexNode {
    */
   final PrepareResponse nack(Prepare prepare) {
     return new PrepareResponse(
+        nodeIdentifier, prepare.number().nodeIdentifier(),
         new Vote(nodeIdentifier, prepare.number().nodeIdentifier(), prepare.logIndex(), false, prepare.number()),
         highestAccepted(), journal.loadAccept(prepare.logIndex())
     );

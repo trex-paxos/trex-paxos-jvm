@@ -62,7 +62,7 @@ public class SpecificTests {
     final var ballotNumber2 = new BallotNumber(2, (byte) 2);
     final var ignoreAcceptSlot1 = new Accept(nodeId2, 1L, ballotNumber2, new Command("cmd", "data2".getBytes()));
     final var freshAcceptSlot2 = new Accept(nodeId2, 2L, ballotNumber2, new Command("cmd", "data3".getBytes()));
-    final var catchUpResponse = new CatchupResponse(nodeId1, nodeId2, List.of(ignoreAcceptSlot1, freshAcceptSlot2), new Commit(nodeId2, ballotNumber2, 2L));
+    final var catchUpResponse = new CatchupResponse(nodeId1, nodeId2, List.of(ignoreAcceptSlot1, freshAcceptSlot2));
 
     // And node1 processes the message
     node.paxos(catchUpResponse);

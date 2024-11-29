@@ -17,16 +17,7 @@ package com.github.trex_paxos.msg;
 
 import com.github.trex_paxos.Vote;
 
-public record AcceptResponse(Vote vote, Progress progress) implements TrexMessage, DirectMessage, SlotFixingMessage {
-  /**
-   * @return the proposer that sent the request
-   */
-  public byte from() {
-    return vote.from();
-  }
-
-  public byte to() {
-    return vote.to();
-  }
-
+public record AcceptResponse(byte from, byte to, Vote vote,
+                             Progress progress) implements TrexMessage, DirectMessage, SlotFixingMessage {
+// TODO should we send the highest promise in case it is a nack?
 }

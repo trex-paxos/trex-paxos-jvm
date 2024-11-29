@@ -15,6 +15,7 @@
  */
 package com.github.trex_paxos.msg;
 
+/// TrexMessage is the base interface for all messages in the protocol.
 public sealed interface TrexMessage extends Message permits
     Accept,
     AcceptResponse,
@@ -25,6 +26,7 @@ public sealed interface TrexMessage extends Message permits
     DirectMessage,
     Prepare,
     PrepareResponse {
+  /// @return the node in the cluster that sent this message.
   byte from();
 }
 
