@@ -99,7 +99,7 @@ public record AcceptResponse(
 
 ### Third: Learning Which Values Are Fixed
 
-Any value `V` journaled into slot `S` by a mathematician majority of nodes will never change. Cloud environments typically only support point-to-point messaging. This means that `AcceptResponse` messages are only sent to the leader. It can then send a short `commit(S,N)` message to inform the other nodes when a value has been fixed. This message can piggyback at the front of the subsequent outbound `accept` message within the same network packet. 
+Any value `V` journaled into slot `S` by a mathematician majority of nodes will never change. Cloud environments typically only support point-to-point messaging. This means that `AcceptResponse` messages are only sent to the leader. It can then send a short `commit(S,N)` message to inform the other nodes when a value has been fixed. This message can piggyback at the front of the subsequent outbound `accept` message network packet. 
 
 Leaders must always increment their counter to create a fresh `N` each time they attempt to lead. That ensures that each `commit(S,N)` refers to a unique `accept(S,N,VV)` message. If another node never received the corresponding `accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the retransmission of fixed values. 
 
