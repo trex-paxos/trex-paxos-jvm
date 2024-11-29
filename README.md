@@ -71,9 +71,9 @@ Nodes never recycle their numbers. They increment their counter each time they a
 
 The objective is to fix the same command value `V` into the same command log stream index `S`, known as a log slot, at each node in the cluster. When the network is healthy and servers have undertaken crash recovery, an uncontested leader sends a stream of commands using `accept(S,N,V)` messages where:
 
-* `V` is a command value. 
 * `S` is a log index slot the leader assigns to the command value. 
 * `N` is a node's unique ballot number. The reason it is called a ballot number will only become apparent when we describe the crash recovery protocol below. 
+* `V` is a command value. 
 
 The value `V` is fixed at slot `S` when a mathematical majority of nodes journal the value `V` into their log. No matter how many leaders attempt to assign a value to the same slot `S`, they will all assign the same `V` using different unique `N` values. How that works is covered in a later section. 
 
