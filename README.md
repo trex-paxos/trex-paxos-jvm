@@ -99,12 +99,11 @@ public record AcceptResponse(
 
 ### Third: Learning Which Values Are Fixed
 
-Any value `V` journaled into slot `S` by a mathematician majority of nodes will never change. When galloping, the leader first learns that a value is fixed from the response messages of followers.  It can then send a short `commit(S,N)` message to inform the other nodes. This is not covered in the original papers but is a standard optimisation known as a Paxos "phase 3" message. We do not need to send it in a separate network packet. It can piggyback at the front of the network packet of the next outbound `accept` message. 
+Any value `V` journaled into slot `S` by a mathematician majority of nodes will never change. Cloud environments typically only support point-to-point messaging. This means that `AcceptResponse` messages are only sent to the leader. It can then send a short `commit(S,N)` message to inform the other nodes when a value has been fixed. This message can piggyback at the front of the subsequent outbound `accept` message within the same network packet. 
 
-This is why a node must always increment its counter to use a fresh `N` each time it attempts to lead. That ensures that the tuple `{S,N}` referenes a unique `V` so that the value does not need to be retransmitted. If another node never received the corresponding `accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the retransmission of fixed values. 
+Leaders must always increment their counter to create a fresh `N` each time they attempt to lead. That ensures that each `commit(S,N)` refers to a unique `accept(S,N,VV)` message. If another node never received the corresponding `accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the retransmission of fixed values. 
 
-This implementation uses code similar to the following as the messages to “teach” which values are fixed at specific slots. These are known as "learning" messages which are optional message types not discussed in the original papers: 
-
+This implementation uses code similar to the following to enable nodes to learn which values have been fixed: : 
 
 ```java
 public record Commit(
@@ -118,9 +117,9 @@ public record CatchupResponse( List<Command> catchup ) {}
 
 It is important to note that we can use any possible set of learning messages as long as we do not violate the algorithm's invariants. 
 
-When each node learns that the next contiguous slot `s` is fixed, it will up-call the command value `V` to the host application. This will be an application-specific callback that can do whatever the host application desires. The point is that every node will up-call the same command values in the same order. 
+Each node learns the value `V` fixed into each sequential slot `S`. It will up-call the command value `V` to the host application. This will be an application-specific callback that can do whatever the host application desires. The point is that every node will up-call the same command values in the same order. 
 
-Nodes may ignore any messages associated with slots less than or equal to the highest slot index they have learnt to be fixed. Dropping a message is identical to never receiving a message. That does not violate the safety of the Paxos Algorithm, as it ensures safety in the face of lost messages. 
+This implementation sends negative acknowledgements to protocol messages equal to or less than the last slow known to be fixed. A leader who receives a negative acknowledgement will abdicate and request retransmission using a `catchup` message. 
 
 ### Fourth: The Leader Takeover Protocol
 
