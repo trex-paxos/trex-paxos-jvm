@@ -57,7 +57,7 @@ public class SpecificTests {
     }};
 
     // When node 2 sends a catchup response that has fixed values made under a previous leaders ballot number
-    // And where the actual fixed message at slot one is different to the one that node 1 thinks is already committed.
+    // And where the actual fixed message at slot one is different to the one that node 1 thinks is already fixed.
     final var nodeId2 = (byte) 2;
     final var ballotNumber2 = new BallotNumber(2, (byte) 2);
     final var ignoreAcceptSlot1 = new Accept(nodeId2, 1L, ballotNumber2, new Command("cmd", "data2".getBytes()));
@@ -68,7 +68,7 @@ public class SpecificTests {
     node.paxos(catchUpResponse);
 
     // Then the fixed value should not have changed after processing the catchup.
-    assertEquals(acceptPreviouslyFixedSlot1, journal.fakeJournal.get(1L), "The committed value should not have changed after processing the catchup.");
+    assertEquals(acceptPreviouslyFixedSlot1, journal.fakeJournal.get(1L), "The fixed value should not have changed after processing the catchup.");
     // And the node should accept the second slot value even having made a higher self-promise
     assertEquals(freshAcceptSlot2, journal.fakeJournal.get(2L), "The node should accepted the second slot value even having made a higher self-promise");
     // And the node should not have updated its progress  ballot number

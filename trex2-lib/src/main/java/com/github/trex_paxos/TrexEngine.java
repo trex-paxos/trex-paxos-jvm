@@ -53,7 +53,7 @@ public abstract class TrexEngine {
   protected abstract void setHeartbeat();
 
   /// Process an application command sent from a client. This is only actioned by a leader. It will return a single accept
-  /// then append a fixed message as it is very cheap for another node to filter out commits it has already seen.
+  /// then append a fixed message as it is very cheap for another node to filter out fixed values it has already seen.
   private List<TrexMessage> command(Command command) {
       // only if we are leader do we create the next accept message into the next log index
       final var nextAcceptMessage = trexNode.nextAcceptMessage(command);
