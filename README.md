@@ -71,9 +71,9 @@ Nodes never recycle their numbers. They increment their counter each time they a
 
 The objective is to fix the same command value `V` into the same command log stream index `S`, known as a log slot, at each node in the cluster. When the network is healthy and servers have undertaken crash recovery, an uncontested leader sends a stream of commands using `accept(S,N,V)` messages where:
 
-* `V` is a command value. 
 * `S` is a log index slot the leader assigns to the command value. 
 * `N` is a node's unique ballot number. The reason it is called a ballot number will only become apparent when we describe the crash recovery protocol below. 
+* `V` is a command value. 
 
 The value `V` is fixed at slot `S` when a mathematical majority of nodes journal the value `V` into their log. No matter how many leaders attempt to assign a value to the same slot `S`, they will all assign the same `V` using different unique `N` values. How that works is covered in a later section. 
 
@@ -99,17 +99,21 @@ public record AcceptResponse(
 
 ### Third: Learning Which Values Are Fixed
 
+<<<<<<< HEAD
 Any value `V` journaled into slot `S` by a mathematician majority of nodes will never change. Cloud environments
 typically only support point-to-point messaging. This means that `AcceptResponse` messages are only sent to the leader.
 It can then send a short `fixed(S,N)` message to inform the other nodes when a value has been fixed. This message can
 piggyback at the front of the subsequent outbound `accept` message within the same network packet.
+=======
+Any value `V` journaled into slot `S` by a mathematician majority of nodes will never change. Cloud environments typically only support point-to-point messaging. This means that `AcceptResponse` messages are only sent to the leader. It can then send a short `commit(S,N)` message to inform the other nodes when a value has been fixed. This message can piggyback at the front of the subsequent outbound `accept` message network packet. 
+>>>>>>> da913573cdeb70f8b39b4d429f11646865f142e5
 
 Leaders must always increment their counter to create a fresh `N` each time they attempt to lead. That ensures that each
 `fixed(S,N)` refers to a unique `accept(S,N,VV)` message. If another node never received the corresponding
 `accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the
 retransmission of fixed values.
 
-This implementation uses code similar to the following to enable nodes to learn which values have been fixed: : 
+This implementation uses code similar to the following to enable nodes to learn which values have been fixed:
 
 ```java
 public record Fixed(
@@ -120,7 +124,7 @@ public record Fixed(
 public record Catchup(long highestFixedIndex) {
 }
 
-public record CatchupResponse( List<Command> catchup ) {}
+public record CatchupResponse( List<Accept> catchup ) {}
 ```
 
 It is important to note that we can use any possible set of learning messages as long as we do not violate the algorithm's invariants. 
