@@ -122,7 +122,7 @@ public record Accept( long logIndex,
 
 public record AcceptResponse(
     long logIndex,
-    Ballot number number,
+    BallotNumber number,
     boolean vote ){}
 ```
 
