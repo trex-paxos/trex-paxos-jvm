@@ -224,14 +224,16 @@ In this implementation a new leader first issues a `prepare` for the slot immedi
 The new leader instantaneously send the response message to itself and instantaneously 
 responds which is a massage that includes it's own `highestAccepted`. When it gets a majority 
 positive response it computes `max(highestAccepted)` to know all the slots that it must recover.
-It then streams `prepare` messages for the full range of slots. These may be buffered into a single network package.
+It then streams `prepare` messages for the full range of slots. 
 
 Intuitively, we can think of the first message as a leader election. Hence we call
 `N` a "ballot number" and we consider the responses to be "votes". 
 In a three node cluster a leader only needs to exchange one 
 message to be elected. It immediately issues small prepare 
 messages for the full range of slots. These may be batched into a single 
-network packet. 
+network packet. We can recover a range of slots in parallel  
+without making a network roundtrip per slot. In essence the new leader is 
+asking nodes to retransmit what they know about prior leaders `accept` messages.
 
 ## Fifth, Durable State Requirements
 
