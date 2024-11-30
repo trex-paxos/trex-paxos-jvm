@@ -208,9 +208,8 @@ public record Prepare( long logIndex,
 public record PrepareResponse(
     long logIndex,
     Optional<Accept> highestUnfixed,
-    long highestAccepted
-) {
-}
+    long highestAccepted,
+    boolean vote ) {}
 ```
 
 The only subtle thing above is the `highestAccepted` entry.
