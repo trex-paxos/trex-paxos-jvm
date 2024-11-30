@@ -246,34 +246,31 @@ public record Progress( BallotNumber highestPromised,
 
 public interface Journal {
    void saveProgress(Progress progress);
-   void write(long logIndex, Command command);
-   Command read(long logIndex);
+   Progress loadProgress();
+   void write(long logIndex, Accept accept);
+   Accept read(long logIndex);
    void sync();
    long highestAcceptedSlot();
 }
 ```
 
 The progress of each node is its highest promised `N` and its highest fixed slot `S`. 
-
-The command values are
-journaled into a given slot index. Journal writes must be crash-proof (disk flush or equivalent). 
-The journal's `sync ()`
-method must first flush any commands into their slots and only then flush the `progress`.
+Journal writes must be crash-proof (disk flush or equivalent). 
+The journal's `sync()` method must first flush any commands into their slots and only then flush the `progress`.
 The method `long highestAcceptedSlot()` is required to run the leader takeover protocol. 
-The journal is a single interface that could easily be implemented in an embedded Java database else
-a relational database such as postresql running on the same physical server.
+
+The journal is a single interface it could easily be implemented in an embedded Java database else
+an external relational database such as postresql running on the same physical server.
 In which case the progress record would be a small table with only one row.
 The accept table would be large and you would use the log index as the primary key.
-You could gave a maintenance cronjob check the `fixedIndex` across all nodes to then 
-delete from the accept tables for slots below that min value. 
+You could create a maintenance cronjob that computes the minimum `fixedIndex` of the progress across all nodes. You can then 
+safely delete from the accept tables for all slots below that min value. 
 
-Yet you dont gave to use a relation database. It could be entirely possible to use an external storage service to hold the actual values 
-and then run the algorithm using the key to that storage service as the command value. It is entirely 
-possible to use different storage for the accept messages than values and a third solution to hold the progress record. 
-What matters is that the values must be crash durable, before the accept log is crash durable, 
-before the progress is crash durable. You can mix and match storage solutions to get an optimal 
-set up. 
-
+You do not have to use a relation database. You could use an external storage service to hold the actual values 
+and then run the algorithm using the key to that storage service as a reference to the actual command value. It is entirely 
+possible to use different storage engines for each of the accept messages, the values and the progress record. 
+All that matters is that the values must be made crash durable, before the accept log is made crash durable, 
+before the progress is made crash durable. 
 
 ## Sixth, The invariants
 
