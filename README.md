@@ -109,7 +109,7 @@ our leader can stream `accept` messages continuously without awaiting a response
 This library uses code similar to the following as the `accept` message and its acknowledgement:
 
 ```java
-public record Command( String id,
+public record Command( String uuid,
                        byte[] operationBytes){}
 
 public record BallotNumber(int counter, byte nodeIdentifier) {}
