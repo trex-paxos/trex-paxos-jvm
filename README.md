@@ -275,8 +275,8 @@ This experience led me to make the following design decision:
 > Do not optimise the happy path for lost messages. Rather have nodes request retransmission. The ensures that 
 the exact protocol and its invarants are guaranteed. 
 
-The next observation I wish to make is that in my day job I have many times had to write up what happenes during outages of complex distributed systems. 
-This has lead me to the following wisdom written by experts: 
+In my day job I have many times had to write up what happened during outages of complex distributed systems. 
+Thesw may experiences at may companies over many years has lead me to the following wisdom written by people smarter than me
 
 > Do not attempt to have any smart error handling logic to deal with problems such as IOExceptions. The best approach is “let it crash” and have something monitoring the code
 such as kubernetes health checks, reboot any process that hits any network connectivity errors.
