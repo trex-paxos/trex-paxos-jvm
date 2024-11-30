@@ -194,16 +194,10 @@ When a node times out it attempts to run the leader takeover protocol:
 3. For each slot the leader selects the `V` that was associated with the highest `N` value from a majority of responses. If there was no value known at that slot by a majority then the new leader can safely use its own command value `V` at that slot.
 4. For each slot the leader sends fresh `accept(S,N,V)` messages with chosen command `V` using its own `N` for each slot
 
-The new leader may stream out many `prepare` messages for many slots buffering them into a single network packet.
-This allows a leader to recover many slots concurrently. 
-
-If you have been previously taught Paxos ths description above says that the leader takeover protocol is to run the 
-full algorithm for every slot. 
-
-Again, whenever a node receives either a `prepare` or `accept` message protocol message with a higher `N` that it
-replies to positively, it has promised to reject any further protocol messages with a lower `N`. Again, 
-when a leader learns that a slot is fixed in sequence it will issue a `fixed(S,N)`. Again, if it gets a majority negative 
-acknowledgment for any slot it abdicates. 
+If you have been previously studied Paxos that description says that the leader takeover protocol is to run the 
+full algorithm for many slots. The only question is what is the range of slots that we need to recover. This is the range of slots tht any previous leader has attempted to fix.
+A value is only fixed at a slot if a majority of nodes have journaled it. Clearly one node in any majority must have 
+journaled the value. We can simply ask a majority of nodes and use the max value. 
 
 This library uses code similar to the following for the `prepare` message and its acknowledgement:
 
@@ -218,22 +212,24 @@ public record PrepareResponse(
     boolean vote ) {}
 ```
 
-The only subtle thing above is the `highestAccepted` entry.
-We use `highestAccepted` to learn the full range of slots 
-that a majority of nodes know that the last leader attempted to fix.
-The max value returned defines the full set of slots that must be 
-prepared. 
+We use `highestAccepted` value to learn the full range of slots 
+that any past leader has attempted to fix.
 
-In this implementation a new leader first issues a `prepare` for the slot higher than the last it knows to be fixed.
-The new leader will instantaneously send the response message to itself 
-which includes it's own `highestAccepted`. When it gets a majority 
-positive response it computes `max(highestAccepted)` 
-and streams for that range of slots.
+Again, whenever a node receives either a `prepare` or `accept` message protocol message with a higher `N` that it
+replies to positively, it has promised to reject any further protocol messages with a lower `N`. Again, 
+when a leader learns that a slot is fixed in sequence it will issue a `fixed(S,N)`. Again, if it gets a majority negative 
+acknowledgment for any slot it abdicates. 
+
+In this implementation a new leader first issues a `prepare` for the slot immediately after the highest slot it knows was fixed.
+The new leader instantaneously send the response message to itself and instantaneously 
+responds which is a massage that includes it's own `highestAccepted`. When it gets a majority 
+positive response it computes `max(highestAccepted)` to know all the slots that it must recover.
+It then streams `prepare` messages for the full range of slots. These may be buffered into a single network package.
 
 Intuitively, we can think of the first message as a leader election. Hence we call
 `N` a "ballot number" and we consider the responses to be "votes". 
 In a three node cluster a leader only needs to exchange one 
-message to be elected. It immediately streams small prepare 
+message to be elected. It immediately issues small prepare 
 messages for the full range of slots. These may be batched into a single 
 network packet. 
 
