@@ -165,9 +165,12 @@ algorithm's invariants.
 
 As each node learns the value `V` fixed into each sequential slot `S`. It will up-call the command value `V` to the host
 application. This will be an application-specific callback that can do whatever the host application desires. The point
-is that every node will up-call the same command values in the same order. Most often a stable leader learns that a 
+is that every node will up-call the same command values in the same order. 
+
+Most often a stable leader learns that a 
 slot is fixed from a majority of positive acknowledgements. This means that in steady state the leader is first to 
 up-call to the host application. The followers learn on the next network packet from the leader.
+
 This implement has the leader periodically heartbeat out its latest `fixed` message every few tens of milliseconds.
 This means that in practice follower nodes are kept up to date to within the configurable heartbeat 
 interval. 
