@@ -275,29 +275,35 @@ This experience led me to make the following design decision:
 > Do not optimise the happy path for lost messages. Rather have nodes request retransmission. The ensures that 
 the exact protocol and its invarants are guaranteed. 
 
-In my day job I have many times had to write up what happened during outages of complex distributed systems. 
-Thesw may experiences at may companies over many years has lead me to the following wisdom written by people smarter than me
+In my day job, I have many times had to carefully read and sometimes write down what happened during outages of complex distributed systems. 
+These may experiences led me to adopt the “let it crash” philosophy:
 
-> Do not attempt to have any smart error handling logic to deal with problems such as IOExceptions. The best approach is “let it crash” and have something monitoring the code
-such as kubernetes health checks, reboot any process that hits any network connectivity errors.
+> Do not attempt to have any smart error handling logic deal with major probles. 
+The safest approach is ftrn a ”let it crash” philosophy and have something monitor and kill processes 
+that get “stuck” due to infrastructure outage.
 
-If this implementation sees “something unexpected or complex” a node simply 
-wipes any leadership stage and returns to being a follower. 
+If this implementation sees something unexpected outside of stready state the `TrexNode` will first simply 
+resert any leadership state and return to being a follower. That may lead to the leader recovery protol 
+being rerun to ensure correctness due to lost messages. 
 
-If this implementation hits IOExceptions or anything else in the critical code, it makes itself 
+If this implementation hits IOExceptions or anything else in the critical code, it maeks itself 
 as “crashed” and refuses to do anything else. You need to kill the process to reintialise everything from the 
 durable state. 
 
-And my final observation is hard won over a quarter of a century of working on distributed systems. The moment we know the bug is there and approximately where it is we typically 
+And my final observation is hard won over a quarter of a century of working on distributed systems. The moment we know 
+that a bug is there and approximately where it is we typically 
 patch it inside of an hour. No amount 
-of code review or developer written tests ever finds all the bugs. We meed to write brutally simple code where there
+of code review or developer written tests ever finds all of the bugs. We meed to write brutally simple code where there
 is simply less space for bugs to hide. We need to do brute force style testing on any mission critical code:
 
 > Keep it as simple as possible and attempt a brute force search for bugs. 
 
-This library presents my thesis that can codify the invariants and perform a brute force search for protocol violations. 
+In practice often we dont write such brute force tests we parallel run in production. 
+Yet we can and should for something as well specified and as mechanically simple 
+as an implementation of Paxos. This library presents my thesis om that topic. 
+
 Then what remains is the authors mistakes in the specification and implementation of the invariants and the tests. 
-The benefit of open source is that with enough eyes, those errors can be found and then fixed inside of an hour. 
+The benefit of open source is that with enough eyes, those bugs can be found and then fixed inside of an hour. 
 
 ### Project Goals
 
