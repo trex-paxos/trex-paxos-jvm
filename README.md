@@ -122,9 +122,14 @@ public record Accept( long logIndex,
 
 public record AcceptResponse(
     long logIndex,
-    BallotNumber number,
+    Ballot number number,
     boolean vote ){}
 ```
+
+A careful reader of the code above would be notice the boolean `vote`, which implies a nodes may
+respond with either a positive acknowledgement or a negative acknowledgement. 
+This implementation includes negative acknowledgements to both `prepare` and `accept` 
+messages. When a leader receives a majority negative response, it abdicates. 
 
 ### Third: Learning Which Values Are Fixed
 
