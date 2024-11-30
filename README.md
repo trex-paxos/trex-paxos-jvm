@@ -136,7 +136,7 @@ messages. When a leader receives a majority negative response, it abdicates.
 
 Any value `V` journaled into slot `S` by a mathematical majority of nodes will never change. Cloud environments
 typically only support point-to-point messaging. This means that `AcceptResponse` messages are only sent to the leader.
-As the leader is the first to learn which values are chosen, Lamport calls the leader the “distinguished learner”. 
+As the leader is the first to learn which values are fixed, Lamport calls the leader the “distinguished learner”. 
 
 The leader can send a short `fixed(S,N)` message to inform the other nodes when a value has been fixed. This message can
 piggyback at the front of the subsequent outbound `accept` message network packet. Due to lost messaging a leader may 
