@@ -185,19 +185,24 @@ On leader election (p. 7):
 
 > A reliable algorithm for electing a proposer must use either randomness or realtime — for example, by using timeouts. However, safety is ensured regardless of the success or failure of the election.
 
-The novelty of Paxos was that it did not require real-time clocks. This implementation uses random timeouts:
+The novelty of Paxos was that it did not require real-time clocks. This implementation uses random timeouts.
+When a node times out it attempts to run the leader takeover protocol:
 
-1. Any leader sends `prepare(N,S)` for all slots any prior leader has attempted to fix
-2. Nodes respond with promise messages containing any unfixed `{N,V}` tuple at that slot `S`
-3. The leader selects the `V` that was associated with the highest `N` value from a majority of responses
+1. The new leader sends `prepare(N,S)` for all slots any prior leader has attempted to fix
+2. Nodes respond with promise messages containing any unfixed `{S,N,V}` tuples for each message
+3. For eacb slot the leader selects the `V` that was associated with the highest `N` value from a majority of responses
 4. The leader sends fresh `accept(S,N,V)` messages with chosen commands `V` using its own `N`
+
+If you have been previously taught Paxos that last set of statements simply says to run the full algorithm for every slot. 
+
+Again, whenever a node receives either a `prepare` or `accept` message protocol message with a higher `N` that it
+replies to positively, it has promised to reject any further protocol messages with a lower `N`.
+
+The new leader can stream out many messages for many slots buffering them into a single network packet.
 
 A node might have no value for the specific slot. We can use `Optional<Command>` to cover that case. If a leader sees no
 values from a majority of nodes, it is free to pick any value. In practice, a new leader won't yet be accepting client
 commands until it gets to a steady state. So, it will choose a special “no operation” value, which is an empty command.
-
-Again, whenever a node receives either a `prepare` or `accept` message protocol message with a higher `N` that it
-replies to positively, it has promised to reject any further protocol messages with a lower `N`.
 
 This library uses code similar to the following for the `prepare` message and its acknowledgement:
 
@@ -215,16 +220,14 @@ public record PrepareResponse(
 The only subtle thing above is the `highestAccepted` entry.
 We use `highestAccepted` to learn the full range of slots 
 that a majority of nodes know that the last leader attempted to fix.
-The new leader can then immediately stream `prepare` messages for 
-all lots it must recover. Once this slots range has been fixed using the full set of messages 
-does the leader upgrade to steady state galloping mode. 
 
-
-It is entirely acceptable that messages carry more information. This is not a violation of the algorithm as long as the algorithm's invariants are not violated. 
+It is entirely acceptable that messages carry more information. 
 In this case, a new leader must send a `prepare` message for all slots
-that the majority of nodes collectively know the past leader attempted to fix.
+that the majority of nodes collectively know any prior leader attempted to fix. 
 
-
+This implementation first sends a `prepare` for the slot higher than the last knows to be fixed.
+Once it has a majority response it takes the max of highestAccepted 
+and streams for that range of slots.
 
 ## Fifth, The invariants
 
