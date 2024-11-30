@@ -62,7 +62,7 @@ proof of it's correctness. This description will explain it in the following ord
 
 ### First: Promises, Promises
 
-The core algorithm uses only two protocol messages, `prepare(_,N,)` and `accept(_,N,_))` where `N` is called a ballot
+The core algorithm uses only two protocol messages, `prepare(_,N)` and `accept(_,N,_))` where `N` is called a ballot
 number or a proposal number. Nodes promise to reject protocol messages associated with a lower number than the last `N`
 they did not reject. This means each node stores the highest `N` it has previously acknowledged.
 
