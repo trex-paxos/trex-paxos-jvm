@@ -213,12 +213,18 @@ public record PrepareResponse(
 ```
 
 The only subtle thing above is the `highestAccepted` entry.
+We use `highestAccepted` to learn the full range of slots 
+that a majority of nodes know that the last leader attempted to fix.
+The new leader can then immediately stream `prepare` messages for 
+all lots it must recover. Once this slots range has been fixed using the full set of messages 
+does the leader upgrade to steady state galloping mode. 
+
+
 It is entirely acceptable that messages carry more information. This is not a violation of the algorithm as long as the algorithm's invariants are not violated. 
 In this case, a new leader must send a `prepare` message for all slots
 that the majority of nodes collectively know the past leader attempted to fix.
-We use `highestAccepted` to learn that full range, then stream `prepare` messages for 
-all slots. Only when all slots have been recovered, does the leader upgrade 
-to galloping mode. 
+
+
 
 ## Fifth, The invariants
 
