@@ -160,7 +160,7 @@ Each node learns the value `V` fixed into each sequential slot `S`. It will up-c
 application. This will be an application-specific callback that can do whatever the host application desires. The point
 is that every node will up-call the same command values in the same order.
 
-This implementation sends negative acknowledgements to protocol messages equal to or less than the last slow known to be
+This implementation sends negative acknowledgements to protocol messages equal to or less than the last log index slot known to be
 fixed. A leader who receives a negative acknowledgement will abdicate and request retransmission using a `catchup`
 message.
 
@@ -253,6 +253,38 @@ The algorithm uses only inequalities, not absolute values or absolute offsets:
 That is a relatively small set of test permutations to brute force.
 
 TO BE CONTINUED
+
+### Design Choices
+
+A careful reading of the description above explains that the happy path galloping state is optimal. 
+Where many implementations of any protocl go wrong is in trying to apply optimisation that add
+complexity and bugs. I myself did this with an early version of the code where I had a flawed concept of a “fast forward commit”.
+That was an optimisatio. I attempted for lost messages on the galloping path when the leadership did not change.
+I discovered my error by running thousands of randomised simulations with rolling network partions that checked 
+for the divergence of the commit logs of a three node cluster. This led me to make the following design decision:
+
+> Do not optimise the happy path for lost messages. Rather have nodes request retransmission. The ensures that 
+the exact protocol and its invarants are guaranteed. 
+
+The ultimate sin of a Paxos library is to not make state durable to go faster in stready state. 
+It is a violation of the protocol to do that. The proper way to get throughput is to batch commands into a single 
+`Accept`. Rather than putting one client command as bytes into the command byte array 
+put a list of commands that were bufferred while awaiting the disk writes. 
+
+The next observation I wish to make is that in my day job I have many times had to write up what happenes during outages of complex distributed systems. 
+This has lead me to the following wisdom written by experts: 
+
+> Do not attempt to have any smart error handling logic to deal with problems such as IOExceptions. The best approach is “let it crash” and have something monitoring the code
+such as kubernetes health checks reboot any process that hits any network connectivity errors.
+
+And my final observation is hard won over a quarter of a century of working on distributed systems. The moment we know the bug is there and approximately where it is we typically 
+patch it inside of an hour. No amount 
+of code review or developer written tests ever finds all the bugs. We meed to write brutally simple code where there
+is simply less space for bugs to hide. We need to do brute force style testing on any mission critical code:
+
+> Keep it as simple as possible and attempt a brute force search for bugs. 
+
+This library presents my evidence that the 
 
 ### Project Goals
 
