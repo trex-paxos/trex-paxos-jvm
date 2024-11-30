@@ -172,7 +172,7 @@ On leader election (p. 7):
 
 The novelty of Paxos was that it did not require real-time clocks. This implementation uses random timeouts:
 
-1. Any leader sends `prepare(N,S)` for slots not known to be fixed
+1. Any leader sends `prepare(N,S)` for all slots any prior leader has attempted to fix
 2. Nodes respond with promise messages containing any unfixed `{N,V}` tuple at that slot `S`
 3. The leader selects the `V` that was associated with the highest `N` value from a majority of responses
 4. The leader sends fresh `accept(S,N,V)` messages with chosen commands `V` using its own `N`
@@ -192,9 +192,19 @@ public record Prepare( long logIndex,
 
 public record PrepareResponse(
     long logIndex,
-    Optional<Accept> highestUnfixed) {
+    Optional<Accept> highestUnfixed,
+    long highestAccepted
+) {
 }
 ```
+
+The only subtle thing above is the `highestAccepted` entry.
+It is entirely acceptable that messages carry more information. This is not a violation of the algorithm as long as the algorithm's invariants are not violated. 
+In this case, a new leader must send a `prepare` message for all slots
+that the majority of nodes collectively know the past leader attempted to fix.
+We use `highestAccepted` to learn that full range, then stream `prepare` messages for 
+all slots. Only when all slots have been recovered, does the leader upgrade 
+to galloping mode. 
 
 ## Fifth, The invariants
 
