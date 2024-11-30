@@ -255,17 +255,27 @@ public interface Journal {
 }
 ```
 
-The progress of each node is its highest promised `N` and its highest fixed slot `S`. Accepted command values are
-journaled into a given slot index with the `Accept` message so that we can retransmit 
-them easily. There is no need to actually persist anything other than the actual comamnd bytes against 
-each slot key. 
- 
-Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync ()`
+The progress of each node is its highest promised `N` and its highest fixed slot `S`. 
+
+The command values are
+journaled into a given slot index. Journal writes must be crash-proof (disk flush or equivalent). 
+The journal's `sync ()`
 method must first flush any commands into their slots and only then flush the `progress`.
 The method `long highestAcceptedSlot()` is required to run the leader takeover protocol. 
-It is mentioned here as it would slow down crash recovery if it was slow to compute this value. 
-In practice many storage systems support ordered keys else indexes over keys such that getting the max 
-key under which an accept message is journaled can be a fast operation. 
+The journal is a single interface that could easily be implemented in an embedded Java database else
+a relational database such as postresql running on the same physical server.
+In which case the progress record would be a small table with only one row.
+The accept table would be large and you would use the log index as the primary key.
+You could gave a maintenance cronjob check the `fixedIndex` across all nodes to then 
+delete from the accept tables for slots below that min value. 
+
+Yet you dont gave to use a relation database. It could be entirely possible to use an external storage service to hold the actual values 
+and then run the algorithm using the key to that storage service as the command value. It is entirely 
+possible to use different storage for the accept messages than values and a third solution to hold the progress record. 
+What matters is that the values must be crash durable, before the accept log is crash durable, 
+before the progress is crash durable. You can mix and match storage solutions to get an optimal 
+set up. 
+
 
 ## Sixth, The invariants
 
