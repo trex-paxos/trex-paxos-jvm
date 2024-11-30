@@ -127,7 +127,7 @@ public record AcceptResponse(
     boolean vote ){}
 ```
 
-A careful reader of the code above would be notice the boolean `vote`, which implies each node may
+The boolean `vote` implies each node may
 respond with either a positive acknowledgement or a negative acknowledgement. 
 This implementation includes negative acknowledgements to both `prepare` and `accept` 
 messages. When a leader receives a majority negative response, it abdicates. 
