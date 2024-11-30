@@ -290,17 +290,14 @@ If this implementation hits IOExceptions or anything else in the critical code, 
 as “crashed” and refuses to do anything else. You need to kill the process to reintialise everything from the 
 durable state. 
 
-And my final observation is hard won over a quarter of a century of working on distributed systems. The moment we know 
-that a bug is there and approximately where it is we typically 
-patch it inside of an hour. No amount 
-of code review or developer written tests ever finds all of the bugs. We meed to write brutally simple code where there
-is simply less space for bugs to hide. We need to do brute force style testing on any mission critical code:
+My final observation is hard won over a quarter of a century of working on distributed systems. The moment we know 
+a bug exists. We find it inside of an hour and patch it. Yet recovery in production and rolling out the patch 
+can take multiple days. No amount 
+of code review or developer written tests ever finds all of the bugs. We shoukd aim to write brutally simple code where there
+is simply less surface for bugs to hide. We should aim to do brute-force style testing on mission critical code.
+This leads to this design choice:
 
 > Keep it as simple as possible and attempt a brute force search for bugs. 
-
-In practice often we dont write such brute force tests we parallel run in production. 
-Yet we can and should for something as well specified and as mechanically simple 
-as an implementation of Paxos. This library presents my thesis om that topic. 
 
 Then what remains is the authors mistakes in the specification and implementation of the invariants and the tests. 
 The benefit of open source is that with enough eyes, those bugs can be found and then fixed inside of an hour. 
