@@ -143,11 +143,11 @@ piggyback at the front of the subsequent outbound `accept` message network packe
 learn which slots are fixed out of order. This implementation only issues `fixed` messages in sequential log order. 
 
 Leaders must always increment their counter to create a fresh `N` each time they attempt to lead. That ensures that each
-`fixed(S,N)` refers to a unique `accept(S,N,V)` message. If another node never received the corresponding
-`accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the
+`fixed(S,N)` refers to a unique `accept(S,N,V)` message. If any node does not have the matching 
+`accept(S,N,V)` in its jounral it must request retransmission. This implementation uses a `catchup` message to request the
 retransmission of missed `accept` messages. 
 
-This implementation uses code similar to the following to enable nodes to learn which values have been fixed:
+This implementation uses code similar to the following to allow nodes other than the leader to learn which values have been fixed:
 
 ```java
 public record Fixed(
