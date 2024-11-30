@@ -132,7 +132,7 @@ It can then send a short `fixed(S,N)` message to inform the other nodes when a v
 piggyback at the front of the subsequent outbound `accept` message network packet.
 
 Leaders must always increment their counter to create a fresh `N` each time they attempt to lead. That ensures that each
-`fixed(S,N)` refers to a unique `accept(S,N,VV)` message. If another node never received the corresponding
+`fixed(S,N)` refers to a unique `accept(S,N,V)` message. If another node never received the corresponding
 `accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the
 retransmission of fixed values.
 
