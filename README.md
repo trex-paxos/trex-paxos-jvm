@@ -222,7 +222,7 @@ acknowledgment for any slot it abdicates.
 
 In this implementation a new leader first issues a `prepare` for the slot immediately after the highest slot it knows was fixed.
 The new leader instantaneously send the response message to itself and instantaneously 
-responds which is a massage that includes it's own `highestAccepted`. When it gets a majority 
+responds which is a message that includes it's own `highestAccepted`. When it gets a majority 
 positive response it computes `max(highestAccepted)` to know all the slots that it must recover.
 It then streams `prepare` messages for the full range of slots. 
 
