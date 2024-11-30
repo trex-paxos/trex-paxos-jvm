@@ -221,12 +221,10 @@ The only subtle thing above is the `highestAccepted` entry.
 We use `highestAccepted` to learn the full range of slots 
 that a majority of nodes know that the last leader attempted to fix.
 
-It is entirely acceptable that messages carry more information. 
-In this case, a new leader must send a `prepare` message for all slots
-that the majority of nodes collectively know any prior leader attempted to fix. 
-
-This implementation first sends a `prepare` for the slot higher than the last knows to be fixed.
-Once it has a majority response it takes the max of highestAccepted 
+In this implementation a new leader first issues `prepare` for the slot higher than the last knows to be fixed.
+The new leader will instantaneously send the response message to itself 
+which includes it's own `highestAccepted`. When it gets a majority 
+positive response it computes `max(highestAccepted)` 
 and streams for that range of slots.
 
 ## Fifth, The invariants
