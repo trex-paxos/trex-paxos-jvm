@@ -59,7 +59,8 @@ proof of it's correctness. This description will explain it in the following ord
 * Second, explain the steady state of the algorithm, which uses only `accept` messages.
 * Third, explain how servers may learn that values have been fixed efficiently.
 * Fourth, explain the leader take-over protocol, which is the most complex step that uses both `prepare` and `accept` messages.
-* Fifth, define the invariants of this implementation.
+* Fifth, explain the durable state requirements.
+* Sixth, define the invariants of this implementation.
 
 ### First: Promises, Promises
 
@@ -189,20 +190,20 @@ The novelty of Paxos was that it did not require real-time clocks. This implemen
 When a node times out it attempts to run the leader takeover protocol:
 
 1. The new leader sends `prepare(N,S)` for all slots any prior leader has attempted to fix
-2. For each slot nodes respond with promise messages containing any unfixed `{S,N,V}` tuples
-3. For each slot `S` the leader selects the `V` that was associated with the highest `N` value from a majority of responses
-4. For each slot leader sends fresh `accept(S,N,V)` messages with chosen commands `V` using its own `N` for each slot
+2. For each slot nodes respond with promise messages containing any unfixed `{S,N,V}` tuples else only `{S,N}` is it has no value at that slot. 
+3. For each slot the leader selects the `V` that was associated with the highest `N` value from a majority of responses. If there was no value known at that slot by a majority then the new leader can safely use its own command value `V` at that slot. . 
+4. For each slot the leader sends fresh `accept(S,N,V)` messages with chosen command `V` using its own `N` for each slot
 
-If you have been previously taught Paxos that last set of statements simply says to run the full algorithm for every slot. 
+The new leader may stream out many `prepare` messages for many slots buffering them into a single network packet.
+This allows a leader to recover many slots concurrently. 
+
+If you have been previously taught Paxos ths description above says that the leader takeover protocol is to run the 
+full algorithm for every slot. 
 
 Again, whenever a node receives either a `prepare` or `accept` message protocol message with a higher `N` that it
-replies to positively, it has promised to reject any further protocol messages with a lower `N`.
-
-The new leader can stream out many messages for many slots buffering them into a single network packet.
-
-A node might have no value for the specific slot. We can use `Optional<Command>` to cover that case. If a leader sees no
-values from a majority of nodes, it is free to pick any value. In practice, a new leader won't yet be accepting client
-commands until it gets to a steady state. So, it will choose a special “no operation” value, which is an empty command.
+replies to positively, it has promised to reject any further protocol messages with a lower `N`. Again, 
+when a leader learns that a slot is fixed in sequence it will issue a `fixed(S,N)`. Again, if it gets a majority negative 
+acknowledgment for any slot it abdicates. 
 
 This library uses code similar to the following for the `prepare` message and its acknowledgement:
 
@@ -220,14 +221,23 @@ public record PrepareResponse(
 The only subtle thing above is the `highestAccepted` entry.
 We use `highestAccepted` to learn the full range of slots 
 that a majority of nodes know that the last leader attempted to fix.
+The max value returned defines the full set of slots that must be 
+prepared. 
 
-In this implementation a new leader first issues `prepare` for the slot higher than the last it knows to be fixed.
+In this implementation a new leader first issues a `prepare` for the slot higher than the last it knows to be fixed.
 The new leader will instantaneously send the response message to itself 
 which includes it's own `highestAccepted`. When it gets a majority 
 positive response it computes `max(highestAccepted)` 
 and streams for that range of slots.
 
-## Fifth, The invariants
+Intuitively, we can think of the first message as a leader election. Hence we call
+`N` a "ballot number" and we consider the responses to be "votes". 
+In a three node cluster a leader only needs to exchange one 
+message to be elected. It immediately streams small prepare 
+messages for the full range of slots. These may be batched into a single 
+network packet. 
+
+## Fifth, Durable State Requirements
 
 The state of each node is similar to the following model:
 
@@ -241,12 +251,19 @@ public interface Journal {
    void write(long logIndex, Command command);
    Command read(long logIndex);
    void sync();
+   long highestAcceptedSlot();
 }
 ```
 
 The progress of each node is its highest promised `N` and its highest fixed slot `S`. The command values are
-journaled to a given slot index. Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync ()`
+journaled into a given slot index. Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync ()`
 method must first flush any commands into their slots and only then flush the `progress`.
+The method `long highestAcceptedSlot()` is required to run the leader takeover protocol. 
+It is mentioned here as it would slow down crash recovery if it was slow to compute this value. 
+In practice many storage systems support ordered keys else indexes over keys such that getting the max 
+key under which an accept message is journaled can be a fast operation. 
+
+## Sixth, The invariants
 
 The above algorithm has a small mechanical footprint. It is a set of rules that imply a handful of inequality checks.
 The entire state space of a distributed system is hard to reason about and test. There are a near-infinite number of
