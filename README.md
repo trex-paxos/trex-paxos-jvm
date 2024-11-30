@@ -258,24 +258,35 @@ TO BE CONTINUED
 
 A careful reading of the description above explains that the happy path galloping state is optimal. 
 Where many implementations of any protocl go wrong is in trying to apply optimisation that add
-complexity and bugs. I myself did this with an early version of the code where I had a flawed concept of a “fast forward commit”.
-That was an optimisatio. I attempted for lost messages on the galloping path when the leadership did not change.
-I discovered my error by running thousands of randomised simulations with rolling network partions that checked 
-for the divergence of the commit logs of a three node cluster. This led me to make the following design decision:
-
-> Do not optimise the happy path for lost messages. Rather have nodes request retransmission. The ensures that 
-the exact protocol and its invarants are guaranteed. 
+complexity and bugs. 
 
 The ultimate sin of a Paxos library is to not make state durable to go faster in stready state. 
 It is a violation of the protocol to do that. The proper way to get throughput is to batch commands into a single 
 `Accept`. Rather than putting one client command as bytes into the command byte array 
 put a list of commands that were bufferred while awaiting the disk writes. 
 
+I implemented a flawed concept of a “fast forward commit” in an early implementation. 
+I attempted to optimise for lost messages on the galloping path when the leadership did not change.
+I discovered my error by running thousands of randomised simulations with rolling network partions that checked 
+for the divergence of the commit logs of a three node cluster.
+
+This experience led me to make the following design decision:
+
+> Do not optimise the happy path for lost messages. Rather have nodes request retransmission. The ensures that 
+the exact protocol and its invarants are guaranteed. 
+
 The next observation I wish to make is that in my day job I have many times had to write up what happenes during outages of complex distributed systems. 
 This has lead me to the following wisdom written by experts: 
 
 > Do not attempt to have any smart error handling logic to deal with problems such as IOExceptions. The best approach is “let it crash” and have something monitoring the code
-such as kubernetes health checks reboot any process that hits any network connectivity errors.
+such as kubernetes health checks, reboot any process that hits any network connectivity errors.
+
+If this implementation sees “something unexpected or complex” a node simply 
+wipes any leadership stage and returns to being a follower. 
+
+If this implementation hits IOExceptions or anything else in the critical code, it makes itself 
+as “crashed” and refuses to do anything else. You need to kill the process to reintialise everything from the 
+durable state. 
 
 And my final observation is hard won over a quarter of a century of working on distributed systems. The moment we know the bug is there and approximately where it is we typically 
 patch it inside of an hour. No amount 
@@ -284,7 +295,9 @@ is simply less space for bugs to hide. We need to do brute force style testing o
 
 > Keep it as simple as possible and attempt a brute force search for bugs. 
 
-This library presents my evidence that the 
+This library presents my thesis that can codify the invariants and perform a brute force search for protocol violations. 
+Then what remains is the authors mistakes in the specification and implementation of the invariants and the tests. 
+The benefit of open source is that with enough eyes, those errors can be found and then fixed inside of an hour. 
 
 ### Project Goals
 
