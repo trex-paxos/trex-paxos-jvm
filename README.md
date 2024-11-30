@@ -163,12 +163,17 @@ public record CatchupResponse( List<Accept> catchup ) {}
 It is important to note that we can use any possible set of learning messages as long as we do not violate the
 algorithm's invariants.
 
-Each node learns the value `V` fixed into each sequential slot `S`. It will up-call the command value `V` to the host
+As each node learns the value `V` fixed into each sequential slot `S`. It will up-call the command value `V` to the host
 application. This will be an application-specific callback that can do whatever the host application desires. The point
-is that every node will up-call the same command values in the same order.
+is that every node will up-call the same command values in the same order. Most often a stable leader learns that a 
+slot is fixed from a majority of positive acknowledgements. This means that in steady state the leader is first to 
+up-call to the host application. The followers learn on the next network packet from the leader.
+This implement has the leader periodically heartbeat out its latest `fixed` message every few tens of milliseconds.
+This means that in practice follower nodes are kept up to date to within the configurable heartbeat 
+interval. 
 
-This implementation sends negative acknowledgements to protocol messages equal to or less than the last log index slot known to be
-fixed. A leader who receives a negative acknowledgement will abdicate and request retransmission using a `catchup`
+This implementation sends negative acknowledgements to `prepare` and `accept` messages with `S` equal to or less than the last log index slot known to be
+fixed. A leader who receives a majority of negative acknowledgements will abdicate and request retransmission using a `catchup`
 message.
 
 ### Fourth: The Leader Takeover Protocol
