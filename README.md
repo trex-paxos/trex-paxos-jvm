@@ -233,7 +233,7 @@ message to be elected. It immediately issues small prepare
 messages for the full range of slots. These may be batched into a single 
 network packet. We can recover a range of slots in parallel  
 without making a network roundtrip per slot. In essence the new leader is 
-asking nodes to retransmit what they know about prior leaders `accept` messages.
+asking nodes to retransmit what they know about past `accept` messages.
 
 ## Fifth, Durable State Requirements
 
