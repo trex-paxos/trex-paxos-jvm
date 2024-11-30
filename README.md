@@ -255,8 +255,12 @@ public interface Journal {
 }
 ```
 
-The progress of each node is its highest promised `N` and its highest fixed slot `S`. The command values are
-journaled into a given slot index. Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync ()`
+The progress of each node is its highest promised `N` and its highest fixed slot `S`. Accepted command values are
+journaled into a given slot index with the `Accept` message so that we can retransmit 
+them easily. There is no need to actually persist anything other than the actual comamnd bytes against 
+each slot key. 
+ 
+Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync ()`
 method must first flush any commands into their slots and only then flush the `progress`.
 The method `long highestAcceptedSlot()` is required to run the leader takeover protocol. 
 It is mentioned here as it would slow down crash recovery if it was slow to compute this value. 
