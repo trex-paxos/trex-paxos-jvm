@@ -189,9 +189,9 @@ The novelty of Paxos was that it did not require real-time clocks. This implemen
 When a node times out it attempts to run the leader takeover protocol:
 
 1. The new leader sends `prepare(N,S)` for all slots any prior leader has attempted to fix
-2. Nodes respond with promise messages containing any unfixed `{S,N,V}` tuples for each message
-3. For eacb slot the leader selects the `V` that was associated with the highest `N` value from a majority of responses
-4. The leader sends fresh `accept(S,N,V)` messages with chosen commands `V` using its own `N`
+2. For each slot nodes respond with promise messages containing any unfixed `{S,N,V}` tuples
+3. For each slot `S` the leader selects the `V` that was associated with the highest `N` value from a majority of responses
+4. For each slot leader sends fresh `accept(S,N,V)` messages with chosen commands `V` using its own `N` for each slot
 
 If you have been previously taught Paxos that last set of statements simply says to run the full algorithm for every slot. 
 
@@ -221,7 +221,7 @@ The only subtle thing above is the `highestAccepted` entry.
 We use `highestAccepted` to learn the full range of slots 
 that a majority of nodes know that the last leader attempted to fix.
 
-In this implementation a new leader first issues `prepare` for the slot higher than the last knows to be fixed.
+In this implementation a new leader first issues `prepare` for the slot higher than the last it knows to be fixed.
 The new leader will instantaneously send the response message to itself 
 which includes it's own `highestAccepted`. When it gets a majority 
 positive response it computes `max(highestAccepted)` 
