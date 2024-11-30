@@ -190,7 +190,7 @@ The novelty of Paxos was that it did not require real-time clocks. This implemen
 When a node times out it attempts to run the leader takeover protocol:
 
 1. The new leader sends `prepare(N,S)` for all slots any prior leader has attempted to fix
-2. For each slot nodes respond with promise messages containing any unfixed `{S,N,V}` tuples else only `{S,N}` is it has no value at that slot. 
+2. For each slot nodes respond with promise messages containing any unfixed `{S,N,V}` tuples else only `{S,N}` when it has no value in that slot. 
 3. For each slot the leader selects the `V` that was associated with the highest `N` value from a majority of responses. If there was no value known at that slot by a majority then the new leader can safely use its own command value `V` at that slot. . 
 4. For each slot the leader sends fresh `accept(S,N,V)` messages with chosen command `V` using its own `N` for each slot
 
