@@ -128,8 +128,10 @@ public record AcceptResponse(
 
 Any value `V` journaled into slot `S` by a mathematical majority of nodes will never change. Cloud environments
 typically only support point-to-point messaging. This means that `AcceptResponse` messages are only sent to the leader.
-It can then send a short `fixed(S,N)` message to inform the other nodes when a value has been fixed. This message can
-piggyback at the front of the subsequent outbound `accept` message network packet.
+As the leader is the first to learn which values are chosen is why the quote above calls the leader the “distinguished learner”. 
+The leader can send a short `fixed(S,N)` message to inform the other nodes when a value has been fixed. This message can
+piggyback at the front of the subsequent outbound `accept` message network packet. It is important not to do that due to lost messaging. A leader may 
+learn which slots are fixed out of order. This implementation only issues `fixed` messages in sequential log order. 
 
 Leaders must always increment their counter to create a fresh `N` each time they attempt to lead. That ensures that each
 `fixed(S,N)` refers to a unique `accept(S,N,V)` message. If another node never received the corresponding
