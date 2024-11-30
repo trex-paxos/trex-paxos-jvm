@@ -19,6 +19,7 @@ implementation is sound. The ambition of this documentation is to:
    papers.
 3. Provide sufficient detail around the "learning" messages used by this implementation to understand that they are minimal and do not harm correctness.
 4. Provide enough documentation so that someone can carefully study the code, the tests, and the papers to verify this implementation with far less overall effort than it would take them to write any equivalent implementation.
+5. Explicity explains the design decisions in this implementation. 
 
 As of today, the proceeding list is aspirational. When the exhaustive tests are written, I will invite peer review and
 possibly offer a nominal bug bounty (which would be a folly I would surely come to instantly regret).
@@ -85,7 +86,8 @@ In that record class, the `compareTo` method treats the four-byte counter as hav
 single-byte `nodeIndentifier` as having the least significant bits. The cluster operator must ensure they assign unique
 `nodeIdentifier` values to every node added to the cluster.
 
-Nodes never recycle their numbers. They increment their counter each time they attempt to lead.
+In this implementation nodes never recycle their numbers. They increment their counter each time they attempt to lead. 
+This avoids the need to retransmit values when fixing slots which is explained below.
 
 ### Second: Steady State Galloping
 
