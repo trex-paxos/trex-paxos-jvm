@@ -131,7 +131,7 @@ typically only support point-to-point messaging. This means that `AcceptResponse
 As the leader is the first to learn which values are chosen, Lamport calls the leader the “distinguished learner”. 
 
 The leader can send a short `fixed(S,N)` message to inform the other nodes when a value has been fixed. This message can
-piggyback at the front of the subsequent outbound `accept` message network packet. It is important not to do that due to lost messaging. A leader may 
+piggyback at the front of the subsequent outbound `accept` message network packet. Due to lost messaging a leader may 
 learn which slots are fixed out of order. This implementation only issues `fixed` messages in sequential log order. 
 
 Leaders must always increment their counter to create a fresh `N` each time they attempt to lead. That ensures that each
