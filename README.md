@@ -144,7 +144,7 @@ learn which slots are fixed out of order. This implementation only issues `fixed
 Leaders must always increment their counter to create a fresh `N` each time they attempt to lead. That ensures that each
 `fixed(S,N)` refers to a unique `accept(S,N,V)` message. If another node never received the corresponding
 `accept(S,N,V)`, it must request retransmission. This implementation uses a `catchup` message to request the
-retransmission of fixed values.
+retransmission of missed `accept` messages. 
 
 This implementation uses code similar to the following to enable nodes to learn which values have been fixed:
 
