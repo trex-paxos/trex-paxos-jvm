@@ -169,7 +169,9 @@ On leader election (p. 7):
 
 > A reliable algorithm for electing a proposer must use either randomness or realtime — for example, by using timeouts. However, safety is ensured regardless of the success or failure of the election.
 
-The novelty of Paxos was that it did not require real-time clocks. This implementation uses random timeouts.
+This implementation leader elections using random timeouts.
+It allowe you to use a different mechanism by isolating the pure algorithm logic 
+into the `TrexNode` class. The timeout logic is isolated into the `TrexEngine` class. 
 When a node times out it attempts to run the leader takeover protocol:
 
 1. The new leader sends `prepare(N,S)` for all slots any prior leader has attempted to fix
