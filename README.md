@@ -177,7 +177,7 @@ When a node times out it attempts to run the leader takeover protocol:
 1. The new leader sends `prepare(N,S)` for all slots any prior leader has attempted to fix
 2. For each slot nodes respond with promise messages containing any unfixed `{S,N,V}` tuples else only `{S,N}` when it has no value in that slot. 
 3. For each slot the leader selects the `V` that was associated with the highest `N` value from a majority of responses. If there was no value known at that slot by a majority then the new leader can safely use its own command value `V` at that slot.
-4. For each slot the leader sends fresh `accept(S,N,V)` messages with chosen command `V` using its own `N` for each slot
+4. For each slot the leader sends fresh `accept(S,N',V)` messages with chosen command `V` using its own higher `N'` for each slot.
 
 If you have been previously studied Paxos that description says that the leader takeover protocol is to run the 
 full algorithm for many slots. The only question is what is the range of slots that we need to recover. This is the range of slots tht any previous leader has attempted to fix.
