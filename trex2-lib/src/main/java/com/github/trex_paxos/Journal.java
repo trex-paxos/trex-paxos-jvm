@@ -21,14 +21,16 @@ import java.util.Optional;
 
 /// The journal is the storage layer of the Paxos Algorithm.
 ///
-/// If you are already using a relational database you can use it to store the state of the journal. Then you can use
-/// a database transaction to save the modified state of your application in the same database transaction that you
-/// persist the progress record. In which case use the {@link TrexEngine#TrexEngine(TrexNode, boolean)} constructor
-/// with the `hostManaged` flag set to true. This will prevent the TrexEngine from calling the `sync()` method.
-/// The host must then commit the underlying journal database transaction after it has applied the fixed commands, and
-/// before it sends out any messages.
+/// You will need to turn messages into bytes and back again. There is a {@link Pickle} class that can help with this.
 ///
-/// It is important to note you should not delete accept messages the moment they are up-called into the application.
+/// If you are already using a relational database you can use it to store the state of the journal. Then you can use
+/// a database transaction to commit the work of the fixed commands within the same database transaction that you
+/// persist the `progress` record. In which case use the {@link TrexEngine#TrexEngine(TrexNode, boolean)} constructor
+/// with the `hostManagedTransactions` flag set to true. This will prevent the TrexEngine from calling the `sync()` method.
+/// The host must then commit the underlying journal database transaction after it has applied all the fixed commands
+/// to the application tables. Only then may it sends out any messages.
+///
+/// It is important to note you should not delete `accept` messages the moment they are up-called into the application.
 /// They should be kept around so that other nodes can request retransmission of missed messages. To
 /// keep the database size under control you can run a cronjob that reads the {@link Progress#highestFixedIndex()}
 /// from all databases. It is then safe to delete all `Accept` messages stored at a lower than the min fixed index seen
@@ -37,19 +39,19 @@ import java.util.Optional;
 /// Many databases suggest that if you have very large values you should store them in an external store and only store
 /// the reference in the database.
 ///
-/// You do not have to use a relational database. You can use kv stores or document stores. The H2 database uses MVStore
-/// as its storage subsystem. This supports transactions so it makes a great embedded journal.
-/// You would have the `sync()` method call `commit()` on the underlying MVStore that is behind two maps, one that only
-/// contains the progress value and the other navigable map that holds all the `accept` messages by log slot.
+/// You do not have to use a relational database. You can use a kv stores or a document stores. MVStore is the
+/// storage subsystem of H2. It supports transactions and would make a good choice for an embedded journal.
+/// You would have the `sync()` method call `commit()` on the underlying MVStore that is behind two maps. One map would
+/// only contain the progress value. The other navigable map would hold all the `accept` messages keyed by log slot.
 ///
-/// You can even use different stores for the different state types as long as when {@link #sync()} is called the state is made crash durable in
-/// the following order:
+/// If you use a store that does not support transactions when {@link #sync()} is called the state must be made crash
+/// durable in the following order:
 ///
 /// 1. All `accept` messages are made crash durable first.
 /// 2. The `progress` record is made crash durable last.
 ///
-/// VERY IMPORTANT: The journal must be crash durable. The TrexNode will the {@link #sync()} method on the journal which must
-/// only return when the state is persisted.
+/// VERY IMPORTANT: The journal must be crash durable. By default `{@link TrexEngine} will the {@link #sync()} method on
+/// the journal which must only return when all state is persisted.
 ///
 /// When an empty node is fist created the journal must have a `NoOperation.NOOP` accept journaled at log index 0.
 /// It must also have the nodes progress saved as `new Progress(noteIdentifier)`. When a cold cluster is started up the
@@ -57,15 +59,13 @@ import java.util.Optional;
 ///
 /// If you want to clone a node to create a new one you must copy the journal and the application state. Then update
 /// the journal state to have new node identifier in the progress record. This is because the journal is node specific,
-/// and we must not accidentally load the wrong history when moving nodes between servers.
+/// and we must not accidentally mix the identity of the node when moving state between physical hosts.
 ///
-/// If you are using a sql database to hold the state this might look like 'update progress set node_identifier = ?'
-/// where the node_identifier is updated to the new unique node identifier.
+/// If you are using a sql database restore to create a new node the SQL might look like 'update progress set node_identifier = ?'
+/// where the node_identifier is the new unique node identifier.
 ///
 /// If you are using an embedded btree you could {@link #readProgress(byte)}, modify the progress with java,
 /// then {@link #writeProgress(Progress)}
-///
-/// You need to turn messages into bytes and back again. There is a {@link Pickle} class that can help you with this.
 public interface Journal {
 
   /// Save the progress record to durable storage. The {@link #sync()} method must be called before returning any messages
