@@ -58,8 +58,7 @@ This description will explain it in the following order:
 * Fourth, explain the leader take-over protocol, which is the most complex step that uses both `prepare` and `accept` messages.
 * Fifth, explain the durable state requirements.
 * Sixth, define the invariants of this implementation.
-* Seventh, explain this implementation's design choices.
-* Eighth, provide a footnote on leader duels.
+* Seventh, provide a footnote on leader duels.
 
 ### First: Promises, Promises
 
@@ -287,43 +286,12 @@ The core of this implementation that ensures safety is written as inequalities c
 * The journal at any slot can have only no value, the no-operation value, or a client command value.
 * The journal can either be continuous, have gaps, or not have reached a specific index when that index is learnt to be fixed.  
 
-If we had ten such things to brute force test, each with only three permutations, we would have 3^10=59,049 test scenarios to brute force. 
+If had ten such things to brute force test, each with only three permutations, we would have 3^10=59,049 test scenarios
+to brute force.
 
 TO BE CONTINUED
 
-### Seventh, Design Choices
-
-The description above explains that the happy path galloping state is optimal. Therefore, this implementation makes the following design decision:
-
-> Do not optimise the happy path for lost messages. Have nodes request retransmission.
-
-In my day job, I have had to read carefully and occasionally document n what happened during outages of complex distributed systems.  These experiences led me to adopt the “let it crash” philosophy:
-
-> Do not attempt to use any error recovery logic to deal with IO problems.
- 
-The safest approach is to follow a ”let it crash” philosophy and have something monitor and kill processes 
-that get “stuck” due to infrastructure outages.
-
-If this implementation sees something unexpected outside of steady state, the `TrexNode` will first  
-clear any leadership state and return to being a follower. That may lead to the leader's recovery protocol 
-being rerun to ensure correctness due to lost messages. 
-
-If this implementation hits IOExceptions or anything else in the critical code, it marks itself 
-as “crashed” and refuses to do anything else. You need to kill the process to reinitialise everything from the 
-durable state. 
-
-My final observation is that it is hard-won over a quarter of a century of working on distributed systems. The moment we know 
-a bug exists. We find it within an hour and patch it. Yet recovery in production and rolling out the patch 
-can take multiple days. No amount 
-of code review or developer-written tests ever finds all of the bugs. We should aim to write brutally simple code with less surface for bugs to hide. We should aim to do brute-force style testing on mission-critical code.
-This leads to this design choice:
-
-> Keep it as simple as possible and attempt a brute-force search for bugs. 
-
-Only the author's mistakes in the specification and implementation of the invariants and their tests will remain. 
-The benefit of open source is that, with enough eyes, any errors can be found and fixed.
-
-### Eighth, Leader Duels
+### Seventh, Leader Duels
 
 The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) states (p. 7):
 
