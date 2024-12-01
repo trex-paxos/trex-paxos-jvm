@@ -54,7 +54,7 @@ This description will explain it in the following order:
 
 * First, explain that promises apply to both core message types.
 * Second, explain the steady state of the algorithm, which uses only `accept` messages.
-* Third, explain how servers may learn that values have been fixed efficiently.
+* Third, explain how nodes may efficiently learn which values have been fixed.
 * Fourth, explain the leader take-over protocol, which is the most complex step that uses both `prepare` and `accept` messages.
 * Fifth, explain the durable state requirements.
 * Sixth, define the invariants of this implementation.
