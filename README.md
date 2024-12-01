@@ -139,7 +139,7 @@ As the leader is the first to learn which values are fixed, Lamport calls the le
 
 The leader can send a short `fixed(S,N)` message to inform the other nodes when a value has been fixed. This message can
 piggyback at the front of the subsequent outbound `accept` message network packet. Due to lost messaging, a leader may 
-learn which slots are fixed out of sequential order. This implementation only issues `fixed` messages in sequential log order. 
+learn which slots are fixed out of sequential order. In this implementation leaders only send `fixed` messages in sequential slot order. 
 
 Leaders must always increment their counter to create a fresh `N` each time they attempt to lead. That ensures that each
 `fixed(S,N)` refers to a unique `accept(S,N,V)` message. If any node does not have the matching 
