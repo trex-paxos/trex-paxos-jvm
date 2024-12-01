@@ -170,7 +170,7 @@ On leader election (p. 7):
 > A reliable algorithm for electing a proposer must use either randomness or realtime — for example, by using timeouts. However, safety is ensured regardless of the success or failure of the election.
 
 This implementation leader elections using random timeouts.
-It allowe you to use a different mechanism by isolating the pure algorithm logic 
+It allows you to use a different mechanism by isolating the pure algorithm logic 
 into the `TrexNode` class. The timeout logic is isolated into the `TrexEngine` class. 
 When a node times out it attempts to run the leader takeover protocol:
 
@@ -179,10 +179,9 @@ When a node times out it attempts to run the leader takeover protocol:
 3. For each slot the leader selects the `V` that was associated with the highest `N` value from a majority of responses. If there was no value known at that slot by a majority then the new leader can safely use its own command value `V` at that slot.
 4. For each slot the leader sends fresh `accept(S,N',V)` messages with chosen command `V` using its own higher `N'` for each slot.
 
-If you have been previously studied Paxos that description says that the leader takeover protocol is to run the 
-full algorithm for many slots. The only question is what is the range of slots that we need to recover. This is the range of slots tht any previous leader has attempted to fix.
-A value is only fixed at a slot if a majority of nodes have journaled it. Clearly, one node in any majority must have 
-journaled the value. We can ask a majority of nodes and use the max value. 
+That description says that the leader takeover protocol is to run the full algorithm for many slots. This can happen in parallel for many slots. 
+The only question is what is the range of slots that we need to recover. It is the range of slots up to the maximum slot any node has journalled a value. 
+We can ask a majority of nodes the highest slot at which they have accepted a value. 
 
 This library uses code similar to the following for the `prepare` message and its acknowledgement:
 
