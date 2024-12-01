@@ -253,7 +253,7 @@ public interface Journal {
   // this is called during crash recovery or to catchup other nodes and we can expect sequential access patterns. 
   Optional<Accept> readAccept(long logIndex);
 
-  // this must make all the writes durable. 
+  // if the host application is not explicitly managing database transactions this will be called to make all the writes durable. 
   void sync();
 
   // this is used during startup
@@ -261,12 +261,12 @@ public interface Journal {
 }
 ```
 
-Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync()` method must first flush any
+Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync()` is intended must first flush any
 commands into their slots and only then flush the `progress`. The general idea here is that your application probably
-already has a database, it is almost trivial to implement this interface on top of that database, and you can use a
-transaction to write this state under the same database transaction your "up-call" is running to apply any chosen
-command
-values.
+already has a database, it is almost trivial to implement this interface on top of that database. You can specify that
+your host code will be managing transactions and the `sync()` method will not be called and you so you can supply a
+no-op
+method.
 
 See the java doc on the `Journal` interface for more details.
 

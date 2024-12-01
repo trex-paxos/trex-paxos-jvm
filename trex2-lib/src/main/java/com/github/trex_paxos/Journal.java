@@ -23,18 +23,26 @@ import java.util.Optional;
 ///
 /// If you are already using a relational database you can use it to store the state of the journal. Then you can use
 /// a database transaction to save the modified state of your application in the same database transaction that you
-/// persist the progress record.
+/// persist the progress record. In which case use the {@link TrexEngine#TrexEngine(TrexNode, boolean)} constructor
+/// with the `hostManaged` flag set to true. This will prevent the TrexEngine from calling the `sync()` method.
+/// The host must then commit the underlying journal database transaction after it has applied the fixed commands, and
+/// before it sends out any messages.
 ///
 /// It is important to note you should not delete accept messages the moment they are up-called into the application.
-/// They should be kept around so that other nodes can request retransmission of them if they have missed them. To
-/// keep the database size under control you can run a cronjob that reads the min {@link Progress#highestFixedIndex()}
-/// from all database. It is then safe to delete all `Accept` messages stored at a lower slot index.
+/// They should be kept around so that other nodes can request retransmission of missed messages. To
+/// keep the database size under control you can run a cronjob that reads the {@link Progress#highestFixedIndex()}
+/// from all databases. It is then safe to delete all `Accept` messages stored at a lower than the min fixed index seen
+/// within the cluster.
 ///
 /// Many databases suggest that if you have very large values you should store them in an external store and only store
 /// the reference in the database.
 ///
-/// Yet you do not have to use a relational database. You can use kv stores or document stores. You can even use different
-/// stores for the different state types as long as when {@link #sync()} is called the state is made crash durable in
+/// You do not have to use a relational database. You can use kv stores or document stores. The H2 database uses MVStore
+/// as its storage subsystem. This supports transactions so it makes a great embedded journal.
+/// You would have the `sync()` method call `commit()` on the underlying MVStore that is behind two maps, one that only
+/// contains the progress value and the other navigable map that holds all the `accept` messages by log slot.
+///
+/// You can even use different stores for the different state types as long as when {@link #sync()} is called the state is made crash durable in
 /// the following order:
 ///
 /// 1. All `accept` messages are made crash durable first.
@@ -56,6 +64,8 @@ import java.util.Optional;
 ///
 /// If you are using an embedded btree you could {@link #readProgress(byte)}, modify the progress with java,
 /// then {@link #writeProgress(Progress)}
+///
+/// You need to turn messages into bytes and back again. There is a {@link Pickle} class that can help you with this.
 public interface Journal {
 
   /// Save the progress record to durable storage. The {@link #sync()} method must be called before returning any messages
@@ -85,8 +95,13 @@ public interface Journal {
   /// @param logIndex The log slot to load the accept record for.
   Optional<Accept> readAccept(long logIndex);
 
-  /// Journal writes must be crash-proof (disk flush or equivalent). The `sync()` method must first flush any `accept`
-  /// messages into their slots and only then flush the `progress` record. .
+  /// Journal writes must be crash-proof (disk flush or equivalent). If you are using transactional storage you would
+  /// ensure that write of the `progress` and all `accepts` happens automatically. If your storage does not support
+  /// transactions you just first flush any `accept` messages into their slots and only then flush the `progress` record.
+  ///
+  /// If the {@link TrexEngine#TrexEngine(TrexNode, boolean)} is constructed with `hostManagedTransactions` set to true
+  /// this method is never called. It is then the responsibility of the host application to ensure that the underlying database
+  /// transactions are committed before any messages are sent out.
   void sync();
 
   /// Get the highest log index that has been journaled. This is used to during startup. If you are using a relational

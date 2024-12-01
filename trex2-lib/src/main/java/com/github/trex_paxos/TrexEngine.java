@@ -32,11 +32,25 @@ public abstract class TrexEngine {
   /// The underlying TrexNode that is the actual Part-time Parliament algorithm implementation guarded by this class.
   final protected TrexNode trexNode;
 
+  protected boolean syncJournal = true;
+
   /// Create a new TrexEngine which wraps a TrexNode.
   ///
   /// @param trexNode The underlying TrexNode which must be pre-configured with a concrete Journal and QuorumStrategy.
   public TrexEngine(TrexNode trexNode) {
     this.trexNode = trexNode;
+  }
+
+  /// Create a new TrexEngine which wraps a TrexNode.
+  ///
+  /// @param trexNode                The underlying TrexNode which must be pre-configured with a concrete Journal and QuorumStrategy.
+  /// @param hostManagedTransactions If true the TrexEngine will not sync the journal after each message. It is then the responsibility
+  ///                                                   of the host host application to sync the journal by calling commit on the underlying database when it has finished
+  ///                                                   applying the fixed commands to the underlying database.
+  @SuppressWarnings("unused")
+  public TrexEngine(TrexNode trexNode, boolean hostManagedTransactions) {
+    this.trexNode = trexNode;
+    this.syncJournal = !hostManagedTransactions;
   }
 
   /// This method must schedule a call to the timeout method at some point in the future.
