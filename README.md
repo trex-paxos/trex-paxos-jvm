@@ -160,8 +160,8 @@ public record Catchup(long highestFixedIndex) {
 public record CatchupResponse( List<Accept> catchup ) {}
 ```
 
-As each node learns which value `V` is fixed into each sequential slot `S`. It will up-call the command value `V` to the host
-application. 
+Each node learns which value `V` is fixed into each sequential slot `S`.
+Each nide will thrn up-call the command value `V` to the host application. 
 
 ### Fourth: The Leader Takeover Protocol
 
