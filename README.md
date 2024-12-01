@@ -100,7 +100,7 @@ The objective is to fix the same command value `V` into the same command log str
 
 The value `V` is fixed at slot `S` when a mathematical majority of nodes journal the value `V` into their log. No matter
 how many leaders attempt to assign a value to the same slot `S`, they will all assign the same `V` using different
-unique `N` values. How that works is covered in a later section.
+unique `N` values. How that works is described below. 
 
 We can call this steady-state galloping, as things move at top speed using a different stride pattern than when
 walking (or trotting). A leader will self-accept and transmit the message to the other two nodes in a three-node
