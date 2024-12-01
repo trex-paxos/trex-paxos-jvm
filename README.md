@@ -213,11 +213,15 @@ It then streams `prepare` messages for the full range of slots.
 Intuitively, we can think of the first message as a leader election. Hence, we call
 `N` a ballot number, and we consider the responses to be votes.
 In a three-node cluster, a leader only needs to exchange one 
-message to be elected. It immediately issues small prepare 
-messages for the full range of slots. These may be batched into a single 
-network packet. We can recover a range of slots in parallel  
-without making a network roundtrip per slot. In essence, the new leader is 
-asking nodes to retransmit what they know about past `accept` messages.
+message to be elected. 
+
+Once elected a new leader immediately issues small prepare 
+messages for the full range of slots. Intuitively the new leader is 
+asking nodes to retransmit what they know about all past `accept` messages. 
+The new leader then collaborates with an old leader 
+by choosing their value. The mathematics of the Paxos algorithm 
+gaurentees that all leaders converge on choosing the same value 
+at each slot. 
 
 ## Fifth, Durable State Requirements
 
