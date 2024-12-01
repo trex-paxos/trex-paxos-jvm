@@ -54,7 +54,7 @@ This description will explain it in the following order:
 
 * First, explain that promises apply to both core message types.
 * Second, explain the steady state of the algorithm, which uses only `accept` messages.
-* Third, explain how servers may learn that values have been fixed efficiently.
+* Third, explain how nodes may efficiently learn which values have been fixed.
 * Fourth, explain the leader take-over protocol, which is the most complex step that uses both `prepare` and `accept` messages.
 * Fifth, explain the durable state requirements.
 * Sixth, define the invariants of this implementation.
@@ -75,15 +75,15 @@ The number `N` must be unique to a given node for the algorithm to be correct. L
 
 > Different proposers choose their numbers from disjoint sets of numbers, so two different proposers never issue a proposal with the same number.
 
-This is achieved by encoding the node identifier in each `N`s lower bits. This library uses the following Java record as
-`N`:
+This is achieved by encoding the node identifier in each `N`s lower bits. 
+This library uses a record with a signature similar to this: 
 
 ```java
 public record BallotNumber(int counter, byte nodeIdentifier) implements Comparable<BallotNumber> {
 }
 ```
 
-In that record class, the `compareTo` method treats the four-byte counter as having the most significant bits and the
+The `compareTo` method treats the four-byte counter as having the most significant bits and the
 single-byte `nodeIndentifier` as having the least significant bits. The cluster operator must ensure they assign unique
 `nodeIdentifier` values to every node added to the cluster.
 
@@ -95,13 +95,12 @@ This avoids the need to retransmit values when fixing slots, as explained below.
 The objective is to fix the same command value `V` into the same command log stream index `S`, known as a log slot, at each node in the cluster. When the network is healthy, and servers have undertaken crash recovery, an uncontested leader sends a stream of commands using `accept(S,N,V)` messages where:
 
 * `S` is a log index slot the leader assigns to the command value.
-* `N` is a node's unique ballot number. The reason it is called a ballot number will only become apparent when we
-  describe the crash recovery protocol below.
+* `N` is a node's unique ballot number. 
 * `V` is a command value.
 
 The value `V` is fixed at slot `S` when a mathematical majority of nodes journal the value `V` into their log. No matter
 how many leaders attempt to assign a value to the same slot `S`, they will all assign the same `V` using different
-unique `N` values. How that works is covered in a later section.
+unique `N` values. How that works is described below. 
 
 We can call this steady-state galloping, as things move at top speed using a different stride pattern than when
 walking (or trotting). A leader will self-accept and transmit the message to the other two nodes in a three-node
@@ -140,7 +139,7 @@ As the leader is the first to learn which values are fixed, Lamport calls the le
 
 The leader can send a short `fixed(S,N)` message to inform the other nodes when a value has been fixed. This message can
 piggyback at the front of the subsequent outbound `accept` message network packet. Due to lost messaging, a leader may 
-learn which slots are fixed out of sequential order. This implementation only issues `fixed` messages in sequential log order. 
+learn which slots are fixed out of sequential order. In this implementation leaders only send `fixed` messages in sequential slot order. 
 
 Leaders must always increment their counter to create a fresh `N` each time they attempt to lead. That ensures that each
 `fixed(S,N)` refers to a unique `accept(S,N,V)` message. If any node does not have the matching 
@@ -161,8 +160,8 @@ public record Catchup(long highestFixedIndex) {
 public record CatchupResponse( List<Accept> catchup ) {}
 ```
 
-As each node learns which value `V` is fixed into each sequential slot `S`. It will up-call the command value `V` to the host
-application. 
+Each node learns which value `V` is fixed into each sequential slot `S`.
+Each nide will thrn up-call the command value `V` to the host application. 
 
 ### Fourth: The Leader Takeover Protocol
 
@@ -170,18 +169,19 @@ On leader election (p. 7):
 
 > A reliable algorithm for electing a proposer must use either randomness or realtime — for example, by using timeouts. However, safety is ensured regardless of the success or failure of the election.
 
-The novelty of Paxos was that it did not require real-time clocks. This implementation uses random timeouts.
+This implementation leader elections using random timeouts.
+It allows you to use a different mechanism by isolating the pure algorithm logic 
+into the `TrexNode` class. The timeout logic is isolated into the `TrexEngine` class. 
 When a node times out it attempts to run the leader takeover protocol:
 
 1. The new leader sends `prepare(N,S)` for all slots any prior leader has attempted to fix
 2. For each slot nodes respond with promise messages containing any unfixed `{S,N,V}` tuples else only `{S,N}` when it has no value in that slot. 
 3. For each slot the leader selects the `V` that was associated with the highest `N` value from a majority of responses. If there was no value known at that slot by a majority then the new leader can safely use its own command value `V` at that slot.
-4. For each slot the leader sends fresh `accept(S,N,V)` messages with chosen command `V` using its own `N` for each slot
+4. For each slot the leader sends fresh `accept(S,N',V)` messages with chosen command `V` using its own higher `N'` for each slot.
 
-If you have been previously studied Paxos that description says that the leader takeover protocol is to run the 
-full algorithm for many slots. The only question is what is the range of slots that we need to recover. This is the range of slots tht any previous leader has attempted to fix.
-A value is only fixed at a slot if a majority of nodes have journaled it. Clearly, one node in any majority must have 
-journaled the value. We can ask a majority of nodes and use the max value. 
+That description says that the leader takeover protocol is to run the full algorithm for many slots. This can happen in parallel for many slots. 
+The only question is what is the range of slots that we need to recover. It is the range of slots up to the maximum slot any node has journalled a value. 
+We can ask a majority of nodes the highest slot at which they have accepted a value. 
 
 This library uses code similar to the following for the `prepare` message and its acknowledgement:
 
@@ -213,17 +213,15 @@ It then streams `prepare` messages for the full range of slots.
 Intuitively, we can think of the first message as a leader election. Hence, we call
 `N` a ballot number, and we consider the responses to be votes.
 In a three-node cluster, a leader only needs to exchange one 
-message to be elected. It immediately issues small prepare 
-messages for the full range of slots. These may be batched into a single 
-network packet. We can recover a range of slots in parallel  
-without making a network roundtrip per slot. In essence, the new leader is 
-asking nodes to retransmit what they know about past `accept` messages.
+message to be elected. 
 
-We can batch the full range of `prepare` messages into one or more network packets.
-We can batch the responses `prepareResponse` messages into one or more network packets.
-We can batch the small `fixed` into the same network packets as the `accept` messages.
-This means that the actual overhead of this protocol is the network overhead of pushing
-the commands back over the network in the prepare response messages.
+Once elected a new leader immediately issues small prepare 
+messages for the full range of slots. Intuitively the new leader is 
+asking nodes to retransmit what they know about all past `accept` messages. 
+The new leader then collaborates with an old leader 
+by choosing their value. The mathematics of the Paxos algorithm 
+gaurentees that all leaders converge on choosing the same value 
+at each slot. 
 
 ## Fifth, Durable State Requirements
 
@@ -278,9 +276,8 @@ This implementation enforces the following invariants at each node:
 
 1. The fixed index increases sequentially (therefore, the up-call of `{S,V}` tuples must be sequential).
 2. The promise number only increases (yet it may jump forward).
-   3The promised ballot number can only change when processing a `prepare` or `accept` message.
-   4The fixed index can only change when a leader sees a majority `AcceptReponse` message, a follower node sees a
-   `Fixed` message or any node learns about a fixed message due to a `CatchupResponse` message.
+3. The promised ballot number can only change when processing a `prepare` or `accept` message.
+4. The fixed index can only change when a leader sees a majority `AcceptReponse` message, a follower node sees a `Fixed` message or any node learns about a fixed message due to a `CatchupResponse` message.
 
 The core of this implementation that ensures safety is written as inequalities comparing integer types. When we unit test the `TrexNode` class: 
 
@@ -296,12 +293,7 @@ TO BE CONTINUED
 
 ### Seventh, Design Choices
 
-The description above explains that the happy path galloping state is optimal.
-The only thing to regret are is the overheads of making both the node progress and set of accepts crash durable.
-That is the price you pay for the safety of the algorithm. You can batch up commands while you are waiting
-for the disk flushes and pack many client commands into each `Accept` message.
-
-Therefore, this implementation makes the following design decision:
+The description above explains that the happy path galloping state is optimal. Therefore, this implementation makes the following design decision:
 
 > Do not optimise the happy path for lost messages. Have nodes request retransmission.
 
