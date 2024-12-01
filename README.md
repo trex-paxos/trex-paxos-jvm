@@ -219,38 +219,58 @@ network packet. We can recover a range of slots in parallel
 without making a network roundtrip per slot. In essence, the new leader is 
 asking nodes to retransmit what they know about past `accept` messages.
 
+We can batch the full range of `prepare` messages into one or more network packets.
+We can batch the responses `prepareResponse` messages into one or more network packets.
+We can batch the small `fixed` into the same network packets as the `accept` messages.
+This means that the actual overhead of this protocol is the network overhead of pushing
+the commands back over the network in the prepare response messages.
+
 ## Fifth, Durable State Requirements
 
 The state of each node is similar to the following model:
 
 ```java
-public record Progress( BallotNumber highestPromised,
-                        long fixedIndex) {
-}
-
-public interface Journal {
-   void saveProgress(Progress progress);
-   Progress loadProgress();
-   void write(long logIndex, Accept accept);
-   Accept read(long logIndex);
-   void sync();
-   long highestAcceptedSlot();
+public record Progress(BallotNumber highestPromised,
+                       long fixedIndex) {
 }
 ```
 
-The progress of each node is its highest promised `N` and its highest fixed slot `S`. 
-Journal writes must be crash-proof (disk flush or equivalent). 
-The journal's `sync()` method must first flush any commands into their slots and only then flush the `progress`.
-The method `long highestAcceptedSlot()` is required to run the leader takeover protocol. 
+The progress of each node is its highest promised `N` and its highest fixed slot `S`. This is only thirteen bytes of
+data.
 
-The journal is a single interface. It could be implemented as PostgreSQL running on the same physical server or using an embedded relational database such as H2. The progress record would be a small table with only one row.
-The accept table would use the log index as the primary key.
-You could create a maintenance cronjob that computes the minimum `fixedIndex` of the progress across all nodes. You can then 
-safely delete all rows from the accept table logic index below that minimum value. 
+You must also provide an implementation of the journal interface which is similar to this definition:
 
-You do not have to use a relational database to implement the journal interface. Different storage engines can be used for each of the `accept` messages, the values, and the progress record. 
-All that matters is that the values must be made crash-durable before the accept log is made crash-durable, 
-before the progress is made crash durable. 
+```java
+
+public interface Journal {
+  // this is only called at startup so you could trade write speed for read speed. 
+  Progress loadProgress();
+
+  // this is called on every message to persist a small amount of data so you would want to optimise this for write speed.
+  void writeProgress(Progress progress);
+
+  // this is called to write data to disk. when there are no crashes or isolated leaders this is write once per slot.
+  void writeAccept(long logIndex, Accept accept);
+
+  // this is called during crash recovery or to catchup other nodes and we can expect sequential access patterns. 
+  Optional<Accept> readAccept(long logIndex);
+
+  // this must make all the writes durable. 
+  void sync();
+
+  // this is used during startup
+  long highestAcceptedSlot();
+}
+```
+
+Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync()` method must first flush any
+commands into their slots and only then flush the `progress`. The general idea here is that your application probably
+already has a database, it is almost trivial to implement this interface on top of that database, and you can use a
+transaction to write this state under the same database transaction your "up-call" is running to apply any chosen
+command
+values.
+
+See the java doc on the `Journal` interface for more details.
 
 ## Sixth, The invariants
 
@@ -276,7 +296,12 @@ TO BE CONTINUED
 
 ### Seventh, Design Choices
 
-The description above explains that the happy path galloping state is optimal. Therefore, this implementation makes the following design decision:
+The description above explains that the happy path galloping state is optimal.
+The only thing to regret are is the overheads of making both the node progress and set of accepts crash durable.
+That is the price you pay for the safety of the algorithm. You can batch up commands while you are waiting
+for the disk flushes and pack many client commands into each `Accept` message.
+
+Therefore, this implementation makes the following design decision:
 
 > Do not optimise the happy path for lost messages. Have nodes request retransmission.
 

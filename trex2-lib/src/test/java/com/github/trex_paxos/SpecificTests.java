@@ -52,7 +52,7 @@ public class SpecificTests {
     final var acceptPreviouslyFixedSlot1 = new Accept((byte) 1, 1L, new BallotNumber(1, (byte) 1), new Command("cmd", "data".getBytes()));
     final var higherSelfPromiseNumber = new BallotNumber(1000, (byte) 1);
     TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {{
-      this.journal.journalAccept(acceptPreviouslyFixedSlot1);
+      this.journal.writeAccept(acceptPreviouslyFixedSlot1);
       this.progress = new Progress(nodeIdentifier, higherSelfPromiseNumber, 1L);
     }};
 
@@ -91,7 +91,7 @@ public class SpecificTests {
     final var acceptPreviouslyFixedSlot1 = new Accept((byte) 1, 1L, new BallotNumber(1, (byte) 1), new Command("cmd", "data".getBytes()));
     TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {{
       this.progress = new Progress(nodeIdentifier, originalNumber, 1L);
-      this.journal.journalAccept(acceptPreviouslyFixedSlot1);
+      this.journal.writeAccept(acceptPreviouslyFixedSlot1);
       this.setRole(TrexRole.LEAD);
       this.term = originalNumber;
     }};

@@ -45,7 +45,7 @@ public class TrexNode {
     this.nodeIdentifier = nodeIdentifier;
     this.journal = journal;
     this.quorumStrategy = quorumStrategy;
-    this.progress = journal.loadProgress(nodeIdentifier);
+    this.progress = journal.readProgress(nodeIdentifier);
     if (progress.nodeIdentifier() != nodeIdentifier) {
       LOGGER.severe("FATAL SEVERE ERROR refusing to run the journal state nodeIdentifier does not match this node: nodeIdentifier=" + nodeIdentifier + ", journal.progress.nodeIdentifier=" + progress.nodeIdentifier());
       throw new IllegalArgumentException("nodeIdentifier=" + nodeIdentifier + " progress.nodeIdentifier=" + progress.nodeIdentifier());
@@ -141,7 +141,7 @@ public class TrexNode {
           messages.add(nack(accept));
         } else if (equalOrHigherAccept(progress, accept)) {
           // always journal first
-          journal.journalAccept(accept);
+          journal.writeAccept(accept);
           if (higherAccept(progress, accept)) {
             // we must update promise on a higher accept http://stackoverflow.com/q/29880949/329496
             this.progress = progress.withHighestPromised(accept.number());
@@ -168,7 +168,7 @@ public class TrexNode {
                   });
             }
           }
-          journal.saveProgress(this.progress);
+          journal.writeProgress(this.progress);
           final var ack = ack(accept);
           if (accept.number().nodeIdentifier() == nodeIdentifier) {
             // we vote for ourself
@@ -187,7 +187,7 @@ public class TrexNode {
         } else if (number.greaterThan(progress.highestPromised())) {
           // ack a higher nextPrepareMessage
           final var newProgress = progress.withHighestPromised(prepare.number());
-          journal.saveProgress(newProgress);
+          journal.writeProgress(newProgress);
           final var ack = ack(prepare);
           messages.add(ack);
           this.progress = newProgress;
@@ -225,7 +225,7 @@ public class TrexNode {
         // TODO is it possible to safely do some deduction here to avoid the catchup?
         if (fixedSlot == highestFixed() + 1) {
           // we must have the correct number at the slot
-          final var fixedAccept = journal.loadAccept(fixedSlot)
+          final var fixedAccept = journal.readAccept(fixedSlot)
               .filter(accept -> accept.number().equals(fixedNumber))
               .orElse(null);
 
@@ -233,7 +233,7 @@ public class TrexNode {
           Optional.ofNullable(fixedAccept).ifPresent(accept -> {
             fixed(accept, commands);
             progress = progress.withHighestFixed(fixedSlot);
-            journal.saveProgress(progress);
+            journal.writeProgress(progress);
             if (!role.equals(FOLLOW)) {
               backdown(messages);
             }
@@ -249,7 +249,7 @@ public class TrexNode {
       case Catchup(final byte replyTo, _, final var otherFixedIndex, final var otherHighestPromised) -> {
         // load the slots they do not know that they are missing
         final var missingAccepts = LongStream.rangeClosed(otherFixedIndex + 1, progress.highestFixedIndex())
-            .mapToObj(journal::loadAccept)
+            .mapToObj(journal::readAccept)
             .flatMap(Optional::stream)
             .toList();
 
@@ -273,12 +273,12 @@ public class TrexNode {
 
         if (!newAccepts.isEmpty()) {
           newAccepts.forEach(accept -> {
-            journal.journalAccept(accept);
+            journal.writeAccept(accept);
             fixed(accept, commands);
           });
 
           progress = progress.withHighestFixed(newAccepts.getLast().logIndex());
-          journal.saveProgress(progress);
+          journal.writeProgress(progress);
         }
       }
     }
@@ -369,7 +369,7 @@ public class TrexNode {
 
               // we have fixed slots
               this.progress = progress.withHighestFixed(fixed.getLast().logIndex());
-              this.journal.saveProgress(progress);
+              this.journal.writeProgress(progress);
 
               // let the cluster know
               messages.add(currentFixedMessage());
@@ -447,7 +447,7 @@ public class TrexNode {
             prepare.logIndex(),
             true,
             prepare.number()),
-        journal.loadAccept(prepare.logIndex()),
+        journal.readAccept(prepare.logIndex()),
         highestAccepted()
 
     );
@@ -466,7 +466,7 @@ public class TrexNode {
             prepare.logIndex(),
             false,
             prepare.number()),
-        journal.loadAccept(prepare.logIndex()), highestAccepted()
+        journal.readAccept(prepare.logIndex()), highestAccepted()
     );
   }
 
@@ -534,7 +534,7 @@ public class TrexNode {
             progress.highestFixedIndex() + 1,
             journal.highestLogIndex() + 1
         )
-        .mapToObj(journal::loadAccept)
+        .mapToObj(journal::readAccept)
         .takeWhile(Optional::isPresent)
         .flatMap(Optional::stream)
         .toList();
@@ -542,7 +542,7 @@ public class TrexNode {
 
   Fixed currentFixedMessage() {
     final var highestFixed = highestFixed();
-    final var fixedAccept = journal.loadAccept(highestFixed).orElseThrow();
+    final var fixedAccept = journal.readAccept(highestFixed).orElseThrow();
     return new Fixed(nodeIdentifier, highestFixed, fixedAccept.number());
   }
 

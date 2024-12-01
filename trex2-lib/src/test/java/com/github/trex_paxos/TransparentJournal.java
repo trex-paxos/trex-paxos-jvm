@@ -17,24 +17,24 @@ class TransparentJournal implements Journal {
   Progress progress;
 
   @Override
-  public void saveProgress(Progress progress) {
+  public void writeProgress(Progress progress) {
     this.progress = progress;
   }
 
   NavigableMap<Long, Accept> fakeJournal = new TreeMap<>();
 
   @Override
-  public void journalAccept(Accept accept) {
+  public void writeAccept(Accept accept) {
     fakeJournal.put(accept.logIndex(), accept);
   }
 
   @Override
-  public Progress loadProgress(byte nodeIdentifier) {
+  public Progress readProgress(byte nodeIdentifier) {
     return progress;
   }
 
   @Override
-  public Optional<Accept> loadAccept(long logIndex) {
+  public Optional<Accept> readAccept(long logIndex) {
     return Optional.ofNullable(fakeJournal.get(logIndex));
   }
 
