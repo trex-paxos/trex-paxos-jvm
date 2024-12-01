@@ -250,7 +250,7 @@ The method `long highestAcceptedSlot()` is required to run the leader takeover p
 The journal is a single interface. It could be implemented as PostgreSQL running on the same physical server or using an embedded relational database such as H2. The progress record would be a small table with only one row.
 The accept table would use the log index as the primary key.
 You could create a maintenance cronjob that computes the minimum `fixedIndex` of the progress across all nodes. You can then 
-safely delete all rows from the accept table logic index below that minimum value. 
+safely delete all rows from the accept table below that.
 
 You do not have to use a relational database to implement the journal interface. Different storage engines can be used for each of the `accept` messages, the values, and the progress record. 
 All that matters is that the values must be made crash-durable before the accept log is made crash-durable, 
@@ -262,9 +262,8 @@ This implementation enforces the following invariants at each node:
 
 1. The fixed index increases sequentially (therefore, the up-call of `{S,V}` tuples must be sequential).
 2. The promise number only increases (yet it may jump forward).
-   3The promised ballot number can only change when processing a `prepare` or `accept` message.
-   4The fixed index can only change when a leader sees a majority `AcceptReponse` message, a follower node sees a
-   `Fixed` message or any node learns about a fixed message due to a `CatchupResponse` message.
+3. The promised ballot number can only change when processing a `prepare` or `accept` message.
+4. The fixed index can only change when a leader sees a majority `AcceptReponse` message, a follower node sees a `Fixed` message or any node learns about a fixed message due to a `CatchupResponse` message.
 
 The core of this implementation that ensures safety is written as inequalities comparing integer types. When we unit test the `TrexNode` class: 
 
