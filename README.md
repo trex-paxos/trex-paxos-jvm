@@ -75,15 +75,15 @@ The number `N` must be unique to a given node for the algorithm to be correct. L
 
 > Different proposers choose their numbers from disjoint sets of numbers, so two different proposers never issue a proposal with the same number.
 
-This is achieved by encoding the node identifier in each `N`s lower bits. This library uses the following Java record as
-`N`:
+This is achieved by encoding the node identifier in each `N`s lower bits. 
+This library uses a record with a signature similar to this: 
 
 ```java
 public record BallotNumber(int counter, byte nodeIdentifier) implements Comparable<BallotNumber> {
 }
 ```
 
-In that record class, the `compareTo` method treats the four-byte counter as having the most significant bits and the
+The `compareTo` method treats the four-byte counter as having the most significant bits and the
 single-byte `nodeIndentifier` as having the least significant bits. The cluster operator must ensure they assign unique
 `nodeIdentifier` values to every node added to the cluster.
 
@@ -95,8 +95,7 @@ This avoids the need to retransmit values when fixing slots, as explained below.
 The objective is to fix the same command value `V` into the same command log stream index `S`, known as a log slot, at each node in the cluster. When the network is healthy, and servers have undertaken crash recovery, an uncontested leader sends a stream of commands using `accept(S,N,V)` messages where:
 
 * `S` is a log index slot the leader assigns to the command value.
-* `N` is a node's unique ballot number. The reason it is called a ballot number will only become apparent when we
-  describe the crash recovery protocol below.
+* `N` is a node's unique ballot number. 
 * `V` is a command value.
 
 The value `V` is fixed at slot `S` when a mathematical majority of nodes journal the value `V` into their log. No matter
