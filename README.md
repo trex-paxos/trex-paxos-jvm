@@ -1,22 +1,18 @@
 ## Trex2: Paxos Algorithm Strong Consistency for state replication on the Java JVM
 
+This repository contains a Java implementation of the Paxos algorithm as described in Leslie Lamport's 2001
+paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf)
+
 This is a work in progress, as more exhaustive tests will be written. At this point, it is not recommended for
 production use. A release candidate will be made when the exhaustive tests mentioned in this readme are implemented.
 
 ### Introduction
 
-This library implements Lamport's Paxos protocol for cluster replication, as described in Lamport's 2001
-paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf). While distributed systems are
-inherently complex, the core Paxos algorithm is mechanically straightforward when adequately understood. It is simple
-enough that a well-written implementation can define the invariants as properties and then use a brute-force approach to
-search for bugs.
-
-The description below explains the algorithm's invariants and the message protocol sufficiently to verify that this
-implementation is sound. The ambition of this documentation is to:
+The ambition of this documentation is to:
 
 1. Provide sufficient detail about the invariants described in the original paper to transcribe them into rigorous tests.
 2. Clarify that the approach taken in this implementation is based on a careful and thorough reading of the original
-   papers.
+   papers, watching Lamport's videos, and careful research about other implementations.
 3. Provide sufficient detail around the "learning" messages used by this implementation to understand that they are minimal and do not harm correctness.
 4. Provide enough documentation so that someone can carefully study the code, the tests, and the papers to verify this implementation with far less overall effort than it would take them to write any equivalent implementation.
 5. Explicitly explain the design decisions in this implementation. 
@@ -24,24 +20,24 @@ implementation is sound. The ambition of this documentation is to:
 As of today, the proceeding list is aspirational. When the exhaustive tests are written, I will invite peer review and
 possibly offer a nominal bug bounty (which would be a folly I would surely come to regret instantly).
 
-### 
-
 ### Cluster Replication With Paxos
 
-To replicate the state of any service, we need to apply the same stream of commands to each server in the same order. The paper states (p. 8):
+To replicate the state of any service, we need to apply the same stream of commands to each server in the same order.
+The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) states (p. 8):
 
 > A simple way to implement a distributed system is as a collection of clients that issue commands to a central server. The server can be described as a deterministic state machine that performs client commands in some sequence. The state machine has a current state; it performs a step by taking as input a command and producing an output and a new state.
 
 For example, in a key-value store, commands might be `put(k,v)`, `get(k)` or `remove(k)` operations. These commands form
 the "values" that must be applied consistently at each server in the cluster.
 
-Lamport explicitly states that Paxos has a leader (p. 6):
+The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) explicitly states that Paxos has a leader (p. 6):
 
 > The algorithm chooses a leader, which plays the roles of the distinguished proposer and the distinguished learner.
 
 This means command values are forwarded to the leader, and the leader assigns the order of the command values.
 
-A common misconception is failing to recognize that Paxos is inherently Multi-Paxos. As Lamport states in "Paxos Made Simple" (p. 10):
+A common misconception is failing to recognize that Paxos is inherently Multi-Paxos.
+The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) states (p. 10):
 
 > A newly chosen leader executes phase 1 for infinitely many instances of the consensus algorithm. Using the same proposal number for all instances, it can do this by sending a single reasonably short message to the other servers.
 
@@ -54,8 +50,7 @@ class `TrexNode` solely responsible for running the core Paxos algorithm.
 
 ### The Paxos Algorithm
 
-It is a pedagogical blunder to introduce the Paxos algorithm to engineers in the order you would write a mathematical
-proof of its correctness. This description will explain it in the following order:
+This description will explain it in the following order:
 
 * First, explain that promises apply to both core message types.
 * Second, explain the steady state of the algorithm, which uses only `accept` messages.
@@ -63,6 +58,8 @@ proof of its correctness. This description will explain it in the following orde
 * Fourth, explain the leader take-over protocol, which is the most complex step that uses both `prepare` and `accept` messages.
 * Fifth, explain the durable state requirements.
 * Sixth, define the invariants of this implementation.
+* Seventh, explain this implementation's design choices.
+* Eighth, provide a footnote on leader duels.
 
 ### First: Promises, Promises
 
@@ -82,7 +79,8 @@ This is achieved by encoding the node identifier in each `N`s lower bits. This l
 `N`:
 
 ```java
-public record BallotNumber(int counter, byte nodeIdentifier) implements Comparable<BallotNumber> { ... }
+public record BallotNumber(int counter, byte nodeIdentifier) implements Comparable<BallotNumber> {
+}
 ```
 
 In that record class, the `compareTo` method treats the four-byte counter as having the most significant bits and the
@@ -212,8 +210,8 @@ responds, which is a message that includes its own `highestAccepted`. When it ge
 positive response, it computes `max(highestAccepted)` to know all the slots it must recover.
 It then streams `prepare` messages for the full range of slots. 
 
-Intuitively, we can think of the first message as a leader election. Hence we call
-`N` a "ballot number", and we consider the responses to be "votes". 
+Intuitively, we can think of the first message as a leader election. Hence, we call
+`N` a ballot number, and we consider the responses to be votes.
 In a three-node cluster, a leader only needs to exchange one 
 message to be elected. It immediately issues small prepare 
 messages for the full range of slots. These may be batched into a single 
@@ -260,8 +258,8 @@ This implementation enforces the following invariants at each node:
 
 1. The fixed index increases sequentially (therefore, the up-call of `{S,V}` tuples must be sequential).
 2. The promise number only increases (yet it may jump forward).
-4. The promised ballot number can only change when processing a `prepare` or `accept` message.
-5. The fixed index can only change when a leader sees a majority `AcceptReponse` message, a follower node sees a
+   3The promised ballot number can only change when processing a `prepare` or `accept` message.
+   4The fixed index can only change when a leader sees a majority `AcceptReponse` message, a follower node sees a
    `Fixed` message or any node learns about a fixed message due to a `CatchupResponse` message.
 
 The core of this implementation that ensures safety is written as inequalities comparing integer types. When we unit test the `TrexNode` class: 
@@ -276,7 +274,7 @@ If we had ten such things to brute force test, each with only three permutations
 
 TO BE CONTINUED
 
-### Design Choices
+### Seventh, Design Choices
 
 The description above explains that the happy path galloping state is optimal. Therefore, this implementation makes the following design decision:
 
@@ -307,6 +305,33 @@ This leads to this design choice:
 
 Only the author's mistakes in the specification and implementation of the invariants and their tests will remain. 
 The benefit of open source is that, with enough eyes, any errors can be found and fixed.
+
+### Eighth, Leader Duels
+
+The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) states (p. 7):
+
+> It’s easy to construct a scenario in which two proposers each keep issuing
+> a sequence of proposals with increasing numbers, none of which are ever
+> chosen.
+
+One pathological scenario exists for a stable network where nodes repeated timeout in an unlucky order such:
+
+* The first node to timeout has the lowest node identifier.
+* The second node to timeouts does so before the first node can fix a value into the next slot.
+
+Yet there is also the other scenario where the first node to timeout has the highest node identifier. Then the second
+node to timeout does not interrupt. If you were to set things up so that you had a 50% probability of two nodes
+timing out within the time it takes them to complete a full slot recovery you have great odds.
+
+Every timeout you have two chances of success; that the first node to timeout has the highest node identifier, and if
+not
+that the lower node is not interrupted before it can complete a full cycle. The odds of success each attempt to elect
+a leader are 75%, 94%, 99%, ..
+
+This implementation separates the core algorithm into TrexNode and the timeout logic into TrexEngine. It will allow you
+to use your own node failure detection or election mechanism if you do not like those odds.
+
+See the wiki for a more detailed explanation of this topic.
 
 ## Development Setup
 
