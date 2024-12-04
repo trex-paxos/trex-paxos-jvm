@@ -1,4 +1,6 @@
-## Trex2: Paxos Algorithm Strong Consistency for cluster replication on the Java JVM
+## Trex2: Paxos Algorithm Strong consistency for cluster replication on the Java JVM
+
+### TL;DR
 
 This repository contains a Java library that implements the Paxos algorithm as described in Leslie Lamport's 2001 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf)
 
