@@ -9,8 +9,7 @@ To use this library:
 * You will need to implement the `Journal` interface to persist the state of the algorithm. This can be tables (or documents or key-values) in the database that your application uses.
 * At this time you will need to setup the cluster membership manually. You will need to assign a unique node identifier
   to each node in the cluster.
-* At this time the network transport options in this library are not complete so you will have to do some work there yet
-  this library is designed to be transport agnostic.
+* This library is designed to be transport agnostic. Examples of plugging in network transport are not complete. 
 
 At this time the exhaustive brute force tests are not yet all written so it is not
 recommended for production use. A release candidate will be made when the exhaustive tests mentioned in this readme are
