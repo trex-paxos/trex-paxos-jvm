@@ -48,7 +48,7 @@ public class PreparePropertyTests {
 
   /// Property test that verifies prepare message handling by testing all combinations
   /// of relationships between the node under test and inbound message properties
-  @Property
+  @Property(generation = GenerationMode.EXHAUSTIVE)
   void prepareTests(@ForAll("testCases") TestCase testCase) {
 
     // Set up the identifier of the node

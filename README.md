@@ -160,7 +160,7 @@ public record CatchupResponse( List<Accept> catchup ) {}
 ```
 
 Each node learns which value `V` is fixed into each sequential slot `S`.
-Each nide will thrn up-call the command value `V` to the host application. 
+Each node will then up-call the command value `V` to the host application.
 
 ### Fourth: The Leader Takeover Protocol
 
@@ -218,8 +218,8 @@ Once elected a new leader immediately issues small prepare
 messages for the full range of slots. Intuitively the new leader is 
 asking nodes to retransmit what they know about all past `accept` messages. 
 The new leader then collaborates with an old leader 
-by choosing their value. The mathematics of the Paxos algorithm 
-gaurentees that all leaders converge on choosing the same value 
+by choosing their value. The mathematics of the Paxos algorithm
+guarantees that all leaders converge on choosing the same value
 at each slot. 
 
 ## Fifth, Durable State Requirements
@@ -286,8 +286,20 @@ The core of this implementation that ensures safety is written as inequalities c
 * The journal at any slot can have only no value, the no-operation value, or a client command value.
 * The journal can either be continuous, have gaps, or not have reached a specific index when that index is learnt to be fixed.  
 
-If had ten such things to brute force test, each with only three permutations, we would have 3^10=59,049 test scenarios
-to brute force.
+If we consider just testing the `prepare` message:
+
+1. The node can be in one of three TrexStates: `FOLLOW`, `RECOVER`, or `LEAD`.
+2. The node can have a `progress.highestPromised().counter()` that is less than, greater than, or equal to the counter
+   in the number of the sender.
+3. The node can have a `progress.highestPromised().highestFixedIndex()` that is less than, greater than, or equal to the
+   log index in the message.
+4. The node can have a `progress.highestPromised().nodeIdentifier()` that is less than, greater than, or equal to the
+   node identifier in the message.
+
+We can exhaustively test this by generating a total of 3^4=81 test scenarios. We can also add into that list whether the
+v
+the journal at that slot hold either `null`, `no-op`, or a client command `byte[]`. This would give us a total of
+3^5=243 test scenarios.
 
 TO BE CONTINUED
 

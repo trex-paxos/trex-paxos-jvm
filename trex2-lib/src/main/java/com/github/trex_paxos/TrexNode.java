@@ -137,12 +137,12 @@ public class TrexNode {
   private void algorithm(TrexMessage input, List<TrexMessage> messages, TreeMap<Long, AbstractCommand> commands) {
     switch (input) {
       case Accept accept -> {
-        if (lowerAccept(progress, accept) || higherAcceptForFixedSlot(accept, progress)) {
+        if (lowerAccept(accept) || fixedSlot(accept)) {
           messages.add(nack(accept));
-        } else if (equalOrHigherAccept(progress, accept)) {
+        } else if (equalOrHigherAccept(accept)) {
           // always journal first
           journal.writeAccept(accept);
-          if (higherAccept(progress, accept)) {
+          if (higherAccept(accept)) {
             // we must update promise on a higher accept http://stackoverflow.com/q/29880949/329496
             this.progress = progress.withHighestPromised(accept.number());
             // we must change our own vote if we are an old leader
@@ -268,7 +268,7 @@ public class TrexNode {
       case CatchupResponse(_, _, final var catchup) -> {
         // drop anything we have already fixed
         final var newAccepts = catchup.stream()
-            .dropWhile(accept -> accept.logIndex() <= progress.highestFixedIndex())
+            .dropWhile(accept -> fixedSlot(accept))
             .toList();
 
         if (!newAccepts.isEmpty()) {
@@ -282,6 +282,10 @@ public class TrexNode {
         }
       }
     }
+  }
+
+  private boolean fixedSlot(Accept accept) {
+    return accept.logIndex() <= progress.highestFixedIndex();
   }
 
   static final String PROTOCOL_VIOLATION_PROMISES = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the promise has been changed when the message is not a PaxosMessage type.";
@@ -470,20 +474,15 @@ public class TrexNode {
     );
   }
 
-  static boolean equalOrHigherAccept(Progress progress, Accept accept) {
+  private boolean equalOrHigherAccept(Accept accept) {
     return progress.highestPromised().lessThanOrEqualTo(accept.number());
   }
 
-  static boolean higherAcceptForFixedSlot(Accept accept, Progress progress) {
-    return accept.number().greaterThan(progress.highestPromised()) &&
-        accept.logIndex() <= progress.highestFixedIndex();
-  }
-
-  static Boolean lowerAccept(Progress progress, Accept accept) {
+  private boolean lowerAccept(Accept accept) {
     return accept.number().lessThan(progress.highestPromised());
   }
 
-  static Boolean higherAccept(Progress progress, Accept accept) {
+  private boolean higherAccept(Accept accept) {
     return accept.number().greaterThan(progress.highestPromised());
   }
 
