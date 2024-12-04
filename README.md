@@ -177,9 +177,11 @@ On leader election (p. 7):
 
 > A reliable algorithm for electing a proposer must use either randomness or realtime — for example, by using timeouts. However, safety is ensured regardless of the success or failure of the election.
 
-This implementation leader elections using random timeouts.
-It allows you to use a different mechanism by isolating the pure algorithm logic 
-into the `TrexNode` class. The timeout logic is isolated into the `TrexEngine` class. 
+This library implements leader failure detection by heartbeating `fixed` messages. Leader election is then by 
+random timeouts. The core algorithm is in a single class 
+`TrexNode` class. The timeout logic is in the `TrexEngine` class. This allows you to use a different 
+failure detection library if you like. 
+
 When a node times out it attempts to run the leader takeover protocol:
 
 1. The new leader sends `prepare(N,S)` for all slots any prior leader has attempted to fix
