@@ -1,10 +1,25 @@
-## Trex2: Paxos Algorithm Strong Consistency for state replication on the Java JVM
+## Trex2: Paxos Algorithm Strong Consistency for cluster replication on the Java JVM
 
-This repository contains a Java implementation of the Paxos algorithm as described in Leslie Lamport's 2001
-paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf)
+This repository contains a Java library implementation that implements the Paxos algorithm as described in Leslie
+Lamport's 2001 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf)
 
-This is a work in progress, as more exhaustive tests will be written. At this point, it is not recommended for
-production use. A release candidate will be made when the exhaustive tests mentioned in this readme are implemented.
+To use this library:
+
+* You will need to implement the `Journal` interface to persist the state of the algorithm. This can be tables in the
+  same
+  database that your application uses where you manage the transactions or it can be a separate database. You can use a
+  traditional
+  relational database or a NoSQL database. You can use an embedded database or a cloud database.
+* You will need to serialise your client-to-server request payloads into a byte array. This might be simply turning a
+  string into a byte array depending on your application.
+* At this time you will need to setup the cluster membership manually. You will need to assign a unique node identifier
+  to each node in the cluster.
+* At this time the network transport options in this library are not complete so you will have to do some work there yet
+  this library is designed to be transport agnostic.
+
+At this time the exhaustive brute force tests are not yet all written so it is not
+recommended for production use. A release candidate will be made when the exhaustive tests mentioned in this readme are
+implemented.
 
 ### Introduction
 
