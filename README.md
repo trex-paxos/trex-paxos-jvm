@@ -6,8 +6,7 @@ This repository contains a Java library that implements the Paxos algorithm as d
 
 To use this library:
 
-* You will need to implement the `Journal` interface to persist the state of the algorithm. This can be tables (or documents or key-values) in the same database that your application 
-  
+* You will need to implement the `Journal` interface to persist the state of the algorithm. This can be tables (or documents or key-values) in the database that your application uses.
 * You will need to serialise your client-to-server request payloads into a byte array. This might be simply turning a
   string into a byte array depending on your application.
 * At this time you will need to setup the cluster membership manually. You will need to assign a unique node identifier
