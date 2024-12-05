@@ -87,7 +87,7 @@ public class AcceptResponsePropertyTests {
           final var s = slot.getAndIncrement();
           final var v = createAcceptVotes(s);
           // Setup gap scenario we first add chosen `accept` before gap
-          acceptVotesByLogIndex.put(s, v);
+          acceptVotesByLogIndex.put(s, v.votes());
           // we need to put it into the journal also
           journaledAccepts.get().put(s, v.accept());
           // Then we create a gap
@@ -97,17 +97,21 @@ public class AcceptResponsePropertyTests {
         final var s = slot.get();
         final var v = createAcceptVotes(s);
         // Setup gap scenario we first add chosen `accept` before gap
-        acceptVotesByLogIndex.put(s, v);
+        acceptVotesByLogIndex.put(s, v.votes());
         // we need to put it into the journal also
         journaledAccepts.get().put(s, v.accept());
       }
 
-      private AcceptVotes createAcceptVotes(long s) {
+      record CreatedData(Accept accept, AcceptVotes votes) {
+      }
+
+      private CreatedData createAcceptVotes(long s) {
         final var a = new Accept(thisNodeId, s, thisPromise, NoOperation.NOOP);
         final Map<Byte, AcceptResponse> responses = new TreeMap<>();
         responses.put(thisNodeId, new AcceptResponse(thisNodeId, thisNodeId,
             new AcceptResponse.Vote(thisNodeId, thisNodeId, s, outcomeVote), s));
-        return new AcceptVotes(a, responses, false);
+        AcceptVotes votes = new AcceptVotes(a.slotTerm(), responses, false);
+        return new CreatedData(a, votes);
       }
     };
 

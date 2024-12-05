@@ -29,4 +29,11 @@ public record Accept(byte from,
   public int compareNumbers(Accept accept) {
     return number.compareTo(accept.number);
   }
+
+  public record SlotTerm(long logIndex, BallotNumber number) {
+  }
+
+  public SlotTerm slotTerm() {
+    return new SlotTerm(logIndex, number);
+  }
 }

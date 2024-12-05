@@ -137,7 +137,7 @@ public class TrexNode {
     switch (input) {
       case Accept accept -> {
         if (lowerAccept(accept) || fixedSlot(accept)) {
-          messages.add(nack(accept));
+          messages.add(nack(accept.slotTerm()));
         } else if (equalOrHigherAccept(accept)) {
           // always journal first
           journal.writeAccept(accept);
@@ -374,7 +374,6 @@ public class TrexNode {
                 "WIN logIndex==" + logIndex +
                     " nodeIdentifier==" + nodeIdentifier() +
                     " number==" + acceptVotes.accept().number() +
-                    " value==" + acceptVotes.accept().command() +
                     " vs==" + vs);
 
             acceptVotesByLogIndex.put(logIndex, AcceptVotes.chosen(acceptVotes.accept()));
@@ -388,10 +387,11 @@ public class TrexNode {
 
             if (!fixed.isEmpty()) {
               // run the callback
-              for (var accept : fixed) {
+              for (var slotTerm : fixed) {
+                final var accept = journal.readAccept(slotTerm.logIndex()).orElseThrow();
                 fixed(accept, commands);
                 // free the memory and stop heartbeating out the accepts
-                acceptVotesByLogIndex.remove(accept.logIndex());
+                acceptVotesByLogIndex.remove(slotTerm.logIndex());
               }
 
               // we have fixed slots
@@ -433,7 +433,7 @@ public class TrexNode {
   /**
    * Send a positive vote message to the leader.
    *
-   * @param accept The accept message to acknowledge.
+   * @param accept The `accept` to positively acknowledge.
    */
   final AcceptResponse ack(Accept accept) {
     return new AcceptResponse(
@@ -447,15 +447,15 @@ public class TrexNode {
   /**
    * Send a negative vote message to the leader.
    *
-   * @param accept The accept message to reject.
+   * @param slotTerm The `accept(S,V,_)` to negatively acknowledge.
    */
-  final AcceptResponse nack(Accept accept) {
+  final AcceptResponse nack(Accept.SlotTerm slotTerm) {
     return new AcceptResponse(
         nodeIdentifier,
-        accept.number().nodeIdentifier(),
+        slotTerm.number().nodeIdentifier(),
         new AcceptResponse.Vote(nodeIdentifier,
-            accept.number().nodeIdentifier(),
-            accept.logIndex(),
+            slotTerm.number().nodeIdentifier(),
+            slotTerm.logIndex(),
             false)
         , progress.highestFixedIndex());
   }
@@ -664,12 +664,12 @@ public class TrexNode {
    * A record of the votes received by a node from other cluster members.
    */
   // FIXME do not hold the Accept as we need to load it from the journal just hold the number+slot
-  public record AcceptVotes(Accept accept, Map<Byte, AcceptResponse> responses, boolean chosen) {
+  public record AcceptVotes(Accept.SlotTerm accept, Map<Byte, AcceptResponse> responses, boolean chosen) {
     public AcceptVotes(Accept accept) {
-      this(accept, new HashMap<>(), false);
+      this(accept.slotTerm(), new HashMap<>(), false);
     }
 
-    public static AcceptVotes chosen(Accept accept) {
+    public static AcceptVotes chosen(Accept.SlotTerm accept) {
       return new AcceptVotes(accept, Collections.emptyMap(), true);
     }
   }
