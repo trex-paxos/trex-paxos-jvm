@@ -75,9 +75,8 @@ public class TrexNode {
   /// When leading we will track the responses to a stream of accept messages.
   final NavigableMap<Long, AcceptVotes> acceptVotesByLogIndex = new TreeMap<>();
 
-  /// Lamport's "Paxos Made Simple" uses the terminology 'proposal number'. Here we use the term 'BallotNumber' as it
-  /// is better aligned to his original The Part-time Parliament paper. We use the term 'BallotNumber' as it is more
-  /// aligned to how we count votes from the other nodes.
+  /// The term of a node is the value that it will use with either the next `prepare` or `accept` message.
+  /// It is only used by the leader and recoverer. It will be null for a follower.
   BallotNumber term = null;
 
   /// This is the main Paxos Algorithm. It is not public as a TrexEngine will wrap this to handle specifics of resetting
@@ -253,8 +252,15 @@ public class TrexNode {
             .flatMap(Optional::stream)
             .toList();
 
-        messages.add(new CatchupResponse(nodeIdentifier, replyTo, missingAccepts));
+        if (!missingAccepts.isEmpty()) {
+          messages.add(new CatchupResponse(nodeIdentifier, replyTo, missingAccepts));
+        }
 
+        /// If the other node has seen a higher promise then we must increase our term
+        /// to be higher. We do not update our promise as we would be doing that in a learning
+        ///  message which is not part of the protocol. Instead we bump or term. Next time we
+        ///  produce an `accept` we will us our term and do a self accept to that which will
+        ///  bump pur promise. As that will be inside of the official algorithm it will be safe.
         if (otherHighestPromised.greaterThan(progress.highestPromised())) {
           if (role == TrexRole.LEAD) {
             assert this.term != null;
@@ -281,10 +287,12 @@ public class TrexNode {
 
         final var priorProgress = progress;
 
+        // here we do not check our promise as we trust that the leader knows that the
+        // values are fixed so it does not matter if we have a higher promise as it
+        // a majority of the nodes have accepted the that message.
         catchup.stream()
             .dropWhile(this::fixedSlot)
             .takeWhile(accept -> accept.logIndex() <= highestContiguous)
-            .filter(this::equalOrHigherAccept)
             .forEach(accept -> {
               journal.writeAccept(accept);
               progress = progress.withHighestFixed(accept.logIndex());

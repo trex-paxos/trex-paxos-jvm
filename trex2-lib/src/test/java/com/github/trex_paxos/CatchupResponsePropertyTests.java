@@ -93,12 +93,10 @@ public class CatchupResponsePropertyTests {
       assert messages.isEmpty();
 
       // if w ae should have journaled all the accepts
-      if (testCase.catchUpAlignment == ArbitraryValues.CatchupAlignmentState.CORRECT &&
-          !otherNumber.lessThan(thisPromise)) {
+      if (testCase.catchUpAlignment == ArbitraryValues.CatchupAlignmentState.CORRECT) {
         // Verify that accepts are processed
         assert journaledAccepts.get().size() == testCase.acceptCount;
-      } else if (testCase.catchUpAlignment == ArbitraryValues.CatchupAlignmentState.TOO_LOW &&
-          !otherNumber.lessThan(thisPromise)) {
+      } else if (testCase.catchUpAlignment == ArbitraryValues.CatchupAlignmentState.TOO_LOW) {
         if (testCase.acceptCount > 0) {
           // Verify that not all accepts are not processed
           assert journaledAccepts.get().size() < testCase.acceptCount;
