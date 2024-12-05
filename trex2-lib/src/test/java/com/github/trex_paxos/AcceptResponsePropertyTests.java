@@ -72,7 +72,7 @@ public class AcceptResponsePropertyTests {
       case LOSE -> false;
     };
 
-    final var slot = new AtomicLong(thisFixed + 1);
+    final var slotAtomic = new AtomicLong(thisFixed + 1);
 
     // Setup node with role and acceptVotes
     final var node = new TrexNode(Level.INFO, thisNodeId, threeNodeQuorum, journal) {
@@ -84,17 +84,17 @@ public class AcceptResponsePropertyTests {
         };
 
         if (testCase.outOfOrder == OutOfOrder.TRUE) {
-          final var s = slot.getAndIncrement();
+          final var s = slotAtomic.getAndIncrement();
           final var v = createAcceptVotes(s);
           // Setup gap scenario we first add chosen `accept` before gap
           acceptVotesByLogIndex.put(s, v.votes());
           // we need to put it into the journal also
           journaledAccepts.get().put(s, v.accept());
           // Then we create a gap
-          slot.getAndIncrement();
+          slotAtomic.getAndIncrement();
         }
 
-        final var s = slot.get();
+        final var s = slotAtomic.get();
         final var v = createAcceptVotes(s);
         // Setup gap scenario we first add chosen `accept` before gap
         acceptVotesByLogIndex.put(s, v.votes());
@@ -115,12 +115,12 @@ public class AcceptResponsePropertyTests {
       }
     };
 
-    final var s = slot.get();
+    final var slot = slotAtomic.get();
 
     // Create accept response
-    final var vote = new AcceptResponse.Vote(otherNodeId, thisNodeId, s, true);
+    final var vote = new AcceptResponse.Vote(otherNodeId, thisNodeId, slot, true);
     final var acceptResponse = new AcceptResponse(otherNodeId, thisNodeId, vote,
-        s);
+        slot);
 
     final var result = node.paxos(acceptResponse);
 
@@ -137,7 +137,8 @@ public class AcceptResponsePropertyTests {
         // Leader must back down if other node has higher fixed index
         assert node.getRole() == TrexRole.FOLLOW;
         assert messages.isEmpty();
-      } else if (testCase.voteOutcome == VoteOutcome.WIN && testCase.outOfOrder == OutOfOrder.FALSE) {
+      } else if (testCase.voteOutcome == VoteOutcome.WIN &&
+          testCase.outOfOrder == OutOfOrder.FALSE) {
         // Should fix value and send Fixed message for contiguous slots
         assert !messages.isEmpty();
         assert messages.getFirst() instanceof Fixed;
@@ -153,7 +154,6 @@ public class AcceptResponsePropertyTests {
         assert commands.isEmpty();
       }
     }
-    // FIXME: TEST FOR BACKING DOWN
   }
 
   @Provide

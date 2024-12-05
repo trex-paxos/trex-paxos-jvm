@@ -39,7 +39,7 @@ public class SpecificTests {
   /// This is a little subtle. The catchup response should not violate the invariants of the system.
   /// When a node is isolated it will make a self promise that may be higher than the current leader.
   /// The current leader can fix values for slots that the isolated node is not aware of.
-  /// When the isolated node rejoins it will backdown and request a catchup. When the response is received
+  /// When the isolated node rejoins it will abdicate and request a catchup. When the response is received
   /// the node should respect the invariant and ignore any values for slots that it has already been fixed.
   /// it should also learn the value for the slot that it has not yet fixed and accept that value even though
   /// it has self promised a higher ballot number.

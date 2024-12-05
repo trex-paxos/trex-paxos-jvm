@@ -161,7 +161,7 @@ public class TrexNode {
                           quorumStrategy.assessAccepts(logIndex, vs);
                       if (quorumOutcome == QuorumOutcome.LOSE) {
                         // this happens in a three node cluster when an isolated split brain leader rejoins
-                        backdown(messages);
+                        abdicate(messages);
                       }
                     }
                   });
@@ -192,7 +192,7 @@ public class TrexNode {
           this.progress = newProgress;
           // leader or recoverer should give way to a higher nextPrepareMessage
           if (prepare.number().nodeIdentifier() != nodeIdentifier && role != FOLLOW) {
-            backdown(messages);
+            abdicate(messages);
           }
           // we vote for ourself
           if (prepare.number().nodeIdentifier() == nodeIdentifier) {
@@ -208,7 +208,7 @@ public class TrexNode {
         if (FOLLOW != role && acceptResponse.to() == nodeIdentifier) {
           // An isolated leader rejoining must back down
           if (LEAD == role && acceptResponse.highestFixedIndex() > progress.highestFixedIndex()) {
-            backdown(messages);
+            abdicate(messages);
           } else {
             // Both Leader and Recoverer can receive AcceptResponses
             processAcceptResponse(acceptResponse, commands, messages);
@@ -233,7 +233,7 @@ public class TrexNode {
             progress = progress.withHighestFixed(fixedSlot);
             journal.writeProgress(progress);
             if (!role.equals(FOLLOW)) {
-              backdown(messages);
+              abdicate(messages);
             }
           });
         }
@@ -317,7 +317,6 @@ public class TrexNode {
   static final String CRASHED = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR This node has crashed and must be rebooted. The durable journal state is now the only source of truth.";
   static final String CRASHING = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR This node has crashed and must be rebooted. The durable journal state is now the only source of truth: ";
 
-
   /// Here we check that we have not violated the Paxos algorithm invariants. If we have then we throw an error.
   /// We also need to check what is described in the wiki page [Cluster Replication With Paxos for the Java Virtual Machine](https://github.com/trex-paxos/trex-paxos-jvm/wiki)
   private void validateProtocolInvariantElseThrowError(TrexMessage input, Progress priorProgress) {
@@ -352,9 +351,9 @@ public class TrexNode {
     throw new AssertionError(message);
   }
 
-  private void backdown(List<TrexMessage> messages) {
+  private void abdicate(List<TrexMessage> messages) {
     messages.clear();
-    backdown();
+    abdicate();
   }
 
   private void processAcceptResponse(AcceptResponse acceptResponse, Map<Long, AbstractCommand> commands, List<TrexMessage> messages) {
@@ -407,7 +406,7 @@ public class TrexNode {
           }
           case LOSE ->
             // we are unable to achieve a quorum, so we must back down as to another leader
-              backdown(messages);
+              abdicate(messages);
         }
       }
     });
@@ -423,7 +422,7 @@ public class TrexNode {
     commands.put(logIndex, cmd);
   }
 
-  void backdown() {
+  void abdicate() {
     this.role = FOLLOW;
     prepareResponsesByLogIndex.clear();
     acceptVotesByLogIndex.clear();
@@ -613,7 +612,7 @@ public class TrexNode {
           prepareResponsesByLogIndex.put(logIndex, votes);
       case LOSE ->
         // we are unable to achieve a quorum, so we must back down
-          backdown(messages);
+          abdicate(messages);
       case WIN -> {
         // only if we learn that other nodes have prepared higher slots we must nextPrepareMessage them
         votes.values().stream()

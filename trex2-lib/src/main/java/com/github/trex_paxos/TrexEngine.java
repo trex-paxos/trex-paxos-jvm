@@ -129,7 +129,7 @@ public abstract class TrexEngine {
   TrexResult paxosNotThreadSafe(TrexMessage trexMessage) {
     if (evidenceOfLeader(trexMessage)) {
       if (trexNode.getRole() != TrexRole.FOLLOW)
-        trexNode.backdown();
+        trexNode.abdicate();
       setRandomTimeout();
     }
 
