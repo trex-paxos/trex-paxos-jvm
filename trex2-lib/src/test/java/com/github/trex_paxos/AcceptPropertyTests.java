@@ -108,7 +108,6 @@ public class AcceptPropertyTests {
         assert response.vote().from() == thisNodeId;
         assert response.vote().to() == otherNodeId;
         assert response.vote().logIndex() == otherIndex;
-        assert response.vote().number().equals(otherNumber);
 
         // Verify journaling
         assert journaledAccept.get() != null;

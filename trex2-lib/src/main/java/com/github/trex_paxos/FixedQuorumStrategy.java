@@ -15,6 +15,9 @@
  */
 package com.github.trex_paxos;
 
+import com.github.trex_paxos.msg.AcceptResponse;
+import com.github.trex_paxos.msg.PrepareResponse;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,8 +36,8 @@ public class FixedQuorumStrategy implements QuorumStrategy {
     this.majority = (int) Math.floor((quorumSize / 2.0) + 1);
   }
 
-  QuorumOutcome simple(Set<Vote> votes) {
-    Map<Boolean, List<Vote>> voteMap = votes.stream().collect(Collectors.partitioningBy(Vote::vote));
+  QuorumOutcome simple(List<Boolean> votes) {
+    Map<Boolean, List<Boolean>> voteMap = votes.stream().collect(Collectors.partitioningBy(v -> v));
     if (voteMap.get(true).size() >= majority)
       return QuorumOutcome.WIN;
     else if (voteMap.get(false).size() >= majority)
@@ -44,12 +47,12 @@ public class FixedQuorumStrategy implements QuorumStrategy {
   }
 
   @Override
-  public QuorumOutcome assessPromises(long logIndex, Set<Vote> promises) {
-    return simple(promises);
+  public QuorumOutcome assessPromises(long logIndex, Set<PrepareResponse.Vote> promises) {
+    return simple(promises.stream().map(PrepareResponse.Vote::vote).collect(Collectors.toList()));
   }
 
   @Override
-  public QuorumOutcome assessAccepts(long logIndex, Set<Vote> accepts) {
-    return simple(accepts);
+  public QuorumOutcome assessAccepts(long logIndex, Set<AcceptResponse.Vote> accepts) {
+    return simple(accepts.stream().map(AcceptResponse.Vote::vote).collect(Collectors.toList()));
   }
 }

@@ -155,7 +155,7 @@ public class TrexNode {
                     if (oldNumber.lessThan(newNumber)) {
                       // we have accepted a higher accept which is a promise as per https://stackoverflow.com/a/29929052
                       acceptVotes.responses().put(nodeIdentifier(), nack(acceptVotes.accept()));
-                      Set<Vote> vs = acceptVotes.responses().values().stream()
+                      Set<AcceptResponse.Vote> vs = acceptVotes.responses().values().stream()
                           .map(AcceptResponse::vote).collect(Collectors.toSet());
                       final var quorumOutcome =
                           quorumStrategy.assessAccepts(logIndex, vs);
@@ -361,9 +361,10 @@ public class TrexNode {
     final var vote = acceptResponse.vote();
     final var logIndex = vote.logIndex();
     Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex)).ifPresent(acceptVotes -> {
+      assert acceptVotes.accept.logIndex() == logIndex;
       if (!acceptVotes.chosen()) {
         acceptVotes.responses().put(acceptResponse.from(), acceptResponse);
-        Set<Vote> vs = acceptVotes.responses().values().stream()
+        Set<AcceptResponse.Vote> vs = acceptVotes.responses().values().stream()
             .map(AcceptResponse::vote).collect(Collectors.toSet());
         final var quorumOutcome =
             quorumStrategy.assessAccepts(logIndex, vs);
@@ -437,9 +438,9 @@ public class TrexNode {
   final AcceptResponse ack(Accept accept) {
     return new AcceptResponse(
         nodeIdentifier, accept.number().nodeIdentifier(),
-        new Vote(nodeIdentifier,
+        new AcceptResponse.Vote(nodeIdentifier,
             accept.number().nodeIdentifier(),
-            accept.logIndex(), true, accept.number()),
+            accept.logIndex(), true),
         progress.highestFixedIndex());
   }
 
@@ -452,11 +453,10 @@ public class TrexNode {
     return new AcceptResponse(
         nodeIdentifier,
         accept.number().nodeIdentifier(),
-        new Vote(nodeIdentifier,
+        new AcceptResponse.Vote(nodeIdentifier,
             accept.number().nodeIdentifier(),
             accept.logIndex(),
-            false,
-            accept.number())
+            false)
         , progress.highestFixedIndex());
   }
 
@@ -468,14 +468,13 @@ public class TrexNode {
   final PrepareResponse ack(Prepare prepare) {
     return new PrepareResponse(
         nodeIdentifier, prepare.number().nodeIdentifier(),
-        new Vote(nodeIdentifier,
+        new PrepareResponse.Vote(nodeIdentifier,
             prepare.number().nodeIdentifier(),
             prepare.logIndex(),
             true,
             prepare.number()),
         journal.readAccept(prepare.logIndex()),
         highestAccepted()
-
     );
   }
 
@@ -487,7 +486,7 @@ public class TrexNode {
   final PrepareResponse nack(Prepare prepare) {
     return new PrepareResponse(
         nodeIdentifier, prepare.number().nodeIdentifier(),
-        new Vote(nodeIdentifier,
+        new PrepareResponse.Vote(nodeIdentifier,
             prepare.number().nodeIdentifier(),
             prepare.logIndex(),
             false,
@@ -605,7 +604,7 @@ public class TrexNode {
     final long logIndex = prepareResponse.vote().logIndex();
     final var votes = prepareResponsesByLogIndex.computeIfAbsent(logIndex, _ -> new HashMap<>());
     votes.put(from, prepareResponse);
-    Set<Vote> vs = votes.values().stream()
+    Set<PrepareResponse.Vote> vs = votes.values().stream()
         .map(PrepareResponse::vote).collect(Collectors.toSet());
     final var quorumOutcome = quorumStrategy.assessPromises(logIndex, vs);
     switch (quorumOutcome) {
@@ -664,7 +663,8 @@ public class TrexNode {
   /**
    * A record of the votes received by a node from other cluster members.
    */
-  record AcceptVotes(Accept accept, Map<Byte, AcceptResponse> responses, boolean chosen) {
+  // FIXME do not hold the Accept as we need to load it from the journal just hold the number+slot
+  public record AcceptVotes(Accept accept, Map<Byte, AcceptResponse> responses, boolean chosen) {
     public AcceptVotes(Accept accept) {
       this(accept, new HashMap<>(), false);
     }

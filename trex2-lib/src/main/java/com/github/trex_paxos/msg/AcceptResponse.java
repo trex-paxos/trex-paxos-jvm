@@ -15,9 +15,9 @@
  */
 package com.github.trex_paxos.msg;
 
-import com.github.trex_paxos.Vote;
-
 /// An AcceptResponse response back to a {@link Accept} message. We add the highestFixedIndex as more information to cause a leader to abdicate if it is behind.
+/// We do not send the other nodes promise if it is a NO vote as if the leader can actually lead the node that rejected
+/// will request catchup and sent its promise. The leader will then increment its term.
 ///
 /// @param from                  see {@link TrexMessage}
 /// @param to                    see {@link DirectMessage}
@@ -28,5 +28,13 @@ public record AcceptResponse(byte from,
                              Vote vote,
                              long highestFixedIndex
 ) implements TrexMessage, DirectMessage, SlotFixingMessage {
-// TODO should we send the highest promise in case it is a nack?
+  public record Vote(
+      // spookily intellij says there are no usages of this field, but if i remove it everything breaks
+      byte from,
+      // spookily intellij says there are no usages of this field, but if i remove it everything breaks
+      byte to,
+      long logIndex,
+      boolean vote
+  ) {
+  }
 }

@@ -65,7 +65,7 @@ public class PickleTests {
   public void testAcceptNackPickleUnpickle() throws IOException {
     AcceptResponse acceptNack = new AcceptResponse(
         (byte) 1, (byte) 2,
-        new Vote((byte) 1, (byte) 2, 4L, true, new BallotNumber(13, (byte) 3)),
+        new AcceptResponse.Vote((byte) 1, (byte) 2, 4L, true),
         11L);
     byte[] pickled = Pickle.writeMessage(acceptNack);
     AcceptResponse unpickled = (AcceptResponse) Pickle.readMessage(pickled);
@@ -77,7 +77,7 @@ public class PickleTests {
     final var accept = new Accept((byte) 4, 5L, new BallotNumber(6, (byte) 7), NoOperation.NOOP);
     PrepareResponse prepareAck = new PrepareResponse(
         (byte) 1, (byte) 2,
-        new Vote((byte) 1, (byte) 2, 3L, true, new BallotNumber(13, (byte) 3)),
+        new PrepareResponse.Vote((byte) 1, (byte) 2, 3L, true, new BallotNumber(13, (byte) 3)),
         Optional.of(accept), 1234213424L
     );
     byte[] pickled = Pickle.writeMessage(prepareAck);
@@ -91,7 +91,7 @@ public class PickleTests {
     final var accept = new Accept((byte) 4, 5L, new BallotNumber(6, (byte) 7), cmd);
     PrepareResponse prepareAck = new PrepareResponse(
         (byte) 1, (byte) 2,
-        new Vote((byte) 1, (byte) 2, 3L, true, new BallotNumber(13, (byte) 3)),
+        new PrepareResponse.Vote((byte) 1, (byte) 2, 3L, true, new BallotNumber(13, (byte) 3)),
         Optional.of(accept), 1234213424L
     );
     byte[] pickled = Pickle.writeMessage(prepareAck);

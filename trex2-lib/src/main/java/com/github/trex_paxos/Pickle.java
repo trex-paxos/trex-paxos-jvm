@@ -86,7 +86,7 @@ public class Pickle {
   public static PrepareResponse readPrepareResponse(DataInputStream dis) throws IOException {
     final var from = dis.readByte();
     final var to = dis.readByte();
-    Vote vote = Pickle.readVote(dis);
+    final var vote = Pickle.readVotePrepare(dis);
     long highestFixedIndex = dis.readLong();
     Optional<Accept> highestUnfixed = dis.readBoolean() ? Optional.of(Pickle.readAccept(dis)) : Optional.empty();
     return new PrepareResponse(from, to, vote, highestUnfixed, highestFixedIndex);
@@ -147,21 +147,36 @@ public class Pickle {
   public static AcceptResponse readAcceptResponse(DataInputStream dis) throws IOException {
     final var from = dis.readByte();
     final var to = dis.readByte();
-    final Vote vote = readVote(dis);
+    final var vote = readVoteAccept(dis);
     final long highestFixedIndex = dis.readLong();
     return new AcceptResponse(from, to, vote, highestFixedIndex);
   }
 
-  public static Vote readVote(DataInputStream dis) throws IOException {
+  public static AcceptResponse.Vote readVoteAccept(DataInputStream dis) throws IOException {
+    byte from = dis.readByte();
+    byte to = dis.readByte();
+    long logIndex = dis.readLong();
+    boolean vote = dis.readBoolean();
+    return new AcceptResponse.Vote(from, to, logIndex, vote);
+  }
+
+  public static void write(AcceptResponse.Vote m, DataOutputStream dos) throws IOException {
+    dos.writeByte(m.from());
+    dos.writeByte(m.to());
+    dos.writeLong(m.logIndex());
+    dos.writeBoolean(m.vote());
+  }
+
+  public static PrepareResponse.Vote readVotePrepare(DataInputStream dis) throws IOException {
     byte from = dis.readByte();
     byte to = dis.readByte();
     long logIndex = dis.readLong();
     boolean vote = dis.readBoolean();
     BallotNumber number = readBallotNumber(dis);
-    return new Vote(from, to, logIndex, vote, number);
+    return new PrepareResponse.Vote(from, to, logIndex, vote, number);
   }
 
-  public static void write(Vote m, DataOutputStream dos) throws IOException {
+  public static void write(PrepareResponse.Vote m, DataOutputStream dos) throws IOException {
     dos.writeByte(m.from());
     dos.writeByte(m.to());
     dos.writeLong(m.logIndex());

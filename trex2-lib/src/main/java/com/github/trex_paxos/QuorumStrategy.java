@@ -15,6 +15,9 @@
  */
 package com.github.trex_paxos;
 
+import com.github.trex_paxos.msg.AcceptResponse;
+import com.github.trex_paxos.msg.PrepareResponse;
+
 import java.util.Set;
 
 /**
@@ -23,8 +26,8 @@ import java.util.Set;
  * there can be different rules for determining overlapping quorums at different parts of the protocol.
  */
 public interface QuorumStrategy {
-  QuorumOutcome assessPromises(long logIndex, Set<Vote> promises);
+  QuorumOutcome assessPromises(long logIndex, Set<PrepareResponse.Vote> promises);
 
-  QuorumOutcome assessAccepts(long logIndex, Set<Vote> accepts);
+  QuorumOutcome assessAccepts(long logIndex, Set<AcceptResponse.Vote> accepts);
 
 }
