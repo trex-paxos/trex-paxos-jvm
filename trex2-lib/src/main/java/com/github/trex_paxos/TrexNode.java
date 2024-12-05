@@ -222,7 +222,6 @@ public class TrexNode {
         }
       }
       case Fixed(final var fixedFrom, final var fixedSlot, final var fixedNumber) -> {
-        // TODO is it possible to safely do some deduction here to avoid the catchup?
         if (fixedSlot == highestFixed() + 1) {
           // we must have the correct number at the slot
           final var fixedAccept = journal.readAccept(fixedSlot)
@@ -240,6 +239,7 @@ public class TrexNode {
           });
         }
 
+        // if we have not fixed the slot then we must catch up
         final var highestFixedIndex = progress.highestFixedIndex();
 
         if (fixedSlot > highestFixedIndex) {
