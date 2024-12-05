@@ -3,8 +3,8 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.*;
 import net.jqwik.api.*;
 
-import java.util.List;
 import java.util.Optional;
+import java.util.logging.Level;
 
 /// Property tests that verify the Paxos protocol invariants for prepare messages.
 /// Tests cover all combinations of:
@@ -15,31 +15,13 @@ import java.util.Optional;
 /// - Value types (NULL, NOOP, COMMAND)
 public class PreparePropertyTests {
 
-  /// Current TrexRole of the node under test when receiving messages
-  enum RoleState {FOLLOW, RECOVER, LEAD}
-
-  /// Relationship between node identifier of node under test compared to message node identifier
-  enum NodeIdentifierRelation {LESS, EQUAL, GREATER}
-
-  /// Relationship between promise counter of node under test compared to message promise counter
-  enum PromiseCounterRelation {LESS, EQUAL, GREATER}
-
-  /// Relationship between fixed slot index of node under test compared to message slot index
-  enum FixedSlotRelation {LESS, EQUAL, GREATER}
-
-  /// Types of command values that can exist in the journal when reading an Accept
-  /// NULL - no command exists in the journal
-  /// NOOP - a NoOperation.NOOP exists in the journal
-  /// COMMAND - a Command("test", "data".getBytes()) exists in the journal
-  enum Value {NULL, NOOP, COMMAND}
-
   /// Test case parameters combining all possible relationships between node under test and message properties
   record TestCase(
-      RoleState role,
-      NodeIdentifierRelation nodeIdentifierRelation,
-      PromiseCounterRelation promiseCounterRelation,
-      FixedSlotRelation fixedSlotRelation,
-      Value value
+      ArbitraryValues.RoleState role,
+      ArbitraryValues.NodeIdentifierRelation nodeIdentifierRelation,
+      ArbitraryValues.PromiseCounterRelation promiseCounterRelation,
+      ArbitraryValues.FixedSlotRelation fixedSlotRelation,
+      ArbitraryValues.Value value
   ) {
   }
 
@@ -93,8 +75,8 @@ public class PreparePropertyTests {
     };
 
     // Setup node with role with the correct parameters
-    final var node = new FakeEngine(nodeId, threeNodeQuorum, journal) {{
-      trexNode.role = switch (testCase.role) {
+    final var node = new TrexNode(Level.INFO, nodeId, threeNodeQuorum, journal) {{
+      role = switch (testCase.role) {
         case FOLLOW -> TrexRole.FOLLOW;
         case RECOVER -> TrexRole.RECOVER;
         case LEAD -> TrexRole.LEAD;
@@ -112,7 +94,7 @@ public class PreparePropertyTests {
     final Prepare prepare = new Prepare(otherNodeId, otherIndex, otherNumber);
 
     // Execute the algorithm for the current scenario
-    var result = node.paxos(List.of(prepare));
+    var result = node.paxos(prepare);
 
     // Verify that no invariants of our protocol are violated
     if (result instanceof TrexResult(var messages, var commands)) {
@@ -143,7 +125,7 @@ public class PreparePropertyTests {
           assert vote.logIndex() == otherIndex;
           assert vote.number().equals(otherNumber);
 
-          // Verify highest accepted value is returned
+          // Verify that highest accepted value is returned
           if (cmd != null) {
             assert response.journaledAccept().isPresent();
             var accept = response.journaledAccept().get();
@@ -155,10 +137,10 @@ public class PreparePropertyTests {
       }
 
       // Verify role changes
-      if (node.trexNode().getRole() != TrexRole.valueOf(testCase.role.name())
+      if (node.getRole() != TrexRole.valueOf(testCase.role.name())
           && prepare.logIndex() > thisFixed
           && otherNumber.greaterThan(thisPromise)) {
-        assert node.trexNode().getRole() == TrexRole.FOLLOW;
+        assert node.getRole() == TrexRole.FOLLOW;
       }
     }
   }
@@ -168,11 +150,11 @@ public class PreparePropertyTests {
   @Provide
   Arbitrary<TestCase> testCases() {
     return Combinators.combine(
-        Arbitraries.of(RoleState.values()),
-        Arbitraries.of(NodeIdentifierRelation.values()),
-        Arbitraries.of(PromiseCounterRelation.values()),
-        Arbitraries.of(FixedSlotRelation.values()),
-        Arbitraries.of(Value.values())
+        Arbitraries.of(ArbitraryValues.RoleState.values()),
+        Arbitraries.of(ArbitraryValues.NodeIdentifierRelation.values()),
+        Arbitraries.of(ArbitraryValues.PromiseCounterRelation.values()),
+        Arbitraries.of(ArbitraryValues.FixedSlotRelation.values()),
+        Arbitraries.of(ArbitraryValues.Value.values())
     ).as(TestCase::new);
   }
 }

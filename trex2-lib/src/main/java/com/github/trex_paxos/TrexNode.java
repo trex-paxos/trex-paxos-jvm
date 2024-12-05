@@ -127,7 +127,7 @@ public class TrexNode {
         validateProtocolInvariantElseThrowError(input, priorProgress);
       }
       if (!commands.isEmpty()) {
-        // TODO make this run all the time
+        // TODO should we make this run all the time
         assert commands.lastKey() == progress.highestFixedIndex();
       }
     }
@@ -266,18 +266,32 @@ public class TrexNode {
         }
       }
       case CatchupResponse(_, _, final var catchup) -> {
-        // drop anything we have already fixed
-        final var newAccepts = catchup.stream()
-            .dropWhile(accept -> fixedSlot(accept))
-            .toList();
+        // if it there is a gap to the catchup then we will ignore it
+        if (!catchup.isEmpty() && catchup.getFirst().logIndex() > progress.highestFixedIndex() + 1) {
+          return;
+        }
 
-        if (!newAccepts.isEmpty()) {
-          newAccepts.forEach(accept -> {
-            journal.writeAccept(accept);
+        // Eliminate any breaks. This reduce is by Claud 3.5
+        // "Returns the second number (b) if it follows the first (a+1), Otherwise keeps the first number (a)"
+        final var highestContiguous = catchup.stream()
+            .map(Accept::logIndex)
+            .reduce((a, b) -> (a + 1 == b) ? b : a)
+            // if we have nothing in the list we return the zero slot which must always be fixed as NOOP
+            .orElse(0L);
+
+        final var priorProgress = progress;
+
+        catchup.stream()
+            .dropWhile(this::fixedSlot)
+            .takeWhile(accept -> accept.logIndex() <= highestContiguous)
+            .filter(this::equalOrHigherAccept)
+            .forEach(accept -> {
+              journal.writeAccept(accept);
+              progress = progress.withHighestFixed(accept.logIndex());
             fixed(accept, commands);
           });
 
-          progress = progress.withHighestFixed(newAccepts.getLast().logIndex());
+        if (progress != priorProgress) {
           journal.writeProgress(progress);
         }
       }

@@ -9,31 +9,12 @@ import java.util.logging.Level;
 
 public class FixedPropertyTests {
 
-  /// Current TrexRole of the node under test when receiving messages
-  enum RoleState {FOLLOW, RECOVER, LEAD}
-
-  /// Relationship between node identifier of node under test compared to message node identifier
-  enum NodeIdentifierRelation {LESS, EQUAL, GREATER}
-
-  /// Relationship between promise counter of node under test compared to message promise counter
-  enum PromiseCounterRelation {LESS, EQUAL, GREATER}
-
-  /// Relationship between fixed slot index of node under test compared to message slot index
-  enum FixedSlotRelation {LESS, EQUAL, GREATER}
-
-  /// State of the journal at the fixed slot
-  enum JournalState {
-    EMPTY,              // No value at slot
-    MATCHING_NUMBER,    // Has `accept` with matching ballot number
-    DIFFERENT_NUMBER   // Has `accept` with different ballot number
-  }
-
   record TestCase(
-      RoleState role,
-      NodeIdentifierRelation nodeIdentifierRelation,
-      FixedSlotRelation fixedSlotRelation,
-      PromiseCounterRelation promiseCounterRelation,
-      JournalState journalState
+      ArbitraryValues.RoleState role,
+      ArbitraryValues.NodeIdentifierRelation nodeIdentifierRelation,
+      ArbitraryValues.FixedSlotRelation fixedSlotRelation,
+      ArbitraryValues.PromiseCounterRelation promiseCounterRelation,
+      ArbitraryValues.JournalState journalState
   ) {
   }
 
@@ -100,7 +81,7 @@ public class FixedPropertyTests {
     };
 
     // Setup node with role
-    final var node = new TrexNode(Level.SEVERE, thisNodeId, threeNodeQuorum, journal) {{
+    final var node = new TrexNode(Level.INFO, thisNodeId, threeNodeQuorum, journal) {{
       role = switch (testCase.role) {
         case FOLLOW -> TrexRole.FOLLOW;
         case RECOVER -> TrexRole.RECOVER;
@@ -116,14 +97,14 @@ public class FixedPropertyTests {
 
     // Verify
     if (result instanceof TrexResult(final var messages, final var commands)) {
-      if (otherIndex == thisFixed + 1 && testCase.journalState == JournalState.MATCHING_NUMBER) {
+      if (otherIndex == thisFixed + 1 && testCase.journalState == ArbitraryValues.JournalState.MATCHING_NUMBER) {
         // Should process next sequential slot with matching number
         assert commands.size() == 1;
         assert journaledProgress.get() != null;
         assert journaledProgress.get().highestFixedIndex() == otherIndex;
 
         // Non-followers should back down
-        if (testCase.role != RoleState.FOLLOW) {
+        if (testCase.role != ArbitraryValues.RoleState.FOLLOW) {
           assert node.getRole() == TrexRole.FOLLOW;
         }
       } else if (otherIndex > thisFixed) {
@@ -145,11 +126,11 @@ public class FixedPropertyTests {
   @Provide
   Arbitrary<TestCase> testCases() {
     return Combinators.combine(
-        Arbitraries.of(RoleState.values()),
-        Arbitraries.of(NodeIdentifierRelation.values()),
-        Arbitraries.of(FixedSlotRelation.values()),
-        Arbitraries.of(PromiseCounterRelation.values()),
-        Arbitraries.of(JournalState.values())
+        Arbitraries.of(ArbitraryValues.RoleState.values()),
+        Arbitraries.of(ArbitraryValues.NodeIdentifierRelation.values()),
+        Arbitraries.of(ArbitraryValues.FixedSlotRelation.values()),
+        Arbitraries.of(ArbitraryValues.PromiseCounterRelation.values()),
+        Arbitraries.of(ArbitraryValues.JournalState.values())
     ).as(TestCase::new);
   }
 }

@@ -61,6 +61,6 @@ public class LoggerConfig {
   }
 
   public static void initialize() {
-    // Method to trigger static initialization
+    // Method to trigger static initialization which will configure the logger
   }
 }

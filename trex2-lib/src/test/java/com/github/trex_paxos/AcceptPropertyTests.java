@@ -8,27 +8,12 @@ import java.util.logging.Level;
 
 public class AcceptPropertyTests {
 
-  /// Current TrexRole of the node under test when receiving messages
-  enum RoleState {FOLLOW, RECOVER, LEAD}
-
-  /// Relationship between node identifier of node under test compared to message node identifier
-  enum NodeIdentifierRelation {LESS, EQUAL, GREATER}
-
-  /// Relationship between promise counter of node under test compared to message promise counter
-  enum PromiseCounterRelation {LESS, EQUAL, GREATER}
-
-  /// Relationship between fixed slot index of node under test compared to message slot index
-  enum FixedSlotRelation {LESS, EQUAL, GREATER}
-
-  /// Types of command values that can exist in the Accept message
-  enum Value {NULL, NOOP, COMMAND}
-
   record TestCase(
-      RoleState role,
-      NodeIdentifierRelation nodeIdentifierRelation,
-      PromiseCounterRelation promiseCounterRelation,
-      FixedSlotRelation fixedSlotRelation,
-      Value value
+      ArbitraryValues.RoleState role,
+      ArbitraryValues.NodeIdentifierRelation nodeIdentifierRelation,
+      ArbitraryValues.PromiseCounterRelation promiseCounterRelation,
+      ArbitraryValues.FixedSlotRelation fixedSlotRelation,
+      ArbitraryValues.Value value
   ) {
   }
 
@@ -89,7 +74,7 @@ public class AcceptPropertyTests {
     };
 
     // Setup node with role
-    final var node = new TrexNode(Level.SEVERE, thisNodeId, threeNodeQuorum, journal) {{
+    final var node = new TrexNode(Level.INFO, thisNodeId, threeNodeQuorum, journal) {{
       role = switch (testCase.role) {
         case FOLLOW -> TrexRole.FOLLOW;
         case RECOVER -> TrexRole.RECOVER;
@@ -108,17 +93,15 @@ public class AcceptPropertyTests {
       // No commands should be generated from accept
       assert commands.isEmpty();
 
+      assert messages.size() == 1;
+      final var response = (AcceptResponse) messages.getFirst();
       if (otherIndex <= thisFixed || otherNumber.lessThan(thisPromise)) {
         // Must reject accepts for fixed slots or lower ballot numbers
-        assert messages.size() == 1;
-        final var response = (AcceptResponse) messages.getFirst();
         assert !response.vote().vote();
         assert journaledAccept.get() == null;
         assert journaledProgress.get() == null;
       } else {
         // Must accept higher or equal ballot numbers
-        assert messages.size() == 1;
-        final var response = (AcceptResponse) messages.getFirst();
         assert response.vote().vote();
 
         // Verify response properties
@@ -143,11 +126,11 @@ public class AcceptPropertyTests {
   @Provide
   Arbitrary<TestCase> testCases() {
     return Combinators.combine(
-        Arbitraries.of(RoleState.values()),
-        Arbitraries.of(NodeIdentifierRelation.values()),
-        Arbitraries.of(PromiseCounterRelation.values()),
-        Arbitraries.of(FixedSlotRelation.values()),
-        Arbitraries.of(Value.values())
+        Arbitraries.of(ArbitraryValues.RoleState.values()),
+        Arbitraries.of(ArbitraryValues.NodeIdentifierRelation.values()),
+        Arbitraries.of(ArbitraryValues.PromiseCounterRelation.values()),
+        Arbitraries.of(ArbitraryValues.FixedSlotRelation.values()),
+        Arbitraries.of(ArbitraryValues.Value.values())
     ).as(TestCase::new);
   }
 }
