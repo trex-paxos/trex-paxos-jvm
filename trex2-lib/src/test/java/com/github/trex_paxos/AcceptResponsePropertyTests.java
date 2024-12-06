@@ -13,10 +13,11 @@ import java.util.logging.Level;
 
 public class AcceptResponsePropertyTests {
 
-  /// Outcome of the vote collection for the accept
+  /// Outcome of the vote collection for the `accept``
   enum VoteOutcome {
     WIN,    // Will achieve majority with this vote
-    LOSE    // Will not achieve majority
+    LOSE,    // Will not achieve majority
+    WAIT    // Will not achieve majority yet
   }
 
   /// Whether accepts are contiguous or have gaps
@@ -50,14 +51,9 @@ public class AcceptResponsePropertyTests {
 
     final var thisFixed = 10L;
 
-    final var journaledProgress = new AtomicReference<Progress>();
     final var journaledAccepts = new AtomicReference<Map<Long, Accept>>(new HashMap<>());
     // Setup journal with accepts
-    final var journal = new FakeJournal(thisNodeId, thisPromise, thisFixed) {
-      @Override
-      public void writeProgress(Progress progress) {
-        journaledProgress.set(progress);
-      }
+    final var journal = new FakeJournal(thisPromise, thisFixed) {
 
       @Override
       public Optional<Accept> readAccept(long logIndex) {
@@ -67,8 +63,8 @@ public class AcceptResponsePropertyTests {
       }
     };
 
-    final var outcomeVote = switch (testCase.voteOutcome) {
-      case WIN -> true;
+    final var thisVote = switch (testCase.voteOutcome) {
+      case WIN, WAIT -> true;
       case LOSE -> false;
     };
 
@@ -82,6 +78,10 @@ public class AcceptResponsePropertyTests {
           case RECOVER -> TrexRole.RECOVER;
           case LEAD -> TrexRole.LEAD;
         };
+
+        if (role != TrexRole.FOLLOW) {
+          term = thisPromise;
+        }
 
         if (testCase.outOfOrder == OutOfOrder.TRUE) {
           final var s = slotAtomic.getAndIncrement();
@@ -109,7 +109,7 @@ public class AcceptResponsePropertyTests {
         final var a = new Accept(thisNodeId, s, thisPromise, NoOperation.NOOP);
         final Map<Byte, AcceptResponse> responses = new TreeMap<>();
         responses.put(thisNodeId, new AcceptResponse(thisNodeId, thisNodeId,
-            new AcceptResponse.Vote(thisNodeId, thisNodeId, s, outcomeVote), s));
+            new AcceptResponse.Vote(thisNodeId, thisNodeId, s, thisVote), s));
         AcceptVotes votes = new AcceptVotes(a.slotTerm(), responses, false);
         return new CreatedData(a, votes);
       }
@@ -117,8 +117,13 @@ public class AcceptResponsePropertyTests {
 
     final var slot = slotAtomic.get();
 
+    final var otherVote = switch (testCase.voteOutcome) {
+      case WIN -> true;
+      case LOSE, WAIT -> false;
+    };
+
     // Create accept response
-    final var vote = new AcceptResponse.Vote(otherNodeId, thisNodeId, slot, true);
+    final var vote = new AcceptResponse.Vote(otherNodeId, thisNodeId, slot, otherVote);
     final var acceptResponse = new AcceptResponse(otherNodeId, thisNodeId, vote,
         slot);
 
@@ -149,6 +154,8 @@ public class AcceptResponsePropertyTests {
         assert messages.isEmpty();
         assert commands.isEmpty();
       } else {
+        assert testCase.voteOutcome == VoteOutcome.LOSE
+            || testCase.voteOutcome == VoteOutcome.WAIT;
         // No majority yet
         assert messages.isEmpty();
         assert commands.isEmpty();

@@ -61,7 +61,7 @@ public class AcceptPropertyTests {
     final var journaledAccept = new AtomicReference<Accept>();
 
     // Setup journal
-    final var journal = new FakeJournal(thisNodeId, thisPromise, thisFixed) {
+    final var journal = new FakeJournal(thisPromise, thisFixed) {
       @Override
       public void writeProgress(Progress progress) {
         journaledProgress.set(progress);

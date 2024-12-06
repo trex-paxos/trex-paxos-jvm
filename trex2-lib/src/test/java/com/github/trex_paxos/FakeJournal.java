@@ -6,12 +6,10 @@ import com.github.trex_paxos.msg.BallotNumber;
 import java.util.Optional;
 
 public class FakeJournal implements Journal {
-  private final byte nodeIdentifier;
   private final BallotNumber promise;
   private final long highestFixed;
 
-  public FakeJournal(byte nodeIdentifier, BallotNumber promise, long highestFixed) {
-    this.nodeIdentifier = nodeIdentifier;
+  public FakeJournal(BallotNumber promise, long highestFixed) {
     this.promise = promise;
     this.highestFixed = highestFixed;
   }

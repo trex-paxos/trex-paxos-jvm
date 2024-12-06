@@ -199,9 +199,9 @@ public class Pickle {
     return new Accept(from, logIndex, number, command);
   }
 
-  public static void write(BallotNumber n, DataOutputStream daos) throws IOException {
-    daos.writeInt(n.counter());
-    daos.writeByte(n.nodeIdentifier());
+  public static void write(BallotNumber n, DataOutputStream dataOutputStream) throws IOException {
+    dataOutputStream.writeInt(n.counter());
+    dataOutputStream.writeByte(n.nodeIdentifier());
   }
 
   public static BallotNumber readBallotNumber(DataInputStream dataInputStream) throws IOException {

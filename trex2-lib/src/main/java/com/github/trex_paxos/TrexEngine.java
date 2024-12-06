@@ -45,7 +45,7 @@ public abstract class TrexEngine {
   ///
   /// @param trexNode                The underlying TrexNode which must be pre-configured with a concrete Journal and QuorumStrategy.
   /// @param hostManagedTransactions If true the TrexEngine will not sync the journal after each message. It is then the responsibility
-  ///                                                   of the host host application to sync the journal by calling commit on the underlying database when it has finished
+  ///                                                   of the host application to sync the journal by calling commit on the underlying database when it has finished
   ///                                                   applying the fixed commands to the underlying database.
   @SuppressWarnings("unused")
   public TrexEngine(TrexNode trexNode, boolean hostManagedTransactions) {

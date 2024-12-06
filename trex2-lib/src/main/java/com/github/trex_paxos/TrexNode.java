@@ -258,9 +258,9 @@ public class TrexNode {
 
         /// If the other node has seen a higher promise then we must increase our term
         /// to be higher. We do not update our promise as we would be doing that in a learning
-        ///  message which is not part of the protocol. Instead we bump or term. Next time we
-        ///  produce an `accept` we will us our term and do a self accept to that which will
-        ///  bump pur promise. As that will be inside of the official algorithm it will be safe.
+        ///  message which is not part of the protocol. Instead, we bump or term. Next time we
+        ///  produce an `accept` we will use our term and do a self accept to that which will
+        ///  bump pur promise. We do not want to alter the promise when not an `accept` or `prepare` message.
         if (otherHighestPromised.greaterThan(progress.highestPromised())) {
           if (role == TrexRole.LEAD) {
             assert this.term != null;

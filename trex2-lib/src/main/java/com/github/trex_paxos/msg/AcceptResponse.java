@@ -29,9 +29,9 @@ public record AcceptResponse(byte from,
                              long highestFixedIndex
 ) implements TrexMessage, DirectMessage, SlotFixingMessage {
   public record Vote(
-      // spookily intellij says there are no usages of this field, but if i remove it everything breaks
+      // spookily intellij says there are no usages of this field, but if I remove it everything breaks
       byte from,
-      // spookily intellij says there are no usages of this field, but if i remove it everything breaks
+      // spookily intellij says there are no usages of this field, but if I remove it everything breaks
       byte to,
       long logIndex,
       boolean vote

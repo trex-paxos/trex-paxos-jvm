@@ -64,7 +64,7 @@ public class PreparePropertyTests {
     };
 
     // Setup journal
-    final var journal = new FakeJournal(nodeId, thisPromise, thisFixed) {
+    final var journal = new FakeJournal(thisPromise, thisFixed) {
       @Override
       public Optional<Accept> readAccept(long logIndex) {
         if (logIndex == otherIndex && cmd != null) {

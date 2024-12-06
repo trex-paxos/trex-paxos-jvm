@@ -54,7 +54,7 @@ public class FixedPropertyTests {
     final var journaledProgress = new AtomicReference<Progress>();
 
     // Setup journal
-    final var journal = new FakeJournal(thisNodeId, thisPromise, thisFixed) {
+    final var journal = new FakeJournal(thisPromise, thisFixed) {
       @Override
       public void writeProgress(Progress progress) {
         journaledProgress.set(progress);

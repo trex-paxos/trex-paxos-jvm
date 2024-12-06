@@ -115,8 +115,7 @@ public class SpecificTests {
     assertTrue(finalHighestPromised.greaterThan(originalNumber));
   }
 
-  // TODO other tests around low ball prepare. An isolate node should not be able to prevent progress.
-  // TODO other tests around making sure fixed messages are issued for every accept
+  // FIXME make sure you test explicitly all the abdication scenarios
 
-
+  // FIXME other tests around making sure fixed messages are issued for every accept
 }

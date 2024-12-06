@@ -69,7 +69,7 @@ public class CatchupPropertyTests {
     final var journaledProgress = new AtomicReference<Progress>();
     final var acceptAtomic = new AtomicReference<List<Accept>>(accepts);
 
-    final var journal = new FakeJournal(thisNodeId, thisPromise, thisFixed) {
+    final var journal = new FakeJournal(thisPromise, thisFixed) {
       @Override
       public void writeProgress(Progress progress) {
         journaledProgress.set(progress);
