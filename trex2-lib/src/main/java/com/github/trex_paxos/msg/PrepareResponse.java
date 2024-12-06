@@ -19,7 +19,7 @@ import java.util.Optional;
 
 /// A PrepareResponse is a response to a {@link Prepare} message. It contains the vote and the highest unfixed log entry if any.
 /// When the vote is positive then we have made a promise to not accept any future Prepare or Accept messages with a lower ballot number.
-///
+/// We must only use the information about promises to pick a value we must not change a promise outside the normal prepare/accept flow.
 /// @param from                 see {@link TrexMessage}
 /// @param to                   see {@link DirectMessage}
 /// @param vote                 whether wre have voted for or voted against the Prepare message based on our past promises. .

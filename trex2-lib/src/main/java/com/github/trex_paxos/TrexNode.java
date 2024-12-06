@@ -126,11 +126,21 @@ public class TrexNode {
         validateProtocolInvariantElseThrowError(input, priorProgress);
       }
       if (!commands.isEmpty()) {
-        // TODO should we make this run all the time
-        assert commands.lastKey() == progress.highestFixedIndex();
+        // The general advice is not to throw. In this case the general advice is wrong.
+        // We must throw if the journal gives us weird commands as that is a fatal error.
+        validateCommandIndexesElseThrowError(input, commands, priorProgress);
       }
     }
     return new TrexResult(messages, commands);
+  }
+
+  private void validateCommandIndexesElseThrowError(TrexMessage input, TreeMap<Long, AbstractCommand> commands, Progress priorProgress) {
+    // TODO validate that the commands are contiguous using the reduce method
+    if (commands.lastKey() != progress.highestFixedIndex()) {
+      final var message = COMMAND_INDEXES + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
+      LOGGER.severe(message);
+      throw new AssertionError(message);
+    }
   }
 
   private void algorithm(TrexMessage input, List<TrexMessage> messages, TreeMap<Long, AbstractCommand> commands) {
@@ -316,6 +326,7 @@ public class TrexNode {
   static final String PROTOCOL_VIOLATION_SLOT_FIXING = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR Paxos Protocol Violation the promise has been changed when the message is not a SlotFixingMessage type.";
   static final String CRASHED = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR This node has crashed and must be rebooted. The durable journal state is now the only source of truth.";
   static final String CRASHING = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR This node has crashed and must be rebooted. The durable journal state is now the only source of truth: ";
+  static final String COMMAND_INDEXES = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR This node has issued commands that do not align to its committed slot index: ";
 
   /// Here we check that we have not violated the Paxos algorithm invariants. If we have then we throw an error.
   /// We also need to check what is described in the wiki page [Cluster Replication With Paxos for the Java Virtual Machine](https://github.com/trex-paxos/trex-paxos-jvm/wiki)
@@ -611,7 +622,9 @@ public class TrexNode {
         // do nothing as a quorum has not yet been reached.
           prepareResponsesByLogIndex.put(logIndex, votes);
       case LOSE ->
-        // we are unable to achieve a quorum, so we must back down
+        // This node cannot leader as it never made a promise high enough that increment the counter
+        // can let it lead. Once it has made a promise to the new leader it will be up to date and
+        // at the next timeout it will increment the counter and be able to lead.
           abdicate(messages);
       case WIN -> {
         // only if we learn that other nodes have prepared higher slots we must nextPrepareMessage them
