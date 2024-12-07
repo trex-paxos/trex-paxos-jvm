@@ -7,13 +7,12 @@ This repository contains a Java library that implements the Paxos algorithm as d
 To use this library:
 
 * You will need to implement the `Journal` interface to persist the state of the algorithm. This can be tables (or documents or key-values) in the database that your application uses.
-* At this time you will need to setup the cluster membership manually. You will need to assign a unique node identifier
+* At this time you will need to set up the cluster membership manually. You will need to assign a unique node identifier
   to each node in the cluster.
 * This library is designed to be transport agnostic. Examples of plugging in network transport are not complete. 
 
-At this time the exhaustive brute force tests are not yet all written so it is not
-recommended for production use. A release candidate will be made when the exhaustive tests mentioned in this readme are
-implemented.
+At this the first draft of exhaustive brute force tests are written. A release candidate will be made when the
+some demos of how to use the library have been written.
 
 ### Introduction
 
@@ -66,7 +65,7 @@ This description will explain it in the following order:
 * Third, explain how nodes may efficiently learn which values have been fixed.
 * Fourth, explain the leader take-over protocol, which is the most complex step that uses both `prepare` and `accept` messages.
 * Fifth, explain the durable state requirements.
-* Sixth, define the invariants of this implementation.
+* Sixth, explain the invariants and testing.
 * Seventh, provide a footnote on leader duels.
 
 ### First: Promises, Promises
@@ -280,7 +279,7 @@ method.
 
 See the java doc on the `Journal` interface for more details.
 
-## Sixth, The invariants
+## Sixth, The invariants & Testing
 
 This implementation enforces the following invariants at each node:
 
@@ -289,30 +288,24 @@ This implementation enforces the following invariants at each node:
 3. The promised ballot number can only change when processing a `prepare` or `accept` message.
 4. The fixed index can only change when a leader sees a majority `AcceptReponse` message, a follower node sees a `Fixed` message or any node learns about a fixed message due to a `CatchupResponse` message.
 
-The core of this implementation that ensures safety is written as inequalities comparing integer types. When we unit test the `TrexNode` class: 
+The core of this implementation that ensures safety is written as inequalities comparing integer types.
+We may test the `TrexNode` class:
 
 * It can only see messages that are less than, greater than, or equal to its promise.
 * It can only see messages from another node with a node identifier that is less than, greater than, or equal to its own.
 * It can only see messages with a fixed slot index that are less than, greater than, or equal to its own.
 * The journal at any slot can have only no value, the no-operation value, or a client command value.
 * The journal can either be continuous, have gaps, or not have reached a specific index when that index is learnt to be fixed.  
+* The outcome of any majority vote can only be WIN, LOSE, or WAIT.
+* The node can be in one of three TrexStates: `FOLLOW`, `RECOVER`, or `LEAD`.
 
-If we consider just testing the `prepare` message:
+This list gives 3^8=2187 test scenarios. The observations where is that
+even if we have a few more things we can vary we can still exhaustively test the implementation.
 
-1. The node can be in one of three TrexStates: `FOLLOW`, `RECOVER`, or `LEAD`.
-2. The node can have a `progress.highestPromised().counter()` that is less than, greater than, or equal to the counter
-   in the number of the sender.
-3. The node can have a `progress.highestPromised().highestFixedIndex()` that is less than, greater than, or equal to the
-   log index in the message.
-4. The node can have a `progress.highestPromised().nodeIdentifier()` that is less than, greater than, or equal to the
-   node identifier in the message.
-
-We can exhaustively test this by generating a total of 3^4=81 test scenarios. We can also add into that list whether the
-v
-the journal at that slot hold either `null`, `no-op`, or a client command `byte[]`. This would give us a total of
-3^5=243 test scenarios.
-
-TO BE CONTINUED
+In addition to exhaustive property-based tests we also run simulations of randomize network partitions that step through
+hundreds of in memory message exchanges between a three node cluster. This tests check that the journal at all three
+nodes
+matches and the list of fixed commands is the same across all three nodes.
 
 ### Seventh, Leader Duels
 
@@ -357,11 +350,10 @@ The list of tasks:
 
 - [x] Implement the Paxos Parliament Protocol for log replication.
 - [x] Write a test harness that injects rolling network partitions.
-- [ ] Write property based tests to exhaustively verify correctness.
+- [x] Write property based tests to exhaustively verify correctness.
 - [ ] Implement a trivial replicated k-v store.
 - [ ] Implement cluster membership changes as UPaxos.
-- [ ] Add optionality so that randomised timeouts can be replaced by some other leader failover detection and voting
-  mechanism (e.g. JGroups).
+- [ ] Add optionality so that randomized timeouts can be replaced by some other leader failure detection (e.g. JGroups).
 
 ## Attribution
 
