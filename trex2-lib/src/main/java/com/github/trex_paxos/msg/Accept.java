@@ -15,6 +15,9 @@
  */
 package com.github.trex_paxos.msg;
 
+import com.github.trex_paxos.AbstractCommand;
+import com.github.trex_paxos.BallotNumber;
+
 /// The Accept message is the second message in the Paxos protocol named in the paper Paxos Made Simple by Leslie Lamport.
 ///
 /// @param from see {@link TrexMessage}

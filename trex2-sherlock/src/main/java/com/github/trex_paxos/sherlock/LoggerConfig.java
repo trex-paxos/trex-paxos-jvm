@@ -58,7 +58,6 @@ public class LoggerConfig {
 
     } catch (Exception e) {
       System.err.println("Failed to configure logger: " + e.getMessage());
-      e.printStackTrace();
     }
   }
 

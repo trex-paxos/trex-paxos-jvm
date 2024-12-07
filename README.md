@@ -187,8 +187,9 @@ When a node times out it attempts to run the leader takeover protocol:
 3. For each slot the leader selects the `V` that was associated with the highest `N` value from a majority of responses. If there was no value known at that slot by a majority then the new leader can safely use its own command value `V` at that slot.
 4. For each slot the leader sends fresh `accept(S,N',V)` messages with chosen command `V` using its own higher `N'` for each slot.
 
-That description says that the leader takeover protocol is to run the full algorithm for many slots. This can happen in parallel for many slots. 
-The only question is what is the range of slots that we need to recover. It is the range of slots up to the maximum slot any node has journalled a value. 
+That description says that the leader takeover protocol is to run the full algorithm for many slots. This can happen in parallel for many slots.
+The only question is what is the range of slots that we need to recover. It is the range of slots up to the maximum slot
+any node has journaled a value.
 We can ask a majority of nodes the highest slot at which they have accepted a value. 
 
 This library uses code similar to the following for the `prepare` message and its acknowledgement:
@@ -255,10 +256,10 @@ public interface Journal {
   // this is called on every message to persist a small amount of data so you would want to optimise this for write speed.
   void writeProgress(Progress progress);
 
-  // this is called to write data to disk. when there are no crashes or isolated leaders this is write once per slot.
+  // this is called to write data to disk. when there are no crashes or isolated leaders each slot is write once yet can be rewritten using a fresh value during crash recovery.
   void writeAccept(long logIndex, Accept accept);
 
-  // this is called during crash recovery or to catchup other nodes and we can expect sequential access patterns. 
+  // this is called during crash recovery or help other nodes catch up on lost messages. We can expect sequential access patterns. 
   Optional<Accept> readAccept(long logIndex);
 
   // if the host application is not explicitly managing database transactions this will be called to make all the writes durable. 
@@ -350,6 +351,7 @@ The list of tasks:
 - [x] Implement the Paxos Parliament Protocol for log replication.
 - [x] Write a test harness that injects rolling network partitions.
 - [x] Write property based tests to exhaustively verify correctness.
+- [x] Write extensive documentation including detailed JavaDoc.
 - [ ] Implement an embedded distributed lock replicated library.
 - [ ] Implement cluster membership changes as UPaxos.
 - [ ] Add optionality so that randomized timeouts can be replaced by some other leader failure detection (e.g. JGroups).

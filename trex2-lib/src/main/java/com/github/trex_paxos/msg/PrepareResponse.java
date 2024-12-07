@@ -15,6 +15,8 @@
  */
 package com.github.trex_paxos.msg;
 
+import com.github.trex_paxos.BallotNumber;
+
 import java.util.Optional;
 
 /// A PrepareResponse is a response to a {@link Prepare} message. It contains the vote and the highest unfixed log entry if any.

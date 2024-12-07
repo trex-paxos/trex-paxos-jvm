@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.trex_paxos.msg;
+package com.github.trex_paxos;
 
 public enum NoOperation implements AbstractCommand {
   NOOP;

@@ -1,6 +1,5 @@
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.msg.AbstractCommand;
 import com.github.trex_paxos.msg.TrexMessage;
 
 import java.util.ArrayList;

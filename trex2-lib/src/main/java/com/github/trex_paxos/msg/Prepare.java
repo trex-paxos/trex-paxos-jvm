@@ -15,6 +15,8 @@
  */
 package com.github.trex_paxos.msg;
 
+import com.github.trex_paxos.BallotNumber;
+
 /// The Prepare message is the first message in the Paxos protocol named in the paper Paxos Made Simple by Leslie Lamport.
 ///
 /// @param from     The node identifier of the proposer used to route the message and self-accept.

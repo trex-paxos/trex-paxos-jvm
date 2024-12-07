@@ -28,7 +28,7 @@ public record AcceptResponse(byte from,
                              byte to,
                              Vote vote,
                              long highestFixedIndex
-) implements TrexMessage, DirectMessage, SlotFixingMessage {
+) implements TrexMessage, DirectMessage, LearningMessage {
   public record Vote(
       // spookily intellij says there are no usages of this field, but if I remove it everything breaks
       byte from,

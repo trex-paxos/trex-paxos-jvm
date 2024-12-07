@@ -25,5 +25,5 @@ import java.util.List;
 public record CatchupResponse(byte from,
                               byte to,
                               List<Accept> accepts
-) implements TrexMessage, DirectMessage, SlotFixingMessage {
+) implements TrexMessage, DirectMessage, LearningMessage {
 }

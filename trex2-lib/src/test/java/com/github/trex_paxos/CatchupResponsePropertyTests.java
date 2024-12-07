@@ -1,9 +1,7 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.Accept;
-import com.github.trex_paxos.msg.BallotNumber;
 import com.github.trex_paxos.msg.CatchupResponse;
-import com.github.trex_paxos.msg.Command;
 import net.jqwik.api.*;
 
 import java.util.ArrayList;

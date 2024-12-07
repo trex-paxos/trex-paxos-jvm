@@ -15,7 +15,7 @@
  */
 package com.github.trex_paxos.sherlock;
 
-import com.github.trex_paxos.msg.Command;
+import com.github.trex_paxos.Command;
 
 import java.util.concurrent.*;
 

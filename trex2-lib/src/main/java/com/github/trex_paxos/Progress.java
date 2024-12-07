@@ -15,8 +15,6 @@
  */
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.msg.BallotNumber;
-
 /**
  * Progress is a record of the highest ballot number promised or seen on an accepted message which must be crash durable
  * (e.g. forced to disk) for Paxos to be correct. We also store the highest fixed index and the highest accepted index.

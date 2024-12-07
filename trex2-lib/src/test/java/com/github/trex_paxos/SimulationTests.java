@@ -15,7 +15,6 @@
  */
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.msg.AbstractCommand;
 import com.github.trex_paxos.msg.BroadcastMessage;
 import com.github.trex_paxos.msg.DirectMessage;
 import com.github.trex_paxos.msg.TrexMessage;
