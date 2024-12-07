@@ -22,10 +22,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 /// The TrexEngine manages the timeout behaviours that surround the core Paxos algorithm.
 /// Subclasses must implement the timeout and heartbeat methods.
 /// The core paxos algorithm is implemented in the TrexNode class that is wrapped by this class.
+/// This method
 public abstract class TrexEngine {
   static final Logger LOGGER = Logger.getLogger("");
 
@@ -68,20 +70,24 @@ public abstract class TrexEngine {
 
   /// Process an application command sent from a client. This is only actioned by a leader. It will return a single accept
   /// then append a fixed message as it is very cheap for another node to filter out fixed values it has already seen.
-  private List<TrexMessage> command(Command command) {
-      // only if we are leader do we create the next accept message into the next log index
-      final var nextAcceptMessage = trexNode.nextAcceptMessage(command);
-      // we self accept
-      final var r = trexNode.paxos(nextAcceptMessage);
-      // the result is ignorable a self ack so does not need to be transmitted.
-      assert r.commands().isEmpty() && r.messages().size() == 1 && r.messages().getFirst() instanceof AcceptResponse;
+  private TrexMessage command(Command command) {
+    // only if we are leader do we create the next accept message into the next log index
+    final var nextAcceptMessage = trexNode.nextAcceptMessage(command);
+    // we self accept
+    final var r = trexNode.paxos(nextAcceptMessage);
+    // the result is ignorable a self ack so does not need to be transmitted.
+    assert r.commands().isEmpty() && r.messages().size() == 1 && r.messages().getFirst() instanceof AcceptResponse;
     // forward to the cluster the new accept and at the same time heartbeat a fixed message.
-    return List.of(nextAcceptMessage, trexNode.currentFixedMessage());
+    return nextAcceptMessage;
   }
 
   public List<TrexMessage> command(List<Command> command) {
     if (trexNode.isLeader()) {
-      return command.stream().map(this::command).flatMap(List::stream).toList();
+      /// toList is immutable so we concat streams first.
+      return Stream.concat(
+          command.stream().map(this::command),
+          Stream.of(trexNode.currentFixedMessage())
+      ).toList();
     } else {
       return Collections.emptyList();
     }
@@ -128,7 +134,7 @@ public abstract class TrexEngine {
   /// the timeout and heartbeat methods.
   TrexResult paxosNotThreadSafe(TrexMessage trexMessage) {
     if (evidenceOfLeader(trexMessage)) {
-      if (trexNode.getRole() != TrexRole.FOLLOW)
+      if (trexNode.getRole() != TrexNode.TrexRole.FOLLOW)
         trexNode.abdicate();
       setRandomTimeout();
     }
@@ -146,9 +152,9 @@ public abstract class TrexEngine {
     }
 
     if (oldRole != newRole) {
-      if (oldRole == TrexRole.LEAD) {
+      if (oldRole == TrexNode.TrexRole.LEAD) {
         setRandomTimeout();
-      } else if (newRole == TrexRole.LEAD) {
+      } else if (newRole == TrexNode.TrexRole.LEAD) {
         clearTimeout();
       }
     }

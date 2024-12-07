@@ -11,8 +11,7 @@ To use this library:
   to each node in the cluster.
 * This library is designed to be transport agnostic. Examples of plugging in network transport are not complete. 
 
-At this the first draft of exhaustive brute force tests are written. A release candidate will be made when the
-some demos of how to use the library have been written.
+At this the version where some exhaustive brute force tests are written.
 
 ### Introduction
 
@@ -327,7 +326,7 @@ timing out within the time it takes them to complete a full slot recovery you ha
 Every timeout you have two chances of success; that the first node to timeout has the highest node identifier, and if
 not
 that the lower node is not interrupted before it can complete a full cycle. The odds of success each attempt to elect
-a leader are 75%, 94%, 99%, ..
+a leader are 75%, 94%, 99%, ...
 
 This implementation separates the core algorithm into TrexNode and the timeout logic into TrexEngine. It will allow you
 to use your own node failure detection or election mechanism if you do not like those odds.
@@ -351,7 +350,7 @@ The list of tasks:
 - [x] Implement the Paxos Parliament Protocol for log replication.
 - [x] Write a test harness that injects rolling network partitions.
 - [x] Write property based tests to exhaustively verify correctness.
-- [ ] Implement a trivial replicated k-v store.
+- [ ] Implement an embedded distributed lock replicated library.
 - [ ] Implement cluster membership changes as UPaxos.
 - [ ] Add optionality so that randomized timeouts can be replaced by some other leader failure detection (e.g. JGroups).
 

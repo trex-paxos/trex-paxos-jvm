@@ -17,7 +17,7 @@ public class AcceptPropertyTests {
   ) {
   }
 
-  final QuorumStrategy threeNodeQuorum = new FixedQuorumStrategy(3);
+  final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
 
   @Property(generation = GenerationMode.EXHAUSTIVE)
   void acceptTests(@ForAll("testCases") TestCase testCase) {

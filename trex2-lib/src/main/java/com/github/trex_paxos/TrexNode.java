@@ -23,7 +23,7 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
-import static com.github.trex_paxos.TrexRole.*;
+import static com.github.trex_paxos.TrexNode.TrexRole.*;
 
 /// A TrexNode is a single node in a Paxos cluster. It runs the part-time parliament algorithm. It requires
 /// the following collaborating classes. This class logs to JUL logging as severe. You can configure JUL logging to
@@ -204,7 +204,7 @@ public class TrexNode {
                           .map(AcceptResponse::vote).collect(Collectors.toSet());
                       final var quorumOutcome =
                           quorumStrategy.assessAccepts(logIndex, vs);
-                      if (quorumOutcome == QuorumOutcome.LOSE) {
+                      if (quorumOutcome == QuorumStrategy.QuorumOutcome.LOSE) {
                         // this happens in a three node cluster when an isolated split brain leader rejoins
                         abdicate(messages);
                       }
@@ -721,6 +721,22 @@ public class TrexNode {
     public static AcceptVotes chosen(Accept.SlotTerm accept) {
       return new AcceptVotes(accept, Collections.emptyMap(), true);
     }
+  }
+
+  /// The roles used by nodes in the paxos algorithm. The paper Paxos Made Simple by Leslie Lamport very clearly states:
+  ///
+  /// > A newly chosen leader executes phase 1 for infinitely many instances of the consensus algorithm
+  ///
+  /// This means we have a leader. We also have followers who have not yet timed-out on the leader. Finally, we have the
+  /// recover role which is a node that is sending out prepare messages in an attempt to fix the values sent by a prior leader.
+  enum TrexRole {
+    /// A follower is a node that is not currently leading the paxos algorithm. We may time out on a follower and attempt to become a leader.
+    FOLLOW,
+    /// If we are wanting to lead we first run rounds of paxos over all known slots to fix the values sent by any prior leader.
+    RECOVER,
+    /// Only after we have recovered all slots known to have been sent any values by the prior leader will we become a leader
+    /// who no longer needs to recover any slots.
+    LEAD
   }
 }
 

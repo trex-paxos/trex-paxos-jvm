@@ -26,7 +26,7 @@ public class PreparePropertyTests {
   }
 
   /// Three node quorum strategy for testing
-  final QuorumStrategy threeNodeQuorum = new FixedQuorumStrategy(3);
+  final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
 
   /// Property test that verifies prepare message handling by testing all combinations
   /// of relationships between the node under test and inbound message properties
@@ -137,10 +137,10 @@ public class PreparePropertyTests {
       }
 
       // Verify role changes
-      if (node.getRole() != TrexRole.valueOf(testCase.role.name())
+      if (node.getRole() != TrexNode.TrexRole.valueOf(testCase.role.name())
           && prepare.logIndex() > thisFixed
           && otherNumber.greaterThan(thisPromise)) {
-        assert node.getRole() == TrexRole.FOLLOW;
+        assert node.getRole() == TrexNode.TrexRole.FOLLOW;
       }
     }
   }

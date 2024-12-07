@@ -34,7 +34,7 @@ public class SpecificTests {
     }
   }
 
-  final QuorumStrategy threeNodeQuorum = new FixedQuorumStrategy(3);
+  final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
 
   /// This is a little subtle. The catchup response should not violate the invariants of the system.
   /// When a node is isolated it will make a self promise that may be higher than the current leader.

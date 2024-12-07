@@ -23,24 +23,22 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/// This is a very simple quorum strategy that is typical for three or five node paxos clusters. It can also work for
-/// even numbers of nodes yet for various reasons it is not recommended to use odd numbers of nodes. In real world
-/// deployments you would want to expand and contract the cluster which requires a more sophisticated strategy such as
-/// UPaxos.
-public class FixedQuorumStrategy implements QuorumStrategy {
-  final int quorumSize;
-  final int majority;
+/// This is the majority strategy from the paper Paxos Mde Simple. It can work for
+/// even numbers of nodes however it is less efficient than the even node gambit.
+public class SimpleMajority implements QuorumStrategy {
+  final int clusterSize;
+  final int quorum;
 
-  public FixedQuorumStrategy(int quorumSize) {
-    this.quorumSize = quorumSize;
-    this.majority = (int) Math.floor((quorumSize / 2.0) + 1);
+  public SimpleMajority(int clusterSize) {
+    this.clusterSize = clusterSize;
+    this.quorum = (int) Math.floor((clusterSize / 2.0) + 1);
   }
 
   QuorumOutcome simple(List<Boolean> votes) {
     Map<Boolean, List<Boolean>> voteMap = votes.stream().collect(Collectors.partitioningBy(v -> v));
-    if (voteMap.get(true).size() >= majority)
+    if (voteMap.get(true).size() >= quorum)
       return QuorumOutcome.WIN;
-    else if (voteMap.get(false).size() >= majority)
+    else if (voteMap.get(false).size() >= quorum)
       return QuorumOutcome.LOSE;
     else
       return QuorumOutcome.WAIT;

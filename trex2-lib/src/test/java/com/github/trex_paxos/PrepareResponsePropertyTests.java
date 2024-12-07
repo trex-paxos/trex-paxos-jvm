@@ -28,7 +28,7 @@ public class PrepareResponsePropertyTests {
   ) {
   }
 
-  final QuorumStrategy threeNodeQuorum = new FixedQuorumStrategy(3);
+  final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
 
   @Property(generation = GenerationMode.EXHAUSTIVE)
   void prepareResponseTests(@ForAll("testCases") TestCase testCase) {
@@ -120,14 +120,14 @@ public class PrepareResponsePropertyTests {
           } else if (testCase.rangeToRecover == RangeToRecover.ONE) {
             assert !messages.isEmpty();
             assert messages.getFirst() instanceof Accept;
-            assert node.getRole() == TrexRole.LEAD;
+            assert node.getRole() == TrexNode.TrexRole.LEAD;
           }
         } else {
           assert !journalWritten.get();
           assert messages.isEmpty();
           assert commands.isEmpty();
           if (testCase.voteOutcome == ArbitraryValues.VoteOutcome.LOSE) {
-            assert node.getRole() == TrexRole.FOLLOW;
+            assert node.getRole() == TrexNode.TrexRole.FOLLOW;
           }
         }
       }

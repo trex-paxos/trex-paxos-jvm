@@ -12,9 +12,11 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <maven.compiler.release>22</maven.compiler.release>
   </properties>
+    <description>This is an implementation of the Paxos Logarithm as written in Paxos Made Simple by Leslie Lamport
+    </description>
   <modules>
     <module>trex2-lib</module>
-    <module>trex2-demo</module>
+      <module>trex2-sherlock</module>
   </modules>
   <dependencies>
     <dependency>

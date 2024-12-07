@@ -18,7 +18,7 @@ public class FixedPropertyTests {
   ) {
   }
 
-  final QuorumStrategy threeNodeQuorum = new FixedQuorumStrategy(3);
+  final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
 
   @Property(generation = GenerationMode.EXHAUSTIVE)
   void fixedTests(@ForAll("testCases") TestCase testCase) {
@@ -105,7 +105,7 @@ public class FixedPropertyTests {
 
         // Non-followers should back down
         if (testCase.role != ArbitraryValues.RoleState.FOLLOW) {
-          assert node.getRole() == TrexRole.FOLLOW;
+          assert node.getRole() == TrexNode.TrexRole.FOLLOW;
         }
       } else if (otherIndex > thisFixed) {
         // Should request catchup for higher slots

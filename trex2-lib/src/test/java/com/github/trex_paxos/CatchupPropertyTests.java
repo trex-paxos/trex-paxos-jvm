@@ -28,7 +28,7 @@ public class CatchupPropertyTests {
   ) {
   }
 
-  final QuorumStrategy threeNodeQuorum = new FixedQuorumStrategy(3);
+  final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
 
   @Property(generation = GenerationMode.EXHAUSTIVE)
   void catchupTests(@ForAll("testCases") TestCase testCase) {

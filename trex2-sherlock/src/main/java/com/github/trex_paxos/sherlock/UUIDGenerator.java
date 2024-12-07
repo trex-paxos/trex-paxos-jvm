@@ -13,20 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.trex_paxos.demo;
+package com.github.trex_paxos.sherlock;
 
 import java.security.SecureRandom;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
-/// The core java UUID generator class can can only create weak Type 3 md5 UUIDs and strong Type 4 random UUIDs.
-/// While it can read Type 1 time based UUIDs it cannot create them. This class creates time ordered UUIDs that are
-/// not official UUIDs but work for our purposes.
-/// The Java UUID library lets us create a UUID two longs. In the most significant long we put the time in milliseconds
-/// ito the higher bits and an atomic counter in the lowest bits.
+/// The Java UUID library lets us create a UUID from two longs.
+/// In the most significant long we put the time in milliseconds.
+/// We then bit shift the time left by 20 bits and mask in a counter.
 /// This gives us good time based ordering within a single JVM.
-/// For the last significant bits we use a pure random long. That effectively makes all of our UUIDs unique across
-/// all JVMs.
+/// The ordering across servers will naturally be subject to clock drift between hosts.
+/// For the last significant bits we use a pure random long to makes the UUIDs globally unique.
 /// The RFC for time based UUIDs suggest that 10M UUIDs per second can be generated. On an M1 Mac the Java core Type 4
 /// pure random UUID generation gives me about 0.6M per second. This class gets about 0.5M per second.
 public class UUIDGenerator {

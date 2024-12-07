@@ -22,7 +22,7 @@ public class AcceptResponsePropertyTests {
   ) {
   }
 
-  final QuorumStrategy threeNodeQuorum = new FixedQuorumStrategy(3);
+  final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
 
   @Property(generation = GenerationMode.EXHAUSTIVE)
   void acceptResponseTests(@ForAll("testCases") TestCase testCase) {
@@ -142,7 +142,7 @@ public class AcceptResponsePropertyTests {
       } else if (testCase.role == ArbitraryValues.RoleState.LEAD &&
           acceptResponse.highestFixedIndex() > thisFixed) {
         // Leader must back down if other node has higher fixed index
-        assert node.getRole() == TrexRole.FOLLOW;
+        assert node.getRole() == TrexNode.TrexRole.FOLLOW;
         assert messages.isEmpty();
       } else if (testCase.voteOutcome == ArbitraryValues.VoteOutcome.WIN &&
           testCase.outOfOrder == ArbitraryValues.OutOfOrder.FALSE) {

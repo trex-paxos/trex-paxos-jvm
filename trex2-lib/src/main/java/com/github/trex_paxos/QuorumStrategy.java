@@ -30,4 +30,7 @@ public interface QuorumStrategy {
 
   QuorumOutcome assessAccepts(long logIndex, Set<AcceptResponse.Vote> accepts);
 
+  enum QuorumOutcome {
+    WIN, LOSE, WAIT
+  }
 }
