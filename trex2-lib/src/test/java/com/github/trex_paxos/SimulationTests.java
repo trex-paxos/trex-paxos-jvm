@@ -65,7 +65,7 @@ public class SimulationTests {
 
   public void testLeaderElection(RandomGenerator rng) {
     // given a repeatable test setup
-    final var simulation = new Simulation(rng, 30);
+    final var simulation = new Simulation(rng, 30, false);
 
     // we do a cold cluster start with no prior leader in the journals
     simulation.coldStart();
@@ -108,7 +108,7 @@ public class SimulationTests {
 
   public void testClientWork(RandomGenerator rng) {
     // given a repeatable test setup
-    final var simulation = new Simulation(rng, 30);
+    final var simulation = new Simulation(rng, 30, false);
 
     // no code start rather we will make a leader
     makeLeader(simulation);
@@ -145,18 +145,18 @@ public class SimulationTests {
   public void testClientWorkLossyNetwork1000() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(56734);
 
-    final var maxOfMins = new AtomicInteger(0);
+    final var maxOfMin = new AtomicInteger(0);
 
     IntStream.range(0, 1000).forEach(i -> {
           LOGGER.info("\n ================= \nstarting iteration: " + i);
       final var minLogLength = testWorkLossyNetwork(rng);
-      if (minLogLength > maxOfMins.get()) {
-        maxOfMins.set(minLogLength);
+      if (minLogLength > maxOfMin.get()) {
+        maxOfMin.set(minLogLength);
       }
         }
     );
 
-    assertThat(maxOfMins.get()).isGreaterThan(10);
+    assertThat(maxOfMin.get()).isGreaterThan(10);
   }
 
   @Test
@@ -169,7 +169,7 @@ public class SimulationTests {
   /// This returns the minimum command size of the three engines
   private int testWorkLossyNetwork(RandomGenerator rng) {
     // given a repeatable test setup
-    final var simulation = new Simulation(rng, 30);
+    final var simulation = new Simulation(rng, 30, false);
 
     // first force a leader as we have separate tests for leader election. This is a partitioned network test.
     makeLeader(simulation);
@@ -230,7 +230,7 @@ public class SimulationTests {
 
   private int testWorkRotationNetworkPartition(RandomGenerator rng) {
     // given a repeatable test setup
-    final var simulation = new Simulation(rng, 30);
+    final var simulation = new Simulation(rng, 30, false);
 
     // first force a leader as we have separate tests for leader election. This is a partitioned network test.
     makeLeader(simulation);

@@ -15,7 +15,9 @@
  */
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.msg.*;
+import com.github.trex_paxos.msg.BroadcastMessage;
+import com.github.trex_paxos.msg.DirectMessage;
+import com.github.trex_paxos.msg.TrexMessage;
 
 import java.util.*;
 import java.util.function.BiFunction;
@@ -34,13 +36,47 @@ class Simulation {
   private final RandomGenerator rng;
   private final long longMaxTimeout;
   private final long shortMaxTimeout;
+  private final boolean forthNode;
+  private final QuorumStrategy threeNodeQuorum;
 
-  public Simulation(RandomGenerator rng, long longMaxTimeout) {
+  final TestablePaxosEngine trexEngine1;
+  final TestablePaxosEngine trexEngine2;
+  final TestablePaxosEngine trexEngine3;
+  final TestablePaxosEngine trexEngine4;
+
+  final Map<Byte, TestablePaxosEngine> engines;
+
+  final BiFunction<Send, Long, Stream<TrexMessage>> DEFAULT_NETWORK_SIMULATION;
+
+  public Simulation(RandomGenerator rng, long longMaxTimeout, boolean forthNode) {
     this.longMaxTimeout = longMaxTimeout;
     this.rng = rng;
     shortMaxTimeout = longMaxTimeout / 3;
     assert this.longMaxTimeout > 1;
     assert this.shortMaxTimeout > 0 && this.shortMaxTimeout < this.longMaxTimeout;
+    this.forthNode = forthNode;
+    threeNodeQuorum = forthNode ? new EvenNodeGambit(4, (byte) 1) : new SimpleMajority(3);
+    trexEngine1 = makeTrexEngine((byte) 1, threeNodeQuorum);
+    trexEngine2 = makeTrexEngine((byte) 2, threeNodeQuorum);
+    trexEngine3 = makeTrexEngine((byte) 3, threeNodeQuorum);
+    trexEngine4 = makeTrexEngine((byte) 3, threeNodeQuorum);
+    engines = forthNode ? Map.of(
+        (byte) 1, trexEngine1,
+        (byte) 2, trexEngine2,
+        (byte) 3, trexEngine3,
+        (byte) 4, trexEngine4
+    ) : Map.of(
+        (byte) 1, trexEngine1,
+        (byte) 2, trexEngine2,
+        (byte) 3, trexEngine3
+    );
+    DEFAULT_NETWORK_SIMULATION =
+        (send, _) ->
+            send.messages.stream().flatMap(x -> switch (x) {
+              case BroadcastMessage m ->
+                  engines.values().stream().flatMap(engine -> engine.paxos(m).messages().stream());
+              case DirectMessage m -> engines.get(m.to()).paxos(m).messages().stream();
+            });
     LOGGER.info("maxTimeout: " + longMaxTimeout + " halfTimeout: " + shortMaxTimeout);
   }
 
@@ -281,18 +317,6 @@ class Simulation {
     }
   }
 
-  final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
-
-  final TestablePaxosEngine trexEngine1 = makeTrexEngine((byte) 1, threeNodeQuorum);
-  final TestablePaxosEngine trexEngine2 = makeTrexEngine((byte) 2, threeNodeQuorum);
-  final TestablePaxosEngine trexEngine3 = makeTrexEngine((byte) 3, threeNodeQuorum);
-
-  final Map<Byte, TestablePaxosEngine> engines = Map.of(
-      (byte) 1, trexEngine1,
-      (byte) 2, trexEngine2,
-      (byte) 3, trexEngine3
-  );
-
   // start will launch some timeouts into the event queue
   void coldStart() {
     trexEngine1.start();
@@ -310,13 +334,6 @@ class Simulation {
   protected Stream<TrexMessage> networkSimulation(Send send, Long now, BiFunction<Send, Long, Stream<TrexMessage>> nemesis) {
     return nemesis.apply(send, now);
   }
-
-  final BiFunction<Send, Long, Stream<TrexMessage>> DEFAULT_NETWORK_SIMULATION =
-      (send, _) ->
-          send.messages.stream().flatMap(x -> switch (x) {
-            case BroadcastMessage m -> engines.values().stream().flatMap(engine -> engine.paxos(m).messages().stream());
-            case DirectMessage m -> engines.get(m.to()).paxos(m).messages().stream();
-          });
 
   private void makeClientDataEvents(int iterations, NavigableMap<Long, List<Event>> eventQueue) {
     IntStream.range(0, iterations).forEach(i -> {
