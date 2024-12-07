@@ -13,24 +13,12 @@ import java.util.logging.Level;
 
 public class AcceptResponsePropertyTests {
 
-  /// Outcome of the vote collection for the `accept``
-  enum VoteOutcome {
-    WIN,    // Will achieve majority with this vote
-    LOSE,    // Will not achieve majority
-    WAIT    // Will not achieve majority yet
-  }
-
-  /// Whether accepts are contiguous or have gaps
-  enum OutOfOrder {
-    FALSE,  // Accepts are contiguous
-    TRUE    // Accepts have gaps
-  }
 
   record TestCase(
       ArbitraryValues.RoleState role,
       ArbitraryValues.NodeIdentifierRelation nodeIdentifierRelation,
-      VoteOutcome voteOutcome,
-      OutOfOrder outOfOrder
+      ArbitraryValues.VoteOutcome voteOutcome,
+      ArbitraryValues.OutOfOrder outOfOrder
   ) {
   }
 
@@ -63,6 +51,10 @@ public class AcceptResponsePropertyTests {
       }
     };
 
+    // we are going to set our own vote to be true of false simply to rig our election
+    // in reality we would expect we would expect our self vote to usually be true
+    // and that we would need two other votes to every loose an election. however we
+    // are not trying to model reality we are trying to explore the state space.
     final var thisVote = switch (testCase.voteOutcome) {
       case WIN, WAIT -> true;
       case LOSE -> false;
@@ -70,7 +62,7 @@ public class AcceptResponsePropertyTests {
 
     final var slotAtomic = new AtomicLong(thisFixed + 1);
 
-    // Setup node with role and acceptVotes
+    // Setup node with role and the rigged acceptVotes that will trigger either a win or a lose
     final var node = new TrexNode(Level.INFO, thisNodeId, threeNodeQuorum, journal) {
       {
         role = switch (testCase.role) {
@@ -83,28 +75,32 @@ public class AcceptResponsePropertyTests {
           term = thisPromise;
         }
 
-        if (testCase.outOfOrder == OutOfOrder.TRUE) {
+        // if we have a ga
+        if (testCase.outOfOrder == ArbitraryValues.OutOfOrder.TRUE) {
+          // drop a rigged vote in at the first slot
           final var s = slotAtomic.getAndIncrement();
           final var v = createAcceptVotes(s);
           // Setup gap scenario we first add chosen `accept` before gap
           acceptVotesByLogIndex.put(s, v.votes());
-          // we need to put it into the journal also
+          // we need to put it into the journal
           journaledAccepts.get().put(s, v.accept());
-          // Then we create a gap
+          // then increment the slot counter without adding an `accept`
           slotAtomic.getAndIncrement();
         }
 
+        // now we add the rigged vote for at least one slot which may be the only slot else after a gap
         final var s = slotAtomic.get();
         final var v = createAcceptVotes(s);
         // Setup gap scenario we first add chosen `accept` before gap
         acceptVotesByLogIndex.put(s, v.votes());
-        // we need to put it into the journal also
+        // we need to put it into the journal
         journaledAccepts.get().put(s, v.accept());
       }
 
       record CreatedData(Accept accept, AcceptVotes votes) {
       }
 
+      ///  Set up an `accept` and `acceptVotes` for a given slot
       private CreatedData createAcceptVotes(long s) {
         final var a = new Accept(thisNodeId, s, thisPromise, NoOperation.NOOP);
         final Map<Byte, AcceptResponse> responses = new TreeMap<>();
@@ -115,21 +111,27 @@ public class AcceptResponsePropertyTests {
       }
     };
 
-    final var slot = slotAtomic.get();
-
+    ///  if the election is rigged top `WIN` or `LOSE` we need a vote
+    ///  if we want to rig for a `WAIT` then our vote is opposite to the self vote
     final var otherVote = switch (testCase.voteOutcome) {
       case WIN -> true;
       case LOSE, WAIT -> false;
     };
 
-    // Create accept response
+    /// Create accept response for the next slot
+    final var slot = slotAtomic.get();
     final var vote = new AcceptResponse.Vote(otherNodeId, thisNodeId, slot, otherVote);
     final var acceptResponse = new AcceptResponse(otherNodeId, thisNodeId, vote,
         slot);
 
+    /// now that we have set up based on our role, the other nodeIdentifier relation, the vote outcome
+    /// we can run the algorithm to see if we issue the fixed message or not
     final var result = node.paxos(acceptResponse);
 
     if (result instanceof TrexResult(final var messages, final var commands)) {
+      /// both followers and revolvers will process accept responses yet followers ignore them
+      /// nodes ignore responses not sent to them
+      ///  ignore responses sent to ourself
       if (testCase.role == ArbitraryValues.RoleState.FOLLOW
           || acceptResponse.to() != thisNodeId
           || testCase.nodeIdentifierRelation == ArbitraryValues.NodeIdentifierRelation.EQUAL
@@ -142,20 +144,20 @@ public class AcceptResponsePropertyTests {
         // Leader must back down if other node has higher fixed index
         assert node.getRole() == TrexRole.FOLLOW;
         assert messages.isEmpty();
-      } else if (testCase.voteOutcome == VoteOutcome.WIN &&
-          testCase.outOfOrder == OutOfOrder.FALSE) {
+      } else if (testCase.voteOutcome == ArbitraryValues.VoteOutcome.WIN &&
+          testCase.outOfOrder == ArbitraryValues.OutOfOrder.FALSE) {
         // Should fix value and send Fixed message for contiguous slots
         assert !messages.isEmpty();
         assert messages.getFirst() instanceof Fixed;
         assert !commands.isEmpty();
-      } else if (testCase.voteOutcome == VoteOutcome.WIN &&
-          testCase.outOfOrder == OutOfOrder.TRUE) {
+      } else if (testCase.voteOutcome == ArbitraryValues.VoteOutcome.WIN &&
+          testCase.outOfOrder == ArbitraryValues.OutOfOrder.TRUE) {
         // Should not fix value or send Fixed message when gaps exist
         assert messages.isEmpty();
         assert commands.isEmpty();
       } else {
-        assert testCase.voteOutcome == VoteOutcome.LOSE
-            || testCase.voteOutcome == VoteOutcome.WAIT;
+        assert testCase.voteOutcome == ArbitraryValues.VoteOutcome.LOSE
+            || testCase.voteOutcome == ArbitraryValues.VoteOutcome.WAIT;
         // No majority yet
         assert messages.isEmpty();
         assert commands.isEmpty();
@@ -168,8 +170,8 @@ public class AcceptResponsePropertyTests {
     return Combinators.combine(
         Arbitraries.of(ArbitraryValues.RoleState.values()),
         Arbitraries.of(ArbitraryValues.NodeIdentifierRelation.values()),
-        Arbitraries.of(VoteOutcome.values()),
-        Arbitraries.of(OutOfOrder.values())
+        Arbitraries.of(ArbitraryValues.VoteOutcome.values()),
+        Arbitraries.of(ArbitraryValues.OutOfOrder.values())
     ).as(TestCase::new);
   }
 }

@@ -29,4 +29,17 @@ public class ArbitraryValues {
     TOO_LOW,   // Some expected accepts are not processed
     TOO_HIGH   // No accepts are processed
   }
+
+  /// Outcome of the vote collection for either an `accept` or a `prepare`
+  enum VoteOutcome {
+    WIN,    // Will achieve majority with this vote
+    LOSE,    // Will not achieve majority
+    WAIT    // Will not achieve majority yet
+  }
+
+  /// Whether the leader is seeing out of order responses due to lost messages
+  enum OutOfOrder {
+    FALSE,  // Accepts are contiguous
+    TRUE    // Accepts have gaps
+  }
 }

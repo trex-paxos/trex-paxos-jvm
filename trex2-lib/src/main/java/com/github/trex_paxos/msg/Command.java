@@ -15,7 +15,7 @@
  */
 package com.github.trex_paxos.msg;
 
-import java.util.Arrays;
+import java.util.zip.CRC32;
 
 /// A client command which is the value we are trying to fixe. As this library is neutral
 /// to the application, the command is completely opaque to the library. The
@@ -62,11 +62,13 @@ public record Command(String clientMsgUuid, byte[] operationBytes) implements Ab
       return java.util.Arrays.equals(operationBytes, other.operationBytes);
     }
 
-  @Override
   public String toString() {
-    return "Command[" +
-        "clientMsgUuid='" + clientMsgUuid + '\'' +
-        ", operationBytes=" + Arrays.toString(operationBytes) +
-        ']';
+    CRC32 crc32 = new CRC32();
+    crc32.update(operationBytes);
+
+    return String.format("Command[clientMsgUuid='%s', operationBytes=byte[%d]:CRC32=%d]",
+        clientMsgUuid,
+        operationBytes.length,
+        crc32.getValue());
   }
 }

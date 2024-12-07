@@ -27,13 +27,13 @@ import java.util.stream.Collectors;
 ///
 /// @param messages A possibly empty list of messages that were generated during the paxos run.
 /// @param commands A possibly empty list of chosen aka fixed commands.
-public record TrexResult(List<TrexMessage> messages, Map<Long, AbstractCommand> commands) {
+public record TrexResult(List<TrexMessage> messages, TreeMap<Long, AbstractCommand> commands) {
   public TrexResult {
     messages = List.copyOf(messages);
-    commands = Map.copyOf(commands);
+    commands = new TreeMap<>(commands);
   }
   static TrexResult noResult() {
-    return new TrexResult(List.of(), Map.of());
+    return new TrexResult(List.of(), new TreeMap<>());
   }
 
   static TrexResult merge(List<TrexResult> results) {
