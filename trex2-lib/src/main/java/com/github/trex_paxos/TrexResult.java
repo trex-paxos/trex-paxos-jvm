@@ -17,6 +17,7 @@ package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.TrexMessage;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -62,5 +63,14 @@ public record TrexResult(List<TrexMessage> messages, TreeMap<Long, AbstractComma
         .collect(Collectors.toSet()).size();
 
     return new TrexResult(allMessages, allCommands);
+  }
+
+  public Collection<Object> fixed() {
+    return commands().isEmpty() ? List.of() :
+        commands()
+            .values()
+            .stream()
+            .filter(c -> c instanceof Command)
+            .collect(Collectors.toList());
   }
 }

@@ -33,6 +33,10 @@ public record Accept(byte from,
     return number.compareTo(accept.number);
   }
 
+  public Long slot() {
+    return logIndex;
+  }
+
   public record SlotTerm(long logIndex, BallotNumber number) {
   }
 

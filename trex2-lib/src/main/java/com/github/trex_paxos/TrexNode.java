@@ -729,7 +729,7 @@ public class TrexNode {
   ///
   /// This means we have a leader. We also have followers who have not yet timed-out on the leader. Finally, we have the
   /// recover role which is a node that is sending out prepare messages in an attempt to fix the values sent by a prior leader.
-  enum TrexRole {
+  public enum TrexRole {
     /// A follower is a node that is not currently leading the paxos algorithm. We may time out on a follower and attempt to become a leader.
     FOLLOW,
     /// If we are wanting to lead we first run rounds of paxos over all known slots to fix the values sent by any prior leader.

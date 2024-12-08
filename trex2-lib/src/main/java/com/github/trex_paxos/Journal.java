@@ -55,7 +55,15 @@ import java.util.Optional;
 ///
 /// When an empty node is fist created the journal must have a `NoOperation.NOOP` accept journaled at log index 0.
 /// It must also have the nodes progress saved as `new Progress(noteIdentifier)`. When a cold cluster is started up the
-/// nodes will time out to and will attempt to prepare the slot 1 which is why it must contain a genesis NOOP.
+/// nodes will time out to and will attempt to prepare the slot 1 which is why it must contain a genesis NOOP. The correct
+/// logic to do this in code is as follows:
+///
+/// ```
+/// // Init a cold start journal to have the first NOOP journaled and the lowest possible promise.
+/// writeProgress(new Progress( (byte)nodeId, BallotNumber.MIN, 0));
+/// // It is the value and log index that is important at a cold start the other details are not important as the slot is fixed.
+/// writeAccept(new Accept((byte)nodeId, 0, BallotNumber.MIN, NoOperation.NOOP));
+/// ```
 ///
 /// If you want to clone a node to create a new one you must copy the journal and the application state. Then update
 /// the journal state to have new node identifier in the progress record. This is because the journal is node specific,
