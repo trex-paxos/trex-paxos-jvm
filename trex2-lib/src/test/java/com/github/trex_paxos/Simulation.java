@@ -346,6 +346,11 @@ class Simulation {
     protected void setHeartbeat() {
       Simulation.this.setHeartbeat(trexNode.nodeIdentifier());
     }
+
+    @Override
+    protected void onCommandFixed(long slot, Command command) {
+      // do
+    }
   }
 
   TestablePaxosEngine makeTrexEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy) {

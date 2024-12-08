@@ -213,5 +213,17 @@ public abstract class TrexEngine {
   protected TrexNode trexNode() {
     return trexNode;
   }
+
+  /// This is the "up-call" from the TrexNode to the TrexEngine when a command is fixed.
+  /// The host application developer is expected to deserialize the command and apply it
+  /// to their application. It is the host application callback. It will eventually be
+  /// called at all nodes when they learn that a command value is fixed at a log index (aka slot).
+  /// As the leader is the distinguished learner it learns first and makes this callback first.
+  /// The other nodes will make a callback when they received a {@link LearningMessage}.
+  /// @param slot The slot index of the fixed command. The slot is provided as an informational fact for logging. Due to
+  /// NOOP commands and in the future cluster reconfiguration commands you will not always see sequential slots numbers
+  /// being up-called.
+  /// @param command The fixed command.
+  protected abstract void onCommandFixed(long slot, Command command);
 }
 
