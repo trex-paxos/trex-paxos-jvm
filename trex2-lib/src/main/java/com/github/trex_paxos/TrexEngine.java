@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
+import java.util.function.Consumer;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
 
@@ -34,13 +35,19 @@ public abstract class TrexEngine {
   /// The underlying TrexNode that is the actual Part-time Parliament algorithm implementation guarded by this class.
   final protected TrexNode trexNode;
 
+  /// Our engine needs to be able to send out messages. These will go out over the network.
+  /// So we model this as a consumer of a list of TrexMessages.
+  final protected Consumer<List<TrexMessage>> networkOutoundSockets;
+
   protected boolean syncJournal = true;
 
   /// Create a new TrexEngine which wraps a TrexNode.
   ///
   /// @param trexNode The underlying TrexNode which must be pre-configured with a concrete Journal and QuorumStrategy.
-  public TrexEngine(TrexNode trexNode) {
+  /// @param networkOutboundSockets The consumer of a list of TrexMessages that will be sent out over the network.
+  public TrexEngine(TrexNode trexNode, Consumer<List<TrexMessage>> networkOutboundSockets) {
     this.trexNode = trexNode;
+    this.networkOutoundSockets = networkOutboundSockets;
   }
 
   /// Create a new TrexEngine which wraps a TrexNode.
@@ -50,8 +57,9 @@ public abstract class TrexEngine {
   ///                                                   of the host application to sync the journal by calling commit on the underlying database when it has finished
   ///                                                   applying the fixed commands to the underlying database.
   @SuppressWarnings("unused")
-  public TrexEngine(TrexNode trexNode, boolean hostManagedTransactions) {
+  public TrexEngine(TrexNode trexNode, Consumer<List<TrexMessage>> networkOutoundSockets, boolean hostManagedTransactions) {
     this.trexNode = trexNode;
+    this.networkOutoundSockets = networkOutoundSockets;
     this.syncJournal = !hostManagedTransactions;
   }
 

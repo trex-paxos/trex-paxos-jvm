@@ -278,6 +278,7 @@ public class TrexNode {
             progress = progress.withHighestFixed(fixedSlot);
             journal.writeProgress(progress);
             if (!role.equals(FOLLOW)) {
+              // the leader is the distinguished learner that recurses so this is positive confirmation of another live leader.
               abdicate(messages);
             }
           });

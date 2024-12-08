@@ -30,8 +30,6 @@ public interface QuorumStrategy {
 
   QuorumOutcome assessAccepts(long logIndex, Set<AcceptResponse.Vote> accepts);
 
-  int clusterSize();
-
   enum QuorumOutcome {
     WIN, LOSE, WAIT
   }

@@ -56,9 +56,4 @@ public class SimpleMajority implements QuorumStrategy {
   public QuorumOutcome assessAccepts(long logIndex, Set<AcceptResponse.Vote> accepts) {
     return simple(accepts.stream().map(AcceptResponse.Vote::vote).collect(Collectors.toList()));
   }
-
-  @Override
-  public int clusterSize() {
-    return this.clusterSize;
-  }
 }
