@@ -16,19 +16,23 @@
 package com.github.trex_paxos.msg;
 
 import com.github.trex_paxos.BallotNumber;
+import com.github.trex_paxos.SlotTerm;
 
 /// A leader sends out a Fixed when it learns of a new fixed log index. It will also heartbeat this message to keep
 /// the followers from timing out. This message type is one of the three [LearningMessage] types where the progress
 /// of the node in terms of fixing slots and making an up-call to the host is called.
 ///
 /// @param from          see {@link TrexMessage}
-/// @param fixedLogIndex The highest contiguous log index that the leader has learnt to have been fixed.
-/// @param number        The ballot number of the accepted log entry. The follower must request retransmission if
-///                                               it does not have the correct accept.
+/// @param slotTerm  This is the `{S,N}` that identifies the fixed `V`. `
 public record Fixed(
     byte from,
-    long fixedLogIndex,
-    BallotNumber number
+    SlotTerm slotTerm
 ) implements TrexMessage, BroadcastMessage, LearningMessage {
+  public Fixed(byte from, long logIndex, BallotNumber number) {
+    this(from, new SlotTerm(logIndex, number));
+  }
 
+  public long slot() {
+    return slotTerm().logIndex();
+  }
 }

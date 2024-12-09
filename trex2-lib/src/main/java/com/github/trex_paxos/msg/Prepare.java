@@ -16,15 +16,26 @@
 package com.github.trex_paxos.msg;
 
 import com.github.trex_paxos.BallotNumber;
+import com.github.trex_paxos.SlotTerm;
+import com.github.trex_paxos.TrexNode;
 
 /// The Prepare message is the first message in the Paxos protocol named in the paper Paxos Made Simple by Leslie Lamport.
 ///
 /// @param from     The node identifier of the proposer used to route the message and self-accept.
-/// @param logIndex The log index slot in the log of total ordering of fixed commands.
-/// @param number   The ballot number of the proposer which will be the term of the node attempting to recover or lead.
+/// @param slotTerm  This is the `{S,N}` where a successful leader will select the highest `V`.
 public record Prepare(
     byte from,
-    long logIndex,
-    BallotNumber number
+    SlotTerm slotTerm
 ) implements TrexMessage, BroadcastMessage, PaxosMessage {
+  public Prepare(byte from, long logIndex, BallotNumber number) {
+    this(from, new SlotTerm(logIndex, number));
+  }
+
+  public long slot() {
+    return slotTerm().logIndex();
+  }
+
+  public BallotNumber number() {
+    return slotTerm().number();
+  }
 }

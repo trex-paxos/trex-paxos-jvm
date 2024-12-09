@@ -111,7 +111,7 @@ public class CatchupResponsePropertyTests {
       if (!catchupAccepts.isEmpty() && testCase.catchUpAlignment == ArbitraryValues.CatchupAlignmentState.CORRECT
           && !otherNumber.lessThan(thisPromise)) {
         assert journaledProgress.get() != null;
-        assert journaledProgress.get().highestFixedIndex() >= catchupAccepts.getLast().logIndex();
+        assert journaledProgress.get().highestFixedIndex() >= catchupAccepts.getLast().slot();
       }
 
       if (testCase.catchUpAlignment == ArbitraryValues.CatchupAlignmentState.CORRECT
@@ -120,8 +120,8 @@ public class CatchupResponsePropertyTests {
         assert commands.size() == testCase.acceptCount;
 
         for (Accept accept : catchupAccepts) {
-          assert commands.containsKey(accept.logIndex());
-          assert commands.get(accept.logIndex()).equals(accept.command());
+          assert commands.containsKey(accept.slot());
+          assert commands.get(accept.slot()).equals(accept.command());
         }
       }
     }

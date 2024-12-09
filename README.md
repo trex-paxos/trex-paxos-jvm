@@ -152,6 +152,8 @@ Leaders must always increment their counter to create a fresh `N` each time they
 `accept(S,N,V)` in its journal, it must request retransmission. This implementation uses a `catchup` message to request the
 retransmission of missed `accept` messages. 
 
+The pairing of `{S,N}` is referred to as a "slot term" within the codebase. 
+
 This implementation uses code similar to the following to allow nodes other than the leader to learn which values have been fixed:
 
 ```java
@@ -283,7 +285,7 @@ See the java doc on the `Journal` interface for more details.
 
 This implementation enforces the following invariants at each node:
 
-1. The fixed index increases sequentially (therefore, the up-call of `{S,V}` tuples must be sequential).
+1. The fixed index increases sequentially. 
 2. The promise number only increases (yet it may jump forward).
 3. The promised ballot number can only change when processing a `prepare` or `accept` message.
 4. The fixed index can only change when a leader sees a majority `AcceptReponse` message, a follower node sees a `Fixed` message or any node learns about a fixed message due to a `CatchupResponse` message.

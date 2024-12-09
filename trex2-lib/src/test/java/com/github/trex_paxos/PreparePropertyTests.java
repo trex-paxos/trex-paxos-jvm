@@ -138,7 +138,7 @@ public class PreparePropertyTests {
 
       // Verify role changes
       if (node.getRole() != TrexNode.TrexRole.valueOf(testCase.role.name())
-          && prepare.logIndex() > thisFixed
+          && prepare.slot() > thisFixed
           && otherNumber.greaterThan(thisPromise)) {
         assert node.getRole() == TrexNode.TrexRole.FOLLOW;
       }

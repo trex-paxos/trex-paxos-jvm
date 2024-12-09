@@ -77,7 +77,7 @@ public class CatchupPropertyTests {
 
       @Override
       public Optional<Accept> readAccept(long logIndex) {
-        return acceptAtomic.get().stream().filter(a -> a.logIndex() == logIndex).findFirst();
+        return acceptAtomic.get().stream().filter(a -> a.slot() == logIndex).findFirst();
       }
     };
 
@@ -109,8 +109,8 @@ public class CatchupPropertyTests {
 
         if (otherIndex < thisFixed && testCase.acceptCount != AcceptCount.NONE) {
           assert !response.accepts().isEmpty();
-          assert response.accepts().getFirst().logIndex() == otherIndex + 1;
-          assert response.accepts().getLast().logIndex() == thisFixed;
+          assert response.accepts().getFirst().slot() == otherIndex + 1;
+          assert response.accepts().getLast().slot() == thisFixed;
         } else {
           assert response.accepts().isEmpty();
         }

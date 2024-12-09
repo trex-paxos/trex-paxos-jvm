@@ -179,12 +179,12 @@ public abstract class TrexEngine {
     return switch (input) {
       case Fixed fixed -> !trexNode.isLeader()
           && fixed.from() != trexNode.nodeIdentifier()
-          && fixed.fixedLogIndex() >= trexNode.highestFixed()
+          && fixed.slot() >= trexNode.highestFixed()
       ;
       case Accept accept -> !trexNode.isLeader()
           && accept.from() != trexNode.nodeIdentifier()
-          && (accept.logIndex() > trexNode.highestAccepted()
-          || accept.logIndex() > trexNode.highestFixed());
+          && (accept.slot() > trexNode.highestAccepted()
+          || accept.slot() > trexNode.highestFixed());
 
       case AcceptResponse acceptResponse -> trexNode.isLeader()
           && acceptResponse.from() != trexNode.nodeIdentifier()

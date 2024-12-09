@@ -17,30 +17,31 @@ package com.github.trex_paxos.msg;
 
 import com.github.trex_paxos.AbstractCommand;
 import com.github.trex_paxos.BallotNumber;
+import com.github.trex_paxos.SlotTerm;
 
 /// The Accept message is the second message in the Paxos protocol named in the paper Paxos Made Simple by Leslie Lamport.
 ///
 /// @param from see {@link TrexMessage}
-/// @param logIndex The log index slot in the log of total ordering of fixed commands.
-/// @param number   The ballot number of the proposer which will be the term of the node attempting to recover or lead.
+/// @param slotTerm  This is the `{S,N}` that identifies the fixed `V`.
 /// @param command  The command to be accepted by the acceptor. This may be a NOOP or a client command.
 public record Accept(byte from,
-                     long logIndex,
-                     BallotNumber number,
+                     SlotTerm slotTerm,
                      AbstractCommand command) implements TrexMessage, BroadcastMessage, PaxosMessage {
 
+  public Accept(byte from, long logIndex, BallotNumber number, AbstractCommand command) {
+    this(from, new SlotTerm(logIndex, number), command);
+
+  }
+
   public int compareNumbers(Accept accept) {
-    return number.compareTo(accept.number);
+    return slotTerm.number().compareTo(accept.slotTerm.number());
   }
 
   public Long slot() {
-    return logIndex;
+    return slotTerm().logIndex();
   }
 
-  public record SlotTerm(long logIndex, BallotNumber number) {
-  }
-
-  public SlotTerm slotTerm() {
-    return new SlotTerm(logIndex, number);
+  public BallotNumber number() {
+    return slotTerm().number();
   }
 }

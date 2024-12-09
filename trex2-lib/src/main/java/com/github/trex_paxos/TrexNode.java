@@ -168,10 +168,15 @@ public class TrexNode {
   /// ensure that the node is stopped if it is in unknown state of if the invariants were violated.
   ///
   /// @param input    The message to process.
-  /// @param messages This is an out version  list of messages to send out to the cluster.
-  private void algorithm(TrexMessage input, List<TrexMessage> messages, TreeMap<Long, AbstractCommand> commands) {
+  /// @param messages This is an out parameter that gathers the list of messages to send out to the cluster.
+  /// @param commands This is an out parameter of chosen command values by slot to up-call to the host application.
+  private void algorithm(TrexMessage input,
+                         List<TrexMessage> messages,
+                         TreeMap<Long, AbstractCommand> commands) {
     switch (input) {
       case Accept accept -> {
+        final var number = accept.slotTerm().number();
+        final var logIndex = accept.slotTerm().logIndex();
         if (lowerAccept(accept) || fixedSlot(accept)) {
           messages.add(nack(accept.slotTerm()));
         } else if (equalOrHigherAccept(accept)) {
@@ -179,16 +184,14 @@ public class TrexNode {
           journal.writeAccept(accept);
           if (higherAccept(accept)) {
             // we must update promise on a higher accept http://stackoverflow.com/q/29880949/329496
-            this.progress = progress.withHighestPromised(accept.number());
+            this.progress = progress.withHighestPromised(number);
             // we must change our own vote if we are an old leader
             if (this.role == LEAD) {
               // does this change our prior self vote?
-              final var logIndex = accept.logIndex();
               Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex))
                   .ifPresent(acceptVotes -> {
                     final var oldNumber = acceptVotes.accept().number();
-                    final var newNumber = accept.number();
-                    if (oldNumber.lessThan(newNumber)) {
+                    if (oldNumber.lessThan(number)) {
                       // we have accepted a higher accept which is a promise as per https://stackoverflow.com/a/29929052
                       acceptVotes.responses().put(nodeIdentifier(), nack(acceptVotes.accept()));
                       Set<AcceptResponse.Vote> vs = acceptVotes.responses().values().stream()
@@ -205,7 +208,7 @@ public class TrexNode {
           }
           journal.writeProgress(this.progress);
           final var ack = ack(accept);
-          if (accept.number().nodeIdentifier() == nodeIdentifier) {
+          if (number.nodeIdentifier() == nodeIdentifier) {
             // we vote for ourself
             paxos(ack);
           }
@@ -215,23 +218,24 @@ public class TrexNode {
         }
       }
       case Prepare prepare -> {
-        var number = prepare.number();
-        if (number.lessThan(progress.highestPromised()) || prepare.logIndex() <= progress.highestFixedIndex()) {
+        final var number = prepare.slotTerm().number();
+        final var logIndex = prepare.slotTerm().logIndex();
+        if (number.lessThan(progress.highestPromised()) || logIndex <= progress.highestFixedIndex()) {
           // nack a low nextPrepareMessage else any nextPrepareMessage for a fixed slot sending any accepts they are missing
           messages.add(nack(prepare));
         } else if (number.greaterThan(progress.highestPromised())) {
           // ack a higher nextPrepareMessage
-          final var newProgress = progress.withHighestPromised(prepare.number());
+          final var newProgress = progress.withHighestPromised(number);
           journal.writeProgress(newProgress);
           final var ack = ack(prepare);
           messages.add(ack);
           this.progress = newProgress;
           // leader or recoverer should give way to a higher nextPrepareMessage
-          if (prepare.number().nodeIdentifier() != nodeIdentifier && role != FOLLOW) {
+          if (number.nodeIdentifier() != nodeIdentifier && role != FOLLOW) {
             abdicate(messages);
           }
           // we vote for ourself
-          if (prepare.number().nodeIdentifier() == nodeIdentifier) {
+          if (newProgress.nodeIdentifier() == nodeIdentifier) {
             paxos(ack);
           }
         } else if (number.equals(progress.highestPromised())) {
@@ -256,7 +260,7 @@ public class TrexNode {
           processPrepareResponse(prepareResponse, messages);
         }
       }
-      case Fixed(final var fixedFrom, final var fixedSlot, final var fixedNumber) -> {
+      case Fixed(final var fixedFrom, SlotTerm(final var fixedSlot, final var fixedNumber)) -> {
         if (fixedSlot == highestFixed() + 1) {
           // we must have the correct number at the slot
           final var fixedAccept = journal.readAccept(fixedSlot)
@@ -310,14 +314,14 @@ public class TrexNode {
       }
       case CatchupResponse(_, _, final var catchup) -> {
         // if it there is a gap to the catchup then we will ignore it
-        if (!catchup.isEmpty() && catchup.getFirst().logIndex() > progress.highestFixedIndex() + 1) {
+        if (!catchup.isEmpty() && catchup.getFirst().slot() > progress.highestFixedIndex() + 1) {
           return;
         }
 
         // Eliminate any breaks. This reduce is by Claud 3.5
         // "Returns the second number (b) if it follows the first (a+1), Otherwise keeps the first number (a)"
         final var highestContiguous = catchup.stream()
-            .map(Accept::logIndex)
+            .map(Accept::slot)
             .reduce((a, b) -> (a + 1 == b) ? b : a)
             // if we have nothing in the list we return the zero slot which must always be fixed as NOOP
             .orElse(0L);
@@ -329,10 +333,10 @@ public class TrexNode {
         // a majority of the nodes have accepted the that message.
         catchup.stream()
             .dropWhile(this::fixedSlot)
-            .takeWhile(accept -> accept.logIndex() <= highestContiguous)
+            .takeWhile(accept -> accept.slot() <= highestContiguous)
             .forEach(accept -> {
               journal.writeAccept(accept);
-              progress = progress.withHighestFixed(accept.logIndex());
+              progress = progress.withHighestFixed(accept.slot());
             fixed(accept, commands);
           });
 
@@ -344,7 +348,7 @@ public class TrexNode {
   }
 
   private boolean fixedSlot(Accept accept) {
-    return accept.logIndex() <= progress.highestFixedIndex();
+    return accept.slot() <= progress.highestFixedIndex();
   }
 
   static final String PROTOCOL_VIOLATION_PROMISES = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED Paxos Protocol Violation the promise has been changed when the message is not a PaxosMessage type.";
@@ -399,7 +403,6 @@ public class TrexNode {
       final var message = COMMAND_INDEXES + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
       LOGGER.severe(message);
     }
-    // Eliminate any breaks. This reduce is by Claud 3.5
     // "Returns the second number (b) if it follows the first (a+1), Otherwise keeps the first number (a)"
     final var highestContiguous = commands.keySet().stream()
         .reduce((a, b) -> (a + 1 == b) ? b : a)
@@ -476,7 +479,7 @@ public class TrexNode {
 
   private void fixed(Accept accept, Map<Long, AbstractCommand> commands) {
     final var cmd = accept.command();
-    final var logIndex = accept.logIndex();
+    final var logIndex = accept.slot();
     LOGGER.log(logAtLevel, () ->
         "FIXED logIndex==" + logIndex +
             " nodeIdentifier==" + nodeIdentifier() +
@@ -501,7 +504,7 @@ public class TrexNode {
         nodeIdentifier, accept.number().nodeIdentifier(),
         new AcceptResponse.Vote(nodeIdentifier,
             accept.number().nodeIdentifier(),
-            accept.logIndex(), true),
+            accept.slot(), true),
         progress.highestFixedIndex());
   }
 
@@ -510,7 +513,7 @@ public class TrexNode {
    *
    * @param slotTerm The `accept(S,V,_)` to negatively acknowledge.
    */
-  final AcceptResponse nack(Accept.SlotTerm slotTerm) {
+  final AcceptResponse nack(SlotTerm slotTerm) {
     return new AcceptResponse(
         nodeIdentifier,
         slotTerm.number().nodeIdentifier(),
@@ -531,10 +534,10 @@ public class TrexNode {
         nodeIdentifier, prepare.number().nodeIdentifier(),
         new PrepareResponse.Vote(nodeIdentifier,
             prepare.number().nodeIdentifier(),
-            prepare.logIndex(),
+            prepare.slot(),
             true,
             prepare.number()),
-        journal.readAccept(prepare.logIndex()),
+        journal.readAccept(prepare.slot()),
         highestAccepted()
     );
   }
@@ -549,10 +552,10 @@ public class TrexNode {
         nodeIdentifier, prepare.number().nodeIdentifier(),
         new PrepareResponse.Vote(nodeIdentifier,
             prepare.number().nodeIdentifier(),
-            prepare.logIndex(),
+            prepare.slot(),
             false,
             prepare.number()),
-        journal.readAccept(prepare.logIndex()), highestAccepted()
+        journal.readAccept(prepare.slot()), highestAccepted()
     );
   }
 
@@ -637,7 +640,7 @@ public class TrexNode {
 
   public Accept nextAcceptMessage(Command command) {
     final var a = new Accept(nodeIdentifier, journal.highestLogIndex() + 1, term, command);
-    this.acceptVotesByLogIndex.put(a.logIndex(), new AcceptVotes(a));
+    this.acceptVotesByLogIndex.put(a.slot(), new AcceptVotes(a.slotTerm()));
     return a;
   }
 
@@ -709,7 +712,7 @@ public class TrexNode {
           // issue the accept messages
           messages.add(accept);
           // create the empty map to track the responses
-          acceptVotesByLogIndex.put(logIndex, new AcceptVotes(accept));
+          acceptVotesByLogIndex.put(logIndex, new AcceptVotes(accept.slotTerm()));
           // send the Accept to ourselves and process the response
           paxos(paxos(accept).messages().getFirst());
           // we are no longer awaiting the nextPrepareMessage for the current slot
@@ -726,14 +729,13 @@ public class TrexNode {
   /**
    * A record of the votes received by a node from other cluster members.
    */
-  // FIXME do not hold the Accept as we need to load it from the journal just hold the number+slot
-  public record AcceptVotes(Accept.SlotTerm accept, Map<Byte, AcceptResponse> responses, boolean chosen) {
-    public AcceptVotes(Accept accept) {
-      this(accept.slotTerm(), new HashMap<>(), false);
+  public record AcceptVotes(SlotTerm accept, Map<Byte, AcceptResponse> responses, boolean chosen) {
+    public AcceptVotes(SlotTerm slotTerm) {
+      this(slotTerm, new HashMap<>(), false);
     }
 
-    public static AcceptVotes chosen(Accept.SlotTerm accept) {
-      return new AcceptVotes(accept, Collections.emptyMap(), true);
+    public static AcceptVotes chosen(SlotTerm slotTerm) {
+      return new AcceptVotes(slotTerm, Collections.emptyMap(), true);
     }
   }
 

@@ -186,7 +186,7 @@ public class Pickle {
 
   public static void write(Accept m, DataOutputStream dataStream) throws IOException {
     dataStream.writeByte(m.from());
-    dataStream.writeLong(m.logIndex());
+    dataStream.writeLong(m.slot());
     write(m.number(), dataStream);
     write(m.command(), dataStream);
   }
@@ -249,8 +249,8 @@ public class Pickle {
 
   public static void write(Fixed m, DataOutputStream dos) throws IOException {
     dos.writeByte(m.from());
-    dos.writeLong(m.fixedLogIndex());
-    write(m.number(), dos);
+    dos.writeLong(m.slotTerm().logIndex());
+    write(m.slotTerm().number(), dos);
   }
 
   public static Fixed readFixed(DataInputStream dis)
@@ -270,7 +270,7 @@ public class Pickle {
 
   public static void write(Prepare p, DataOutputStream dataOutputStream) throws IOException {
     dataOutputStream.writeByte(p.from());
-    dataOutputStream.writeLong(p.logIndex());
+    dataOutputStream.writeLong(p.slot());
     write(p.number(), dataOutputStream);
   }
 

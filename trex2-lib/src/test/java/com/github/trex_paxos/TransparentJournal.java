@@ -23,7 +23,7 @@ class TransparentJournal implements Journal {
 
   @Override
   public void writeAccept(Accept accept) {
-    fakeJournal.put(accept.logIndex(), accept);
+    fakeJournal.put(accept.slot(), accept);
   }
 
   @Override
