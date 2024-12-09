@@ -5,15 +5,18 @@
 This codebase:
 
 * Implements distributed advisory locks as distributed leases using the Trex2 Paxos library.
-* Provides a simple client API to acquire and release leases. 
-* Provides a simple server where you run a cluster of servers and they all keep exactly in sync using the Paxos algorithm.
-* By definition advisory locks do not prevent access to the protected resource. They are more like leases rather than true locks.  
+* Provides only a minimal subset of features compared to [The Chubby lock service](https://static.googleusercontent.com/media/research.google.com/en//archive/chubby-osdi06.pdf).
+* Aims to have a client-less approach to basic features. 
+* Provides a simple server where you run a cluster of servers where they all keep exactly in sync using the Paxos algorithm.
+* Is small enough to be embeddable such that you can choose to back it into a Java app rather than deploy it separately.
 * Uses the H2 MVStore as the default storage backend to be both the paxos journal and to hold the lease state.
-* Trex allows you to use a journal that is using your main database, kv-store or document store, where you can managed
-  translations yourself. This means you can use your preferred database or kv-store or document store as the backing data store. 
-* As this solution runs Paxos you need at least two nodes in the cluster to get it to work but clearly you should use three or more.
+* Allows you to use an external database, or kv-store, or document store if you so choose. 
+* Allows you to run a cluster of three or five servers. Even numbers are supported including just two but are not recommended. 
 
-### Overview
+### Aims
+
+Significant elements of the following are paraphrasing the work of Mick Burrows in the paper "The Chubby lock service 
+for loosely-coupled distributed systems". 
 
 Advisory locks are locks that only prevent other attempts to acquire the same lock, but do not automatically prevent 
 access to the protected resource: 
@@ -26,34 +29,40 @@ to access the resource R, nor prevents other clients from doing so. [Mike Burrow
 
 You can use advisory locks for things like: 
 
-* Coordinating access to shared resources in distributed systems2
-* Managing concurrent background processing tasks2
-* Controlling access to resources stored in memory or external systems3
-* Preventing duplicate execution of scheduled tasks2
+* Coordinating access to shared resources in distributed systems
+* Managing concurrent background processing tasks
+* Preventing duplicate execution of scheduled tasks
 * Coordinating multi-node task distribution
+* Tracking many servers or processes (or pods) coming and going over time. 
+* Tracking which server is a leader or designated manager of an area of work. 
 
-It is important to have high availability and strong consistency guarantees when trying to acquire advisory locks. This is because the locks are used to
+>  For example, an application might use a lock to elect a primary, which would then handle all access to that data for a
+> considerable time, perhaps hours or days. [Mike Burrows](https://static.googleusercontent.com/media/research.google.com/en//archive/chubby-osdi06.pdf)
 
-The concept of an advisory lock is a fundamental building block for distributed systems.
-It is a bad idea to call them locks in a Java library, as they are not locks in the traditional JVM
-sense as per {@link java.util.concurrent.locks.Lock}. They are more like leases. The closest thing in the
-JVM world is a {@link java.util.concurrent.locks.StampedLock} where there is a handle to the acquired lock and a
-different thread may release the lock than the one that acquired it. 
+An advisory locking service aims at providing coarse-grained locks visible to a large number of clients. For strong 
+consistency and high availability they require messages to be exchange with timeouts that are measured in tens of 
+seconds or minutes. In contrast, fine-grained locks are typically held for avery short durations, often a few seconds 
+or less. Fine-grained locks are used to synchronize highly frequent operations, such as individual transactions or 
+small fast updates within a system. Because of their short duration and high frequency of acquisition and release, 
+fine-grained locks impose a significant load on a server. 
 
-It is crucial concept for advisory locking service that different threads or even different processes can take and release advisory locks. 
-The advisory lock is not a resource managed in the JVM process. It is held in a distributed store accessed by many JVMs.
-We must make network calls to acquire and release the advisory lock. These will likely be on different
-threads. This means we need a handle to the logical lease that can be passed around to different threads.
+You can use the coarse-grained lock to allocate which processes or sets of serves are in charge of your own application 
+specific fine-grained locks: 
 
-In the JVM there is no concept of a lock automatically being released after some time. The JVM lock APIs that use
-time units are to timeout on attempting to acquire the lock. They do not release the lock after a certain time.
-In contrast, with a distributed advisory advisory, from a practical perspective it is extremely useful that leases do have an
-expiry time. It ensures that crashed JVMs do not keep locks forever.
+> Fortunately, it is straightforward for clients to implement their own fine-grained locks tailored to their application. 
+> An application might partition its locks into groups and use ... coarse-grained locks to allocate these lock groups 
+> to application-specific lock servers. [Mike Burrows](https://static.googleusercontent.com/media/research.google.com/en//archive/chubby-osdi06.pdf)
 
-We will always be making network calls to acquire and release locks. Lost network packets means that
-the current JVM may we may have actually acquired the advisory lock but the response was lost. Retrying on RuntimeIOException
-to find we had the advisory lock already is a good idea. That looks no different to reacquiring a reentrant lock. So
-we only supply those. If you want non-reentrant locks semantics then simply use a JVM Non-ReentrantLock while holding the lease.
+Which is just saying you can use a three node lock-sever cluster to designate which of your application servers will be 
+your running fine-grained, very short-lived and very high throughput locks. 
+
+It is crucial concept for advisory locking service that different threads or even different processes can take and release
+advisory locks. The advisory lock is not a resource managed in the JVM process.
+
+In any large distributed system the processes that use a locking service will themselves crash. Typically, timeouts of 
+minutes are used on advisory locks. The lock service can fail over in seconds without causing critical harm to the over 
+health of the distributed system it supports. Yet it would be highly resilient, and it should automatically fail over 
+ideally in a few short seconds.
 
 ### Time Marches Backwards
 

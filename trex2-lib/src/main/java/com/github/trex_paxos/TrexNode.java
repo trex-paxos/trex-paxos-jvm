@@ -164,15 +164,6 @@ public class TrexNode {
     }
     return new TrexResult(messages, commands);
   }
-
-  private void validateCommandIndexes(TrexMessage input, TreeMap<Long, AbstractCommand> commands, Progress priorProgress) {
-    // TODO validate that the commands are contiguous using the reduce method
-    if (commands.lastKey() != progress.highestFixedIndex()) {
-      final var message = COMMAND_INDEXES + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
-      LOGGER.severe(message);
-    }
-  }
-
   /// This is the main Paxos Algorithm. It is not public as it is wrapped in guards that check the invariants and
   /// ensure that the node is stopped if it is in unknown state of if the invariants were violated.
   ///
@@ -363,9 +354,9 @@ public class TrexNode {
   static final String CRASHED = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted) is now the only source of truth.";
   static final String CRASHING = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted)  is now the only source of truth to to throwable: ";
   static final String COMMAND_INDEXES = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued commands that do not align to its committed slot index: ";
+  static final String COMMAND_GAPS = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued commands that are not sequential in commited slot index: ";
 
-  /// Here we check that we have not violated the Paxos algorithm invariants. If we have then we throw an error.
-  /// We also need to check what is described in the wiki page [Cluster Replication With Paxos for the Java Virtual Machine](https://github.com/trex-paxos/trex-paxos-jvm/wiki)
+  /// Here we check that we have not violated the Paxos algorithm invariants. If we have then we lock then mark the node as crashed.
   private void validateProtocolInvariants(TrexMessage input, Progress priorProgress) {
     final var priorPromise = priorProgress.highestPromised();
     final var latestPromise = progress.highestPromised();
@@ -397,6 +388,28 @@ public class TrexNode {
         final var message = PROTOCOL_VIOLATION_SLOT_FIXING + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
         LOGGER.severe(message);
       }
+    }
+  }
+
+  /// Here we check that we have not violated the Paxos algorithm invariants. If we have then we lock then mark the node as crashed.
+  private void validateCommandIndexes(TrexMessage input, TreeMap<Long, AbstractCommand> commands, Progress priorProgress) {
+
+    if (commands.lastKey() != progress.highestFixedIndex()) {
+      crashed = true;
+      final var message = COMMAND_INDEXES + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
+      LOGGER.severe(message);
+    }
+    // Eliminate any breaks. This reduce is by Claud 3.5
+    // "Returns the second number (b) if it follows the first (a+1), Otherwise keeps the first number (a)"
+    final var highestContiguous = commands.keySet().stream()
+        .reduce((a, b) -> (a + 1 == b) ? b : a)
+        // if we have nothing in the list we return the zero slot which must always be fixed as NOOP
+        .orElse(0L);
+
+    if (highestContiguous != progress.highestFixedIndex()) {
+      crashed = true;
+      final var message = COMMAND_GAPS + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
+      LOGGER.severe(message);
     }
   }
 
