@@ -352,7 +352,7 @@ The list of tasks:
 - [x] Write a test harness that injects rolling network partitions.
 - [x] Write property based tests to exhaustively verify correctness.
 - [x] Write extensive documentation including detailed JavaDoc.
-- [ ] Implement an embedded distributed lock replicated library.
+- [ ] Implement an embedded distributed advisor lock replicated service.
 - [ ] Implement cluster membership changes as UPaxos.
 - [ ] Add optionality so that randomized timeouts can be replaced by some other leader failure detection (e.g. JGroups).
 
