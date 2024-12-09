@@ -58,7 +58,7 @@ public abstract class TrexEngine {
   /// @param trexNode               The underlying TrexNode which must be pre-configured with a concrete Journal and QuorumStrategy.
   /// @param networkOutboundSockets The consumer of a list of TrexMessages that will be sent out over the network.
   /// @param hostManagedTransactions If true the host application will manage transactions and the TrexNode will not call {@link Journal#sync()} the journal.
-  @SuppressWarnings("unused") // TODO: maybe do a h2 database example
+  @SuppressWarnings("unused") // TODO: maybe do a postgres example
   public TrexEngine(TrexNode trexNode,
                     Consumer<List<TrexMessage>> networkOutboundSockets,
                     boolean hostManagedTransactions) {

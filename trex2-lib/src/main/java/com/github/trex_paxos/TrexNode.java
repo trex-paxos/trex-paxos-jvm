@@ -168,8 +168,8 @@ public class TrexNode {
   /// ensure that the node is stopped if it is in unknown state of if the invariants were violated.
   ///
   /// @param input    The message to process.
-  /// @param messages This is an out parameter that gathers the list of messages to send out to the cluster.
-  /// @param commands This is an out parameter of chosen command values by slot to up-call to the host application.
+  /// @param messages This is an out argument that gathers the list of messages to send out to the cluster.
+  /// @param commands This is an out argument of chosen command values by slot to up-call to the host application.
   private void algorithm(TrexMessage input,
                          List<TrexMessage> messages,
                          TreeMap<Long, AbstractCommand> commands) {

@@ -2,6 +2,7 @@ package com.github.trex_paxos.advisory_locks.server;
 
 import com.github.trex_paxos.Command;
 import com.github.trex_paxos.PaxosServer;
+import com.github.trex_paxos.TrexEngine;
 import com.github.trex_paxos.UUIDGenerator;
 import com.github.trex_paxos.msg.TrexMessage;
 import com.github.trex_paxos.advisory_locks.store.LockStore;
@@ -17,19 +18,15 @@ import java.util.logging.Logger;
 public class LockServer extends PaxosServer
 {
   private static final Logger LOGGER = Logger.getLogger(LockServer.class.getName());
-  private final Supplier<LockServerTrexEngine> engine;
   private final ExecutorService executor;
   private final ConcurrentMap<String, CompletableFuture<LockServerReturnValue>> pendingCommands
       = new ConcurrentHashMap<>();
-  private final Consumer<List<TrexMessage>> networkOutboundSockets;
   private final LockStore lockStore;
 
   public LockServer(LockStore lockStore,
-                    Supplier<LockServerTrexEngine> engine,
+                    TrexEngine engine,
                     Consumer<List<TrexMessage>> networkOutboundSockets) {
     super(engine, networkOutboundSockets);
-    this.engine = engine;
-    this.networkOutboundSockets = networkOutboundSockets;
     this.lockStore = lockStore;
     this.executor = Executors.newVirtualThreadPerTaskExecutor();
   }

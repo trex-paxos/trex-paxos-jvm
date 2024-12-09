@@ -40,14 +40,13 @@ public class LockServerSimulation
 
 
     LockStore lockStore = new LockStore(store);
-    LockServer lockServer = new LockServer(lockStore, ()-> engines.get(nodeId), this);
     TrexNode node = new TrexNode(Level.INFO, nodeId, new SimpleMajority(2), journal);
     TestLockServerTrexEngine engine = new TestLockServerTrexEngine(
         node,
-        lockStore,
         scheduler,
         this
     );
+    LockServer lockServer = new LockServer(lockStore, engine, this);
     engines.put(nodeId, engine);
     servers.put(nodeId, lockServer);
   }

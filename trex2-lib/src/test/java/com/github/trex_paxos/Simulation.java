@@ -273,7 +273,7 @@ class Simulation {
 
   void setHeartbeat(byte nodeIdentifier) {
     final var timeout = rng.nextInt((int) shortMaxTimeout / 2, (int) shortMaxTimeout);
-    final var when = Math.max(lastNow, now) + timeout; // TODO no need to max?
+    final var when = Math.max(lastNow, now) + timeout;
     final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
     final var hb = new Heartbeat(nodeIdentifier);
     if (!events.contains(hb)) {
