@@ -1,4 +1,4 @@
-package com.github.trex_paxos.sherlock;
+package com.github.trex_paxos.advisory_locks;
 
 import java.time.Duration;
 import java.time.Instant;

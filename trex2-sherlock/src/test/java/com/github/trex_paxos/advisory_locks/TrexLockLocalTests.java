@@ -1,6 +1,7 @@
-package com.github.trex_paxos.sherlock;
+package com.github.trex_paxos.advisory_locks;
 
-import com.github.trex_paxos.sherlock.store.LockStore;
+import com.github.trex_paxos.UUIDGenerator;
+import com.github.trex_paxos.advisory_locks.store.LockStore;
 import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -11,17 +12,15 @@ import java.time.Instant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-public class TrexLockTests {
+public class TrexLockLocalTests {
 
   private static TrexLockClient lockClient;
 
   private static class TrexLockClientLocal implements TrexLockClient {
     private final LockStore store;
-    private final UUIDGenerator uuidGenerator;
 
     TrexLockClientLocal(LockStore store) {
       this.store = store;
-      this.uuidGenerator = new UUIDGenerator();
     }
 
     @Override

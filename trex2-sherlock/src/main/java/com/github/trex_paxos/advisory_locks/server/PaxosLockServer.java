@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.trex_paxos.sherlock.server;
+package com.github.trex_paxos.advisory_locks.server;
 
 import com.github.trex_paxos.Command;
-import com.github.trex_paxos.sherlock.UUIDGenerator;
+import com.github.trex_paxos.UUIDGenerator;
 
 import java.io.*;
 import java.net.ServerSocket;

@@ -19,6 +19,7 @@ import com.github.trex_paxos.msg.*;
 
 import java.util.*;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.logging.Logger;
 import java.util.random.RandomGenerator;
 import java.util.random.RandomGeneratorFactory;
@@ -116,9 +117,9 @@ class Simulation {
                       final var data = now + ":" + e.getKey() + i;
                       return new Command(data, data.getBytes());
                     }).toList();
-
-                    final var msg = e.getValue().command(commands);
-                    return msg.stream();
+                    final var engine = e.getValue();
+                    return engine.isLeader() ? engine.nextLeaderBatchOfMessages(commands).stream()
+                        : Stream.empty();
                   });
             }
           }
@@ -328,7 +329,10 @@ class Simulation {
 
   class SimulationPaxosEngine extends TestablePaxosEngine {
 
-    public SimulationPaxosEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy, TransparentJournal transparentJournal) {
+    public SimulationPaxosEngine(byte nodeIdentifier,
+                                 QuorumStrategy quorumStrategy,
+                                 TransparentJournal transparentJournal
+    ) {
       super(nodeIdentifier, quorumStrategy, transparentJournal);
     }
 
@@ -346,17 +350,12 @@ class Simulation {
     protected void setHeartbeat() {
       Simulation.this.setHeartbeat(trexNode.nodeIdentifier());
     }
-
-    @Override
-    protected void onCommandFixed(long slot, Command command) {
-      // do
-    }
   }
 
-  TestablePaxosEngine makeTrexEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy) {
-    return new SimulationPaxosEngine(nodeIdentifier,
-        quorumStrategy,
-        new TransparentJournal(nodeIdentifier)
-    );
-  }
+TestablePaxosEngine makeTrexEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy) {
+  return new SimulationPaxosEngine(nodeIdentifier,
+      quorumStrategy,
+      new TransparentJournal(nodeIdentifier)
+      );
+}
 }

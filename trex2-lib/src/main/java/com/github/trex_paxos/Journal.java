@@ -25,7 +25,7 @@ import java.util.Optional;
 ///
 /// If you are already using a relational database you can use it to store the state of the journal. Then you can use
 /// a database transaction to commit the work of the fixed commands within the same database transaction that you
-/// persist the `progress` record. In which case use the {@link TrexEngine#TrexEngine(TrexNode, boolean)} constructor
+/// persist the `progress` record. In which case use the {@link TrexEngine} constructor
 /// with the `hostManagedTransactions` flag set to true. This will prevent the TrexEngine from calling the `sync()` method.
 /// The host must then commit the underlying journal database transaction after it has applied all the fixed commands
 /// to the application tables. Only then may it sends out any messages.
@@ -107,9 +107,10 @@ public interface Journal {
   /// ensure that write of the `progress` and all `accepts` happens automatically. If your storage does not support
   /// transactions you just first flush any `accept` messages into their slots and only then flush the `progress` record.
   ///
-  /// If the {@link TrexEngine#TrexEngine(TrexNode, boolean)} is constructed with `hostManagedTransactions` set to true
-  /// this method is never called. It is then the responsibility of the host application to ensure that the underlying database
-  /// transactions are committed before any messages are sent out.
+  /// If the {@link TrexEngine} is constructed with `hostManagedTransactions` set to true this method is never called.
+  /// It is then the responsibility of the host application to ensure that the underlying database transactions are
+  /// committed before any messages are sent out. Sending out the messages before the database transaction is committed
+  /// is a violation of the Paxos Algorithm.
   void sync();
 
   /// Get the highest log index that has been journaled. This is used to during startup. If you are using a relational

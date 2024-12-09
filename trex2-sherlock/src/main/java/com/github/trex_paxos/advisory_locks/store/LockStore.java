@@ -1,4 +1,4 @@
-package com.github.trex_paxos.sherlock.store;
+package com.github.trex_paxos.advisory_locks.store;
 
 import org.h2.mvstore.MVStore;
 import org.h2.mvstore.MVMap;
@@ -12,7 +12,7 @@ public class LockStore {
 
   public LockStore(MVStore store) {
     this.store = store;
-    this.locks = store.openMap("com.github.trex_paxos.sherlock.store#locks");
+    this.locks = store.openMap("com.github.trex_paxos.advisory_locks.store#locks");
   }
 
   public Optional<LockEntry> tryAcquireLock(String lockId, long stamp, Duration holdDuration) {

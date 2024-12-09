@@ -17,7 +17,6 @@ package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.*;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
@@ -37,30 +36,34 @@ public abstract class TrexEngine {
 
   /// Our engine needs to be able to send out messages. These will go out over the network.
   /// So we model this as a consumer of a list of TrexMessages.
-  final protected Consumer<List<TrexMessage>> networkOutoundSockets;
+  final protected Consumer<List<TrexMessage>> networkOutboundSockets;
 
-  protected boolean syncJournal = true;
+  protected boolean hostManagedTransactions = false;
 
   /// Create a new TrexEngine which wraps a TrexNode.
   ///
-  /// @param trexNode The underlying TrexNode which must be pre-configured with a concrete Journal and QuorumStrategy.
+  /// @param trexNode               The underlying TrexNode which must be pre-configured with a concrete Journal and QuorumStrategy.
   /// @param networkOutboundSockets The consumer of a list of TrexMessages that will be sent out over the network.
-  public TrexEngine(TrexNode trexNode, Consumer<List<TrexMessage>> networkOutboundSockets) {
+  public TrexEngine(TrexNode trexNode,
+                    Consumer<List<TrexMessage>> networkOutboundSockets
+  ) {
     this.trexNode = trexNode;
-    this.networkOutoundSockets = networkOutboundSockets;
+    this.networkOutboundSockets = networkOutboundSockets;
   }
 
-  /// Create a new TrexEngine which wraps a TrexNode.
+  /// Create a new TrexEngine which wraps a TrexNode. This constructor allows the host application to manage transactions.
+  /// This is only possible if the journal is within the same transactional store as the host application. If the application
+  /// does not call commit on the underlying database before sending out messages then it is a violation of the Paxos algorithm.
   ///
-  /// @param trexNode                The underlying TrexNode which must be pre-configured with a concrete Journal and QuorumStrategy.
-  /// @param hostManagedTransactions If true the TrexEngine will not sync the journal after each message. It is then the responsibility
-  ///                                                   of the host application to sync the journal by calling commit on the underlying database when it has finished
-  ///                                                   applying the fixed commands to the underlying database.
-  @SuppressWarnings("unused")
-  public TrexEngine(TrexNode trexNode, Consumer<List<TrexMessage>> networkOutoundSockets, boolean hostManagedTransactions) {
-    this.trexNode = trexNode;
-    this.networkOutoundSockets = networkOutoundSockets;
-    this.syncJournal = !hostManagedTransactions;
+  /// @param trexNode               The underlying TrexNode which must be pre-configured with a concrete Journal and QuorumStrategy.
+  /// @param networkOutboundSockets The consumer of a list of TrexMessages that will be sent out over the network.
+  /// @param hostManagedTransactions If true the host application will manage transactions and the TrexNode will not call {@link Journal#sync()} the journal.
+  @SuppressWarnings("unused") // TODO: maybe do a h2 database example
+  public TrexEngine(TrexNode trexNode,
+                    Consumer<List<TrexMessage>> networkOutboundSockets,
+                    boolean hostManagedTransactions) {
+    this(trexNode, networkOutboundSockets);
+    this.hostManagedTransactions = hostManagedTransactions;
   }
 
   /// This method must schedule a call to the timeout method at some point in the future.
@@ -76,8 +79,9 @@ public abstract class TrexEngine {
   /// The heartbeat should be a fixed period which is less than the minimum of the random timeout minimal value.
   protected abstract void setHeartbeat();
 
-  /// Process an application command sent from a client. This is only actioned by a leader. It will return a single accept
-  /// then append a fixed message as it is very cheap for another node to filter out fixed values it has already seen.
+  /// Create the next accept message for the next selected given command.
+  /// @param command The command to create the next accept message for.
+  /// @return The next accept message.
   private TrexMessage command(Command command) {
     // only if we are leader do we create the next accept message into the next log index
     final var nextAcceptMessage = trexNode.nextAcceptMessage(command);
@@ -89,16 +93,14 @@ public abstract class TrexEngine {
     return nextAcceptMessage;
   }
 
-  public List<TrexMessage> command(List<Command> command) {
-    if (trexNode.isLeader()) {
+  /// Create the next leader batch of messages for the given set of commands. This should be called by the host application
+  /// when {@link #isLeader()} is true.
+  public List<TrexMessage> nextLeaderBatchOfMessages(List<Command> command) {
       /// toList is immutable so we concat streams first.
       return Stream.concat(
           command.stream().map(this::command),
           Stream.of(trexNode.currentFixedMessage())
       ).toList();
-    } else {
-      return Collections.emptyList();
-    }
   }
 
   /// We want to be friendly to Virtual Threads so we use a semaphore with a single permit to ensure that we only
@@ -122,8 +124,12 @@ public abstract class TrexEngine {
             .filter(m -> m.from() != trexNode.nodeIdentifier())
             .map(this::paxosNotThreadSafe)
             .toList();
-        // the progress must be synced to durable storage before any messages are sent out.
-        trexNode.journal.sync();
+        // if the journal is within the same transactional store as the host application and the host application is
+        // managing transactions then the host application must call commit on the journal before we send out any messages.
+        if(!hostManagedTransactions){
+          // we must sync the journal before we send out any messages.
+          trexNode.journal.sync();
+        }
         // merge all the results into one
         return TrexResult.merge(results);
       } finally {
@@ -214,16 +220,8 @@ public abstract class TrexEngine {
     return trexNode;
   }
 
-  /// This is the "up-call" from the TrexNode to the TrexEngine when a command is fixed.
-  /// The host application developer is expected to deserialize the command and apply it
-  /// to their application. It is the host application callback. It will eventually be
-  /// called at all nodes when they learn that a command value is fixed at a log index (aka slot).
-  /// As the leader is the distinguished learner it learns first and makes this callback first.
-  /// The other nodes will make a callback when they received a {@link LearningMessage}.
-  /// @param slot The slot index of the fixed command. The slot is provided as an informational fact for logging. Due to
-  /// NOOP commands and in the future cluster reconfiguration commands you will not always see sequential slots numbers
-  /// being up-called.
-  /// @param command The fixed command.
-  protected abstract void onCommandFixed(long slot, Command command);
+  public boolean isLeader() {
+    return trexNode.isLeader();
+  }
 }
 

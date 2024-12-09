@@ -5,6 +5,7 @@ import com.github.trex_paxos.msg.TrexMessage;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 
 abstract class TestablePaxosEngine extends TrexEngine {
@@ -17,8 +18,14 @@ abstract class TestablePaxosEngine extends TrexEngine {
     return new ArrayList<>(allCommandsMap.values());
   }
 
-  public TestablePaxosEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy, TransparentJournal journal) {
-    super(new TrexNode(Level.INFO, nodeIdentifier, quorumStrategy, journal), (List<TrexMessage> _)->{});
+  public TestablePaxosEngine(byte nodeIdentifier,
+                             QuorumStrategy quorumStrategy,
+                             TransparentJournal journal
+  ) {
+    super(
+        new TrexNode(Level.INFO, nodeIdentifier, quorumStrategy, journal),
+        (List<TrexMessage> _)->{}
+    );
     this.journal = journal;
   }
 
