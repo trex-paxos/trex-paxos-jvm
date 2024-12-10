@@ -26,12 +26,17 @@ import java.util.stream.LongStream;
 import static com.github.trex_paxos.TrexNode.TrexRole.*;
 
 /// A TrexNode is a single node in a Paxos cluster. It runs the part-time parliament algorithm. It requires
-/// the following collaborating classes. This class logs to JUL logging as severe. You can configure JUL logging to
+/// the following collaborating classes:
+///
+/// * One [Journal] which must be crash durable storage.
+/// * One [QuorumStrategy] which may be a simple majority, in the future FPaxos or UPaxos.
+///
+/// This class logs to JUL logging as severe. You can configure JUL logging to
 /// bridge to your chosen logging framework. This class is not thread safe. The [TrexEngine] will wrap this class and
 /// use a virtual thread friendly mutex to ensure that only one thread is calling the algorithm method at a time.
-/// - A [Journal] which must be crash durable storage. The wrapping [TrexEngine] will call {@link Journal#sync()} unless
-/// it has be constructed with `hostManagedTransactions=true`.
-/// - A [QuorumStrategy] which may be a simple majority, in the future FPaxos or UPaxos.
+///
+/// The wrapping [TrexEngine] will call {@link Journal#sync()} unless it has be constructed with `hostManagedTransactions=true`.
+///
 /// This class will mark itself as crashed if it has exceptions due to journal IO errors or if it reads corrupt data.
 /// After it has logged to JUL and stderr it will throw the original Exception if any. After that it will always throw an
 /// AssertionError see {@link #isCrashed()}.
@@ -42,19 +47,26 @@ public class TrexNode {
   /// We log when we win
   private final Level logAtLevel;
 
-  private boolean crashed = false;
-  private boolean stopped = false;
+  /// Is {@link #isCrashed()}
+  volatile private boolean crashed = false;
+
+  /// Is {@link TrexEngine#isClosed()}
+  volatile private boolean closed = false;
 
   /// A node is marked as crashed if:
+  ///
   /// 1. The journal experiences an exception writing to the journal.
   /// 2. Data is read from the journal that violates the protocol invariants.
   /// 3. Explicitly checks of the protocol invariants fail.
-  /// The original exception if any is logged to both JUL and stderr and thrown. If more messages are attempted
-  /// an IllegalStateException is thrown.
-  /// It is expected that the operator must reboot the node. If the journal is corrupt then the
-  /// operator must restore the journal from a backup possibly and allow it to catch up else clone another node and
-  /// change the `nodeIdentifier` in the journal to recreate the node. You might use a kubernetes health check or similar
-  /// to monitor is method and restart the processes if it becomes crashed.
+  ///
+  /// If you set `hostManagedTransactions=true` then you must catch all journal exceptions and call {@link TrexEngine#crash()}.
+  ///
+  /// It is expected that the operator must reboot the node to get back into a clean state. If the journal is corrupt then the
+  /// operator must restore the journal from a backup and allow it to catch up else clone another node and
+  /// change the `nodeIdentifier` in the cloned journal to match the correct nodeIdentifier.
+  ///
+  /// You might use a kubernetes health check or similar to monitor this method and have it automatically restart the
+  /// processes if it becomes crashed.
   @SuppressWarnings("unused")
   public boolean isCrashed() {
     return crashed;
@@ -151,16 +163,18 @@ public class TrexNode {
       /// the thrown issue is sent up to the host application.
       throw e;
     } finally {
-      /// Here we always check the invariants in finally block see {@link #isCrashed()}
-      if (priorProgress != progress && !priorProgress.equals(progress)) {
-        // The general advice is not to throw. In this case the general advice is wrong.
-        // We must throw as we have violated the protocol and that should be seen as fatal.
-        validateProtocolInvariants(input, priorProgress);
-      }
-      if (!commands.isEmpty()) {
-        // The general advice is not to throw. In this case the general advice is wrong.
-        // We must throw if the journal gives us weird commands as that is a fatal error.
-        validateCommandIndexes(input, commands, priorProgress);
+      if (!crashed) {
+        /// Here we always check the invariants in finally block see {@link #isCrashed()}
+        if (priorProgress != progress && !priorProgress.equals(progress)) {
+          // The general advice is not to throw. In this case the general advice is wrong.
+          // We must throw as we have violated the protocol and that should be seen as fatal.
+          validateProtocolInvariants(input, priorProgress);
+        }
+        if (!commands.isEmpty()) {
+          // The general advice is not to throw. In this case the general advice is wrong.
+          // We must throw if the journal gives us weird commands as that is a fatal error.
+          validateCommandIndexes(input, commands, priorProgress);
+        }
       }
     }
     return new TrexResult(messages, commands);
@@ -175,8 +189,8 @@ public class TrexNode {
   private void algorithm(TrexMessage input,
                          List<TrexMessage> messages,
                          TreeMap<Long, AbstractCommand> commands) {
-    if (stopped) {
-      LOGGER.warning("This node has been stopped and will not process any more messages.");
+    if (closed) {
+      LOGGER.warning("This node has been closed so has shutdown and will not process any more messages.");
       return;
     }
     switch (input) {
@@ -362,7 +376,7 @@ public class TrexNode {
   static final String PROTOCOL_VIOLATION_INDEX = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the fixed slot index has decreased.";
   static final String PROTOCOL_VIOLATION_SLOT_FIXING = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the promise has been changed when the message is not a LearningMessage type.";
   static final String CRASHED = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted) is now the only source of truth.";
-  static final String CRASHING = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted)  is now the only source of truth to to throwable: ";
+  static final String CRASHING = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted) is now the only source of truth to to throwable: ";
   static final String COMMAND_INDEXES = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued commands that do not align to its committed slot index: ";
   static final String COMMAND_GAPS = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued commands that are not sequential in commited slot index: ";
 
@@ -608,7 +622,9 @@ public class TrexNode {
   /// The heartbeat method is called by the TrexEngine to send messages to the cluster to stop them
   /// timing out. There may also be dropped messages due to partitions or crashes. So we will also
   /// heartbeat prepare or accept messages that are pending a response.
-  public List<TrexMessage> heartbeat() {
+  ///
+  /// @return A list of messages to send to the cluster. The list is empty if the node is a follower.
+  public List<TrexMessage> createHeartbeatMessages() {
     final var result = new ArrayList<TrexMessage>();
     if (isLeader()) {
       result.add(currentFixedMessage());
@@ -746,11 +762,11 @@ public class TrexNode {
   }
 
   public void close() {
-    this.stopped = true;
+    this.closed = true;
   }
 
   public boolean isClosed() {
-    return stopped;
+    return closed;
   }
 
   /**

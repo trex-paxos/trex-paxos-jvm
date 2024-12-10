@@ -34,7 +34,7 @@ public class TestLockServerTrexEngine extends TrexEngine {
   }
 
   @Override
-  protected void setHeartbeat() {
+  protected void setNextHeartbeat() {
     // no-op
   }
 }

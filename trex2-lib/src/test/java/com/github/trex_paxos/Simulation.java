@@ -15,11 +15,12 @@
  */
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.msg.*;
+import com.github.trex_paxos.msg.BroadcastMessage;
+import com.github.trex_paxos.msg.DirectMessage;
+import com.github.trex_paxos.msg.TrexMessage;
 
 import java.util.*;
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
 import java.util.logging.Logger;
 import java.util.random.RandomGenerator;
 import java.util.random.RandomGeneratorFactory;
@@ -67,77 +68,77 @@ class Simulation {
     final var _ = IntStream.range(0, iterations).anyMatch(iteration -> {
       Optional.ofNullable(eventQueue.pollFirstEntry())
           .ifPresent(timeWithEvents -> {
-        // advance the clock
-        tick(timeWithEvents.getKey());
+            // advance the clock
+            tick(timeWithEvents.getKey());
 
-        LOGGER.info("------------------");
-        LOGGER.info("tick: " + now + "\n\t" + trexEngine1.role() + " " + trexEngine1.trexNode().progress.toString()
-            + "\n\t" + trexEngine2.role() + " " + trexEngine2.trexNode().progress.toString()
-            + "\n\t" + trexEngine3.role() + " " + trexEngine3.trexNode().progress.toString()
-        );
+            LOGGER.info("------------------");
+            LOGGER.info("tick: " + now + "\n\t" + trexEngine1.role() + " " + trexEngine1.trexNode().progress.toString()
+                + "\n\t" + trexEngine2.role() + " " + trexEngine2.trexNode().progress.toString()
+                + "\n\t" + trexEngine3.role() + " " + trexEngine3.trexNode().progress.toString()
+            );
 
-        // grab the events at this time
-        final var events = timeWithEvents.getValue();
+            // grab the events at this time
+            final var events = timeWithEvents.getValue();
 
-        // for what is in the queue of events at this time
-        final List<TrexMessage> newMessages = events.stream().flatMap(event -> {
-          LOGGER.fine(() -> "event: " + event);
-          switch (event) {
-            case Timeout timeout -> {
-              // if it is a timeout collect the prepare messages if the node is still a follower at this time
-              final var prepare = switch (timeout.nodeIdentifier) {
-                case 1 -> trexEngine1.timeout();
-                case 2 -> trexEngine2.timeout();
-                case 3 -> trexEngine3.timeout();
-                default ->
-                    throw new IllegalStateException("Unexpected node identifier for timeout: " + timeout.nodeIdentifier);
-              };
-              return prepare.stream();
+            // for what is in the queue of events at this time
+            final List<TrexMessage> newMessages = events.stream().flatMap(event -> {
+              LOGGER.fine(() -> "event: " + event);
+              switch (event) {
+                case Timeout timeout -> {
+                  // if it is a timeout collect the prepare messages if the node is still a follower at this time
+                  final var prepare = switch (timeout.nodeIdentifier) {
+                    case 1 -> trexEngine1.timeout();
+                    case 2 -> trexEngine2.timeout();
+                    case 3 -> trexEngine3.timeout();
+                    default ->
+                        throw new IllegalStateException("Unexpected node identifier for timeout: " + timeout.nodeIdentifier);
+                  };
+                  return prepare.stream();
+                }
+
+                // if it is a messages that has arrived run paxos
+                case Send send -> {
+                  return networkSimulation(send, now, nemesis);
+                }
+                case Heartbeat heartbeat -> {
+                  // if it is a timeout collect the prepare messages if the node is still a follower at this time
+                  final var fixedWithAccepts = switch (heartbeat.nodeIdentifier) {
+                    case 1 -> trexEngine1.createHeartbeatMessagesAndReschedule();
+                    case 2 -> trexEngine2.createHeartbeatMessagesAndReschedule();
+                    case 3 -> trexEngine3.createHeartbeatMessagesAndReschedule();
+                    default ->
+                        throw new IllegalStateException("Unexpected node identifier for heartbeat: " + heartbeat.nodeIdentifier);
+                  };
+                  return fixedWithAccepts.stream();
+                }
+                case ClientCommand _ -> {
+                  return engines.entrySet().stream()
+                      .flatMap(e -> {
+                        final var commands = IntStream.range(0, 3).mapToObj(i -> {
+                          final var data = now + ":" + e.getKey() + i;
+                          return new Command(data, data.getBytes());
+                        }).toList();
+                        final var engine = e.getValue();
+                        return engine.isLeader() ? engine.nextLeaderBatchOfMessages(commands).stream()
+                            : Stream.empty();
+                      });
+                }
+              }
+            }).toList();
+
+            // the messages arrive in the next time unit
+            if (!newMessages.isEmpty()) {
+              LOGGER.fine(() -> "\tnewMessages:\n\t" + newMessages.stream()
+                  .map(Object::toString)
+                  .collect(Collectors.joining("\n\t")));
+
+              // messages sent in the cluster will arrive after 1 time unit
+              final var nextTime = now + 1;
+              // we add the messages to the event queue at that time
+              final var nextTimeList = this.eventQueue.computeIfAbsent(nextTime, _ -> new ArrayList<>());
+              nextTimeList.add(new Send(newMessages));
             }
-
-            // if it is a messages that has arrived run paxos
-            case Send send -> {
-              return networkSimulation(send, now, nemesis);
-            }
-            case Heartbeat heartbeat -> {
-              // if it is a timeout collect the prepare messages if the node is still a follower at this time
-              final var fixedWithAccepts = switch (heartbeat.nodeIdentifier) {
-                case 1 -> trexEngine1.heartbeat();
-                case 2 -> trexEngine2.heartbeat();
-                case 3 -> trexEngine3.heartbeat();
-                default ->
-                    throw new IllegalStateException("Unexpected node identifier for heartbeat: " + heartbeat.nodeIdentifier);
-              };
-              return fixedWithAccepts.stream();
-            }
-            case ClientCommand _ -> {
-              return engines.entrySet().stream()
-                  .flatMap(e -> {
-                    final var commands = IntStream.range(0, 3).mapToObj(i -> {
-                      final var data = now + ":" + e.getKey() + i;
-                      return new Command(data, data.getBytes());
-                    }).toList();
-                    final var engine = e.getValue();
-                    return engine.isLeader() ? engine.nextLeaderBatchOfMessages(commands).stream()
-                        : Stream.empty();
-                  });
-            }
-          }
-        }).toList();
-
-        // the messages arrive in the next time unit
-        if (!newMessages.isEmpty()) {
-          LOGGER.fine(() -> "\tnewMessages:\n\t" + newMessages.stream()
-              .map(Object::toString)
-              .collect(Collectors.joining("\n\t")));
-
-          // messages sent in the cluster will arrive after 1 time unit
-          final var nextTime = now + 1;
-          // we add the messages to the event queue at that time
-          final var nextTimeList = this.eventQueue.computeIfAbsent(nextTime, _ -> new ArrayList<>());
-          nextTimeList.add(new Send(newMessages));
-        }
-      });
+          });
       // if the event queue is empty we are done
       var finished = this.eventQueue.isEmpty();
       if (finished) {
@@ -347,15 +348,15 @@ class Simulation {
     }
 
     @Override
-    protected void setHeartbeat() {
+    protected void setNextHeartbeat() {
       Simulation.this.setHeartbeat(trexNode.nodeIdentifier());
     }
   }
 
-TestablePaxosEngine makeTrexEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy) {
-  return new SimulationPaxosEngine(nodeIdentifier,
-      quorumStrategy,
-      new TransparentJournal(nodeIdentifier)
-      );
-}
+  TestablePaxosEngine makeTrexEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy) {
+    return new SimulationPaxosEngine(nodeIdentifier,
+        quorumStrategy,
+        new TransparentJournal(nodeIdentifier)
+    );
+  }
 }

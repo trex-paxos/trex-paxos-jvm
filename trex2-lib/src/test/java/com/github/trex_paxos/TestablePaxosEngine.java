@@ -5,7 +5,6 @@ import com.github.trex_paxos.msg.TrexMessage;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
-import java.util.function.Consumer;
 import java.util.logging.Level;
 
 abstract class TestablePaxosEngine extends TrexEngine {
@@ -24,7 +23,8 @@ abstract class TestablePaxosEngine extends TrexEngine {
   ) {
     super(
         new TrexNode(Level.INFO, nodeIdentifier, quorumStrategy, journal),
-        (List<TrexMessage> _)->{}
+        (List<TrexMessage> _) -> {
+        }
     );
     this.journal = journal;
   }
@@ -35,7 +35,7 @@ abstract class TestablePaxosEngine extends TrexEngine {
     }
     LOGGER.finer(() -> trexNode.nodeIdentifier + " <~ " + input);
     final var oldRole = trexNode.getRole();
-    final var result = super.paxosNotThreadSafe(input);
+    final var result = super.paxos(List.of(input));
     final var newRole = trexNode.getRole();
     if (oldRole != newRole) {
       LOGGER.info(() -> "Node has changed role:" + trexNode.nodeIdentifier() + " == " + newRole);

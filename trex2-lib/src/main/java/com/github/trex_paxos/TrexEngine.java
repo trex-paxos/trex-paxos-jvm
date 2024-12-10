@@ -26,26 +26,34 @@ import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 /// The TrexEngine manages the timeout behaviours that surround the core Paxos algorithm.
-/// It also guards the TrexNode to let you shutdown safely by calling close.
-/// Subclasses must implement the timeout and heartbeat methods.
+/// It is closable to use try-with-resources to ensure that the TrexNode is closed properly on exceptions due to bad
+/// data or journal write exceptions.
+/// Subclasses must implement the timeout and heartbeat methods and can choose to do things like use a failure detection library.
 /// The core paxos algorithm is implemented in the TrexNode class that is wrapped by this class.
-/// This method
+/// This creates a clear separation between the core algorithm and the implementation of timeouts and shutdown logic.
 public abstract class TrexEngine implements Closeable {
   static final Logger LOGGER = Logger.getLogger("");
   public static final String THREAD_INTERRUPTED = "TrexEngine was interrupted awaiting the mutex probably to shutdown while under load.";
 
   /// The underlying TrexNode that is the actual Part-time Parliament algorithm implementation guarded by this class.
-  final protected TrexNode trexNode;
+  final TrexNode trexNode;
 
   /// Our engine needs to be able to send out messages. These will go out over the network.
   /// So we model this as a consumer of a list of TrexMessages.
   final protected Consumer<List<TrexMessage>> networkOutboundSockets;
 
+  /// This is the single most dangerous setting in the entire system. It defines if the host application is managing
+  /// transactions. In which case you must catch any exceptions and call {@link #crash()}. You must also not forget
+  /// to actually commit the journal before sending out any messages. You need to be aware that a SQL commit is not
+  /// a guarantee that the data is disk durable. Using five nodes with them spanning three resilience zones seems like
+  /// may or may not be enough. You need to know the specifics of your database and your data lose requirements.
   final public boolean hostManagedTransactions;
 
-  /// Create a new TrexEngine which wraps a TrexNode.
+  /// Create a new TrexEngine which wraps a TrexNode. This constructor assumes that the host application is not managing
+  /// transactions. This is the default and recommended setting. Then {@link Journal#sync()} will be called within {@link #paxos(List)}.
+  /// You must ensure that you supply a Journal where the data is crash durable after each call to {@link Journal#sync()}.
   ///
-  /// @param trexNode               The underlying TrexNode which must be pre-configured with a concrete Journal and QuorumStrategy.
+  /// @param trexNode               The underlying TrexNode which must be pre-configured with a Journal and QuorumStrategy.
   /// @param networkOutboundSockets The consumer of a list of TrexMessages that will be sent out over the network.
   public TrexEngine(TrexNode trexNode,
                     Consumer<List<TrexMessage>> networkOutboundSockets
@@ -55,12 +63,14 @@ public abstract class TrexEngine implements Closeable {
     this.hostManagedTransactions = false;
   }
 
-  /// Create a new TrexEngine which wraps a TrexNode. This constructor allows the host application to manage transactions.
-  /// This is only possible if the journal is within the same transactional store as the host application. If the application
-  /// does not call commit on the underlying database before sending out messages then it is a violation of the Paxos algorithm.
+  /// Create a new TrexEngine which wraps a TrexNode. If `hostManagedTransactions=false` it behaves as described
+  /// in the other constructor {@link #TrexEngine(TrexNode, Consumer)}. If `hostManagedTransactions=true` the
+  /// {@link Journal#sync()} will never be called. You must ensure that you managed the journal transactions such that
+  /// you are satisfied that the data is crash durable before any messages returned by {@link #paxos(List)} are sent out
+  /// to the network.
   ///
-  /// @param trexNode                The underlying TrexNode which must be pre-configured with a concrete Journal and QuorumStrategy.
-  /// @param networkOutboundSockets  The consumer of a list of TrexMessages that will be sent out over the network.
+  /// @param trexNode               The underlying TrexNode which must be pre-configured with a Journal and QuorumStrategy.
+  /// @param networkOutboundSockets The consumer of a list of TrexMessages that will be sent out over the network.
   /// @param hostManagedTransactions If true the host application will manage transactions and the TrexNode will not call {@link Journal#sync()} the journal.
   @SuppressWarnings("unused") // TODO: maybe do a postgres example
   public TrexEngine(TrexNode trexNode,
@@ -71,12 +81,9 @@ public abstract class TrexEngine implements Closeable {
     this.hostManagedTransactions = hostManagedTransactions;
     final var clusterSize = trexNode.clusterSize();
     if (clusterSize < 5 && hostManagedTransactions) {
-      LOGGER.warning(this.getClass().getCanonicalName() + " WARNING A cluster size of less than 5 with host managed " +
-          "transactions implies you might not have any real crash durability. Your cluster size is " + clusterSize + ". " +
-          "Please ensure you know exactly when your chosen Journal data store will make your data disk durable. It is not " +
-          "the case that when you commit a database transaction that the data is disk durable unless you actually change " +
-          "settings that will drastically slow down throughput. This may or may not be a problem based on the specifics " +
-          "of your system application.");
+      LOGGER.warning(this.getClass().getSimpleName() +
+          " WARNING clusterSize==" + clusterSize + " is less than five and hostManagedTransactions=true are you sure " +
+          "any commit on your journal data store or database is truly crash durable?");
     }
   }
 
@@ -91,7 +98,7 @@ public abstract class TrexEngine implements Closeable {
 
   /// This method must schedule a call to the heartbeat method at some point in the future.
   /// The heartbeat should be a fixed period which is less than the minimum of the random timeout minimal value.
-  protected abstract void setHeartbeat();
+  protected abstract void setNextHeartbeat();
 
   /// Create the next accept message for the next selected given command.
   ///
@@ -119,11 +126,20 @@ public abstract class TrexEngine implements Closeable {
   }
 
   /// We want to be friendly to Virtual Threads so we use a semaphore with a single permit to ensure that we only
-  /// process one message at a time. This is recommended over using a synchronized blocks.
+  /// process one message at a time. This is recommended over using a synchronized blocks on JDK 22.`
   private final Semaphore mutex = new Semaphore(1);
 
-  /// The main entry point for the Trex paxos algorithm. This method will recurse without returning when we need to
-  /// send a message to ourselves. As a side effect the TrexNode journal will be updated.
+  /// The main entry point for the Trex paxos algorithm. This method is thread safe and allows only one thread at a
+  /// time. The following may happen:
+  ///
+  /// 1. The message may be ignored when safe to do so (e.g. slot higher than known fixed or late vote when vote has been won or lost).
+  /// 2. As a side effect the {@link Journal} will be updated. See all the warnings in the Journal interface javadoc.
+  /// 3. Internally the {@link TrexNode} will recurse once or twice with the mutex is held when it generates a broadcast message a responses to those messages.
+  ///  to send messages to itself. As that happens while holding a mutex it
+  /// is an instantaneous exchange of messages with one node in the cluster which is itself.
+  ///
+  /// This method will recurse without returning when we need to
+  /// send a message to ourselves.
   ///
   /// This method uses a mutex to allow only one thread to be processing messages at a time.
   ///
@@ -160,28 +176,27 @@ public abstract class TrexEngine implements Closeable {
     }
   }
 
-  /// This method is not public as it is not thread safe. It is called from the public paxos method which is protected
-  /// by a mutex.
-  ///
-  /// This method will run our paxos algorithm ask to reset timeouts and heartbeats as required. Subclasses must provide
-  /// the timeout and heartbeat methods.
-  TrexResult paxosNotThreadSafe(TrexMessage trexMessage) {
+  /// This method is not public as it is not thread safe. It is called from the public paxos method which is guarded
+  /// by a mutex. This method manages the timeout behaviours.
+  private TrexResult paxosNotThreadSafe(TrexMessage trexMessage) {
     if (evidenceOfLeader(trexMessage)) {
-      if (trexNode.getRole() != TrexNode.TrexRole.FOLLOW)
+      if (trexNode.getRole() != TrexNode.TrexRole.FOLLOW) {
         trexNode.abdicate();
+      }
       setRandomTimeout();
     }
 
     final var oldRole = trexNode.getRole();
 
+    // This runs the actual algorithm
     final var result = trexNode.paxos(trexMessage);
 
     final var newRole = trexNode.getRole();
 
     if (trexNode.isLeader()) {
-      setHeartbeat();
+      setNextHeartbeat();
     } else if (trexNode.isRecover()) {
-      setHeartbeat();
+      setNextHeartbeat();
     }
 
     if (oldRole != newRole) {
@@ -213,10 +228,12 @@ public abstract class TrexEngine implements Closeable {
     };
   }
 
+  /// This should start the timeout behaviour.
   public void start() {
     setRandomTimeout();
   }
 
+  /// This is called when the node has timed out so that it can start a leader election and the recover protocol.
   protected Optional<Prepare> timeout() {
     var result = trexNode.timeout();
     if (result.isPresent()) {
@@ -226,10 +243,11 @@ public abstract class TrexEngine implements Closeable {
     return result;
   }
 
-  protected List<TrexMessage> heartbeat() {
-    var result = trexNode.heartbeat();
+  // FIXME this is too hard to understand and test. Try to come up with something less complex.
+  protected List<TrexMessage> createHeartbeatMessagesAndReschedule() {
+    var result = trexNode.createHeartbeatMessages();
     if (!result.isEmpty()) {
-      setHeartbeat();
+      setNextHeartbeat();
       LOGGER.finer(() -> "Heartbeat: " + trexNode.nodeIdentifier() + " " + trexNode.getRole() + " " + result);
     }
     return result;
@@ -243,21 +261,31 @@ public abstract class TrexEngine implements Closeable {
     return trexNode.isLeader();
   }
 
+  /// Please use try-with-resources to ensure that the TrexNode is closed properly on exceptions due to bad data or journal write exceptions.
   @Override
   public void close() {
     LOGGER.warning("Closing TrexEngine. We are marking TrexNode as stopped.");
     trexNode.close();
   }
 
+  /// Ensure you call this method if you are managing transactions if you have any network exceptions including timeouts.
   @SuppressWarnings("unused")
   public void crash() {
     LOGGER.severe("Crashing TrexEngine. We are marking TrexNode as crashed.");
     trexNode.crash();
   }
 
+  /// Useful for monitoring or alerting.
   @SuppressWarnings("unused")
   public boolean isClosed() {
     return trexNode.isClosed();
+  }
+
+  /// Useful for monitoring and alerting. If this returns true then this node is dead and will refuse to do any more work
+  /// you should restart the node to have it read the durable state of the journal to then rejoin the cluster.
+  @SuppressWarnings("unused")
+  public boolean isCrashed() {
+    return trexNode.isCrashed();
   }
 }
 
