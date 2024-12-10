@@ -1,6 +1,5 @@
 package com.github.trex_paxos.advisory_locks;
 
-import com.github.trex_paxos.UUIDGenerator;
 import com.github.trex_paxos.advisory_locks.store.LockStore;
 import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.BeforeAll;
@@ -8,20 +7,17 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class TrexLockLocalTests {
 
-  private static TrexLockClient lockClient;
+  private static TrexLockService lockClient;
 
-  private static class TrexLockClientLocal implements TrexLockClient {
-    private final LockStore store;
-
-    TrexLockClientLocal(LockStore store) {
-      this.store = store;
-    }
+  private record TrexLockServiceLocal(LockStore store) implements TrexLockService {
+    static final AtomicLong stampGen = new AtomicLong(System.currentTimeMillis());
 
     @Override
     public LockHandle tryLock(String id, Duration durationToHoldLock) {
@@ -32,7 +28,9 @@ public class TrexLockLocalTests {
         return null;
       }
 
-      return store.tryAcquireLock(id, UUIDGenerator.generateUUID().getMostSignificantBits(), durationToHoldLock)
+      final var randomStamp = System.currentTimeMillis();
+
+      return store.tryAcquireLock(id, durationToHoldLock, stampGen.incrementAndGet())
           .map(entry -> new LockHandle(entry.lockId(), entry.stamp(), entry.expiryTime()))
           .orElse(null);
     }
@@ -61,7 +59,7 @@ public class TrexLockLocalTests {
   static void setup() {
     MVStore mvStore = MVStore.open(null); // in-memory store
     LockStore lockStore = new LockStore(mvStore);
-    lockClient = new TrexLockClientLocal(lockStore);
+    lockClient = new TrexLockServiceLocal(lockStore);
   }
 
   @Test

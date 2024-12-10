@@ -19,104 +19,93 @@ import com.github.trex_paxos.msg.Accept;
 
 import java.util.Optional;
 
-/// The journal is the storage layer of the Paxos Algorithm.
+/// The journal is the storage layer of the Paxos Algorithm. Journal writes must be crash-proof (disk flush or equivalent).
 ///
-/// You will need to turn messages into bytes and back again. There is a {@link Pickle} class that can help with this.
+/// When an empty node is fist created the journal must have a `NoOperation.NOOP` accept journaled at log index 0.
+/// It must also have the nodes progress saved as `new Progress(noteIdentifier)` which defaults to the minimum ballot number. .
 ///
-/// If you are already using a relational database you can use it to store the state of the journal. Then you can use
-/// a database transaction to commit the work of the fixed commands within the same database transaction that you
-/// persist the `progress` record. In which case use the {@link TrexEngine} constructor
-/// with the `hostManagedTransactions` flag set to true. This will prevent the TrexEngine from calling the `sync()` method.
-/// The host must then commit the underlying journal database transaction after it has applied all the fixed commands
-/// to the application tables. Only then may it sends out any messages.
+/// If you are already using a relational database you can use it to store the state of the journal in two simple tables.
+/// The `progress` table will have one row. The accept table will have a row for each `accept` message.
+///
+/// If you use a store that does not support transactions when the [TrexEngine] will call {@link #sync()} and you must
+/// make the state crash durable in the following order:
+///
+/// 1. All `accept` messages in the log must be made crash durable first.
+/// 2. The `progress` record is made crash durable last.
+///
+/// If you are using a store that supports transactions you can commit your application writes in the same transaction
+/// as the journal writes. SUse the {@link TrexEngine} constructor with the `hostManagedTransactions=true` flag set to true.
+/// This will prevent the TrexEngine from calling the [#sync()] method. You then must commit the database transaction after
+/// *every* call to [TrexEngine#paxos(java.util.List)] and before any messages are transmitted to the network. When that
+/// method return fixed commands you can apply the commands to your database and then commit the transaction. Once again
+/// this must happen before ending any messages to the network.
 ///
 /// It is important to note you should not delete `accept` messages the moment they are up-called into the application.
 /// They should be kept around so that other nodes can request retransmission of missed messages. To
 /// keep the database size under control you can run a cronjob that reads the {@link Progress#highestFixedIndex()}
-/// from all databases. It is then safe to delete all `Accept` messages stored at a lower than the min fixed index seen
-/// within the cluster.
+/// from all databases and take the min value. You can then delete all `accept` messages from all nodes that are at a
+/// lower log slot index.
 ///
-/// You do not have to use a relational database. You can use a kv stores or a document stores. MVStore is the
-/// storage subsystem of H2. It supports transactions and would make a good choice for an embedded journal.
-/// You would have the `sync()` method call `commit()` on the underlying MVStore that is behind two maps. One map would
-/// only contain the progress value. The other navigable map would hold all the `accept` messages keyed by log slot.
-///
-/// If you use a store that does not support transactions when {@link #sync()} is called the state must be made crash
-/// durable in the following order:
-///
-/// 1. All `accept` messages are made crash durable first.
-/// 2. The `progress` record is made crash durable last.
-///
-/// VERY IMPORTANT: The journal must be crash durable. By default `{@link TrexEngine} will the {@link #sync()} method on
-/// the journal which must only return when all state is persisted. Read the javadoc of the {@link #sync()} method which
-/// has health and safety warnings. If you run a five node cluster with a simple majority and nodes distributed across
-/// cloud resistance zones you might except the risks of every forcing the disk on the database to rely upon whatever
-/// the database vendor does.
-///
-/// VERY IMPORTANT: If you get exceptions writing to your database expectantly IOExceptions you do not know if the
-/// data you write is crash durable. If you are running with host managed transactions if you get any database exceptions
-/// you should call {@link TrexEngine#crash()} and then shutdown and restart the node.
-///
-/// When an empty node is fist created the journal must have a `NoOperation.NOOP` accept journaled at log index 0.
-/// It must also have the nodes progress saved as `new Progress(noteIdentifier)`. When a cold cluster is started up the
-/// nodes will time out to and will attempt to prepare the slot 1 which is why it must contain a genesis NOOP. The correct
-/// logic to do this in code is as follows:
-///
-/// ```
-/// // Init a cold start journal to have the first NOOP journaled and the lowest possible promise.
-/// writeProgress(new Progress((byte)nodeId, BallotNumber.MIN, 0));
-/// // It is the value and log index that is important at a cold start the other details are not important as the slot is fixed.
-/// writeAccept(new Accept((byte)nodeId, 0, BallotNumber.MIN, NoOperation.NOOP));
-///```
+/// VERY IMPORTANT: If you get errors where you don't know what the state of the underlying journal has become you should call
+/// [TrexEngine#crash()] and restart the process.
 ///
 /// If you want to clone a node to create a new one you must copy the journal and the application state. Then update
 /// the journal state to have new node identifier in the progress record. This is because the journal is node specific,
 /// and we must not accidentally mix the identity of the node when moving state between physical hosts.
 ///
-/// If you are using a sql database restore to create a new node the SQL might look like 'update progress set node_identifier = ?'
-/// where the node_identifier is the new unique node identifier.
-///
-/// If you are using an embedded btree you could {@link #readProgress(byte)}, modify the progress with java,
-/// then {@link #writeProgress(Progress)}
+/// Read the [#sync()] message for more information on the importance of crash durability.
 public interface Journal {
 
-  /// Save the progress record to durable storage. The {@link #sync()} method must be called before returning any messages
-  /// from any logic that called this method.
+  /// Save the promise and fixed log index into durable storage. If you get errors where you don't know what the state of the underlying
+  /// you must call [TrexEngine#crash()] and restart the process.
   ///
   /// @param progress The highest promised number and the highest fixed slot index for a given node.
   void writeProgress(Progress progress);
 
-  /// Save the accept record to the log. The {@link #sync()} method must be called before returning any messages
-  /// from any logic that called this method.
-  ///
-  /// Logically this is method is storing `accept(S,N,V)` so it needs to store under log key `S` the values `{N,V}`.
-  /// Typically, values are written in sequential `S` order.
-  ///
-  /// @param accept An accept message that has a log index and a value to be stored in the log.
-  void writeAccept(Accept accept);
-
-  /// Load the progress record from durable storage.
+  /// Load the progress record from durable storage. This is usually only done once at startup.
   ///
   /// @param nodeIdentifier The node identifier to load the progress record for. To avoid accidentally loading the wrong
   ///                                                                                                                                                           history when moving nodes between servers we require the node identifier. This is only a safety feature.
   Progress readProgress(byte nodeIdentifier);
 
+  /// Save a value into the log.
+  /// Logically this method is storing `accept(S,N,V)` so it needs to store the values `{N,V}` at log slot `S`
+  /// The `N` is the term number of the leader that generated the message.
+  /// Typically, values are written in sequential `S` order.
+  ///
+  /// @param accept An accept message that is a log index, command value and term number.
+  void writeAccept(Accept accept);
+
   /// Load any accept record from the log. There may be no accept record for the given log index.
-  /// Typically, values are read in sequential `S` order for crash recovery or syncing nodes.
+  /// Typically, values are read once in sequential `S`. During crash recovery or syncing nodes they are reread.
+  ///
+  /// You should not delete any `accept` messages until you know all nodes have a higher [Progress#highestFixedIndex()]
+  /// than the log index of the accept message.
+  ///
+  /// When a slot is learned to be fixed by a `fixed(S,N')` the value is read from the log and  if `N' != N` then
+  /// Retransmission of the correct `accept` will be requested from the leader.
   ///
   /// @param logIndex The log slot to load the accept record for.
+  /// @return The accept record if it exists at the specified log index.
   Optional<Accept> readAccept(long logIndex);
 
-  /// Journal writes must be crash-proof (disk flush or equivalent). If you are using transactional storage you would
-  /// ensure that write of the `progress` and all `accepts` happens automatically. If your storage does not support
-  /// transactions you just first flush any `accept` messages into their slots and only then flush the `progress` record.
+  /// The name of this is inspired by the [libc sync call](https://man7.org/linux/man-pages/man2/sync.2.html).
+  /// In particular the difference between Linux and what POSIX.1-2001 does:
   ///
-  /// If the {@link TrexEngine} is constructed with `hostManagedTransactions` set as `true` this method is not called by `TrexEngine`.
-  /// It is then the responsibility of the host application to ensure that the data is crash durable. The underlying database transactions are
-  /// not necessary crash durable on a database commit with most real world databases. If you are running a five node cluster
-  /// with a simple majority and nodes distributed across cloud availability zones you may know that the data is crash durable
-  /// to at least two nodes dying at the same time before the database flushes to disk. This means you may be conformable
-  /// in disabling any attempt to make data disk durable. This is down to your own risk assessment.
+  /// > According to the standard specification (e.g., POSIX.1-2001),
+  ///        `sync()` schedules the writes, but may return before the actual
+  ///        writing is done.  However Linux waits for I/O completions.
+  ///
+  /// It is not the case that POSIX.1-2001 does not have a hard sync it just that it calls it `fsync`. It is that sort
+  /// of ambiguity that leads to data loss.
+  ///
+  /// You must choose whether you want a full `fsync` or not. You can choose to have a five node cluster with nodes
+  /// spread across three resilient zones. You can tune the background flush interval of your database to hundreds of milliseconds.
+  /// You may convince yourself that data will make it to disk on a majority of nodes without calling fsync. Yet do not
+  /// hide the risks from your users.
+  ///
+  /// See also what [PostgreSQL](https://www.postgresql.org/docs/8.1/runtime-config-wal.html?t) writes about `fsync``
+  /// as a good background read no matter what database or data store you are using.
   void sync();
 
   /// Get the highest log index that has been journaled. This is used to during startup. If you are using a relational

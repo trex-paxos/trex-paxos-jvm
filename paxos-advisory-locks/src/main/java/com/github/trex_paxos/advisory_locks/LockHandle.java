@@ -14,7 +14,7 @@ public record LockHandle(
     /// This means that the number is unique for each lock acquisition and globally consistent across all JVMs.
     long stamp,
     /// Due to clock drift between server hosts and the possibility of GC stalls on the server host it is perilous to rely
-    /// on the exact expiry time of a lock in milliseconds in a distributed system. See {@link TrexLockClient#expireTimeUnsafe()}
+    /// on the exact expiry time of a lock in milliseconds in a distributed system. See {@link TrexLockService#expireTimeUnsafe()}
     /// for an explanation of why. This instance includes an application specific safety gap.
     Instant expireTimeWithSafetyGap
 ) {

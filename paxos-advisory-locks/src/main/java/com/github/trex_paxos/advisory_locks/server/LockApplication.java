@@ -167,7 +167,9 @@ public class LockApplication implements AutoCloseable {
     }
 
     LoggerConfig.initialize();
-    try (LockApplication server = new LockApplication(Integer.parseInt(parser.getOption(SERVER_PORT)), new CommandProcessor())) {
+    try (LockApplication server =
+             new LockApplication(Integer.parseInt(parser.getOption(SERVER_PORT)),
+                 new CommandProcessor())) {
       server.start();
     } catch (IOException e) {
       LOGGER.log(Level.SEVERE, "Could not start server: " + e.getMessage(), e);

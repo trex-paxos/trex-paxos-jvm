@@ -45,7 +45,7 @@ public abstract class TrexEngine implements Closeable {
   /// This is the single most dangerous setting in the entire system. It defines if the host application is managing
   /// transactions. In which case you must catch any exceptions and call {@link #crash()}. You must also not forget
   /// to actually commit the journal before sending out any messages. You need to be aware that a SQL commit is not
-  /// a guarantee that the data is disk durable. Using five nodes with them spanning three resilience zones seems like
+  /// a guarantee that the data is disk durable. Using five nodes with them spanning three resilience zones
   /// may or may not be enough. You need to know the specifics of your database and your data lose requirements.
   final public boolean hostManagedTransactions;
 

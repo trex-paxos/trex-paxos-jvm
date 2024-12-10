@@ -17,7 +17,7 @@ import java.time.Instant;
 /// If we have multiple objects in the same JVM that have the same ID then they are the same logical lock.
 /// You must be careful if you attempt to synchronize on the handle object itself as you may be synchronizing on a
 /// different objects which would be a fatal mistake.
-public interface TrexLockClient {
+public interface TrexLockService {
 
   /// Attempt to acquire the lease for a specific duration of time. This must always make network calls to find
   /// out of some other JVM has just acquired or released the lock.

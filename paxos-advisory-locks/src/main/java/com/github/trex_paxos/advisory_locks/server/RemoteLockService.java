@@ -47,8 +47,8 @@ public class RemoteLockService extends PaxosService<LockServerCommandValue, Lock
       case LockServerCommandValue.TryAcquireLock cmd -> new LockServerReturnValue.TryAcquireLockReturn(
           lockStore.tryAcquireLock(
               cmd.lockId(),
-              slot,
-              cmd.holdDuration()
+              cmd.holdDuration(),
+              slot
           )
       );
 

@@ -1,7 +1,8 @@
 package com.github.trex_paxos.advisory_locks.store;
 
-import org.h2.mvstore.MVStore;
 import org.h2.mvstore.MVMap;
+import org.h2.mvstore.MVStore;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
@@ -15,7 +16,7 @@ public class LockStore {
     this.locks = store.openMap("com.github.trex_paxos.advisory_locks.store#locks");
   }
 
-  public Optional<LockEntry> tryAcquireLock(String lockId, long stamp, Duration holdDuration) {
+  public Optional<LockEntry> tryAcquireLock(String lockId, Duration holdDuration, long stamp) {
     LockEntry existingLock = locks.get(lockId);
     if (existingLock != null && !isExpired(existingLock)) {
       return Optional.empty();
@@ -57,5 +58,6 @@ public class LockStore {
       long stamp,
       Instant expiryTime,
       long acquiredTimeMillis
-  ) {}
+  ) {
+  }
 }
