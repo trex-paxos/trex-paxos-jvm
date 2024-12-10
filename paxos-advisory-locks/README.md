@@ -7,7 +7,7 @@ This codebase:
 * Implements distributed advisory locks (as distributed leases) using the Trex2 Paxos library.
 * Provides only a minimal subset of features compared
   to [The Chubby lock service](https://static.googleusercontent.com/media/research.google.com/en//archive/chubby-osdi06.pdf).
-* Provides a simple server where you run a cluster of where they all keep exactly in sync by using only using the Paxos
+* Provides a simple server where you run a cluster of where they all keep exactly in sync using only the Paxos
   algorithm.
 * Is small enough to be embeddable. You could embed the lock server into your actual application JVMs.
 * Uses the H2 MVStore as the default storage backend to be both the paxos journal and to hold the lease state.
