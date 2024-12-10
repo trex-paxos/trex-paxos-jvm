@@ -1,20 +1,18 @@
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.msg.*;
-import com.github.trex_paxos.advisory_locks.server.LockServerTrexEngine;
+import com.github.trex_paxos.msg.Prepare;
+import com.github.trex_paxos.msg.TrexMessage;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 
-public class TestLockServerTrexEngine extends LockServerTrexEngine {
+public class TestLockServerTrexEngine extends TrexEngine {
 
   public TestLockServerTrexEngine(TrexNode node,
-                                  ScheduledExecutorService scheduler,
                                   Consumer<List<TrexMessage>> networkOutboundSockets
   ) {
-    super(node, scheduler, networkOutboundSockets);
+    super(node, networkOutboundSockets);
   }
 
   public Optional<Prepare> timeoutForTest() {
@@ -23,5 +21,20 @@ public class TestLockServerTrexEngine extends LockServerTrexEngine {
 
   public Progress getProgress() {
     return this.trexNode().progress;
+  }
+
+  @Override
+  protected void setRandomTimeout() {
+    // no-op
+  }
+
+  @Override
+  protected void clearTimeout() {
+    // no-op
+  }
+
+  @Override
+  protected void setHeartbeat() {
+    // no-op
   }
 }

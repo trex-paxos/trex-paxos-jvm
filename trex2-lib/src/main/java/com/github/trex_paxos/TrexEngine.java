@@ -38,7 +38,7 @@ public abstract class TrexEngine {
   /// So we model this as a consumer of a list of TrexMessages.
   final protected Consumer<List<TrexMessage>> networkOutboundSockets;
 
-  protected boolean hostManagedTransactions = false;
+  final public boolean hostManagedTransactions;
 
   /// Create a new TrexEngine which wraps a TrexNode.
   ///
@@ -49,20 +49,22 @@ public abstract class TrexEngine {
   ) {
     this.trexNode = trexNode;
     this.networkOutboundSockets = networkOutboundSockets;
+    this.hostManagedTransactions = false;
   }
 
   /// Create a new TrexEngine which wraps a TrexNode. This constructor allows the host application to manage transactions.
   /// This is only possible if the journal is within the same transactional store as the host application. If the application
   /// does not call commit on the underlying database before sending out messages then it is a violation of the Paxos algorithm.
   ///
-  /// @param trexNode               The underlying TrexNode which must be pre-configured with a concrete Journal and QuorumStrategy.
-  /// @param networkOutboundSockets The consumer of a list of TrexMessages that will be sent out over the network.
+  /// @param trexNode                The underlying TrexNode which must be pre-configured with a concrete Journal and QuorumStrategy.
+  /// @param networkOutboundSockets  The consumer of a list of TrexMessages that will be sent out over the network.
   /// @param hostManagedTransactions If true the host application will manage transactions and the TrexNode will not call {@link Journal#sync()} the journal.
   @SuppressWarnings("unused") // TODO: maybe do a postgres example
   public TrexEngine(TrexNode trexNode,
                     Consumer<List<TrexMessage>> networkOutboundSockets,
                     boolean hostManagedTransactions) {
-    this(trexNode, networkOutboundSockets);
+    this.trexNode = trexNode;
+    this.networkOutboundSockets = networkOutboundSockets;
     this.hostManagedTransactions = hostManagedTransactions;
   }
 
@@ -80,6 +82,7 @@ public abstract class TrexEngine {
   protected abstract void setHeartbeat();
 
   /// Create the next accept message for the next selected given command.
+  ///
   /// @param command The command to create the next accept message for.
   /// @return The next accept message.
   private TrexMessage command(Command command) {
@@ -96,11 +99,11 @@ public abstract class TrexEngine {
   /// Create the next leader batch of messages for the given set of commands. This should be called by the host application
   /// when {@link #isLeader()} is true.
   public List<TrexMessage> nextLeaderBatchOfMessages(List<Command> command) {
-      /// toList is immutable so we concat streams first.
-      return Stream.concat(
-          command.stream().map(this::command),
-          Stream.of(trexNode.currentFixedMessage())
-      ).toList();
+    /// toList is immutable so we concat streams first.
+    return Stream.concat(
+        command.stream().map(this::command),
+        Stream.of(trexNode.currentFixedMessage())
+    ).toList();
   }
 
   /// We want to be friendly to Virtual Threads so we use a semaphore with a single permit to ensure that we only
@@ -126,7 +129,7 @@ public abstract class TrexEngine {
             .toList();
         // if the journal is within the same transactional store as the host application and the host application is
         // managing transactions then the host application must call commit on the journal before we send out any messages.
-        if(!hostManagedTransactions){
+        if (!hostManagedTransactions) {
           // we must sync the journal before we send out any messages.
           trexNode.journal.sync();
         }
@@ -189,7 +192,7 @@ public abstract class TrexEngine {
       case AcceptResponse acceptResponse -> trexNode.isLeader()
           && acceptResponse.from() != trexNode.nodeIdentifier()
           && acceptResponse.highestFixedIndex() > trexNode.highestFixed();
-      
+
       default -> false;
     };
   }

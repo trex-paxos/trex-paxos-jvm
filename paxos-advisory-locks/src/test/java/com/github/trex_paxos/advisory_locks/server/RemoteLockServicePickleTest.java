@@ -2,13 +2,14 @@ package com.github.trex_paxos.advisory_locks.server;
 
 import com.github.trex_paxos.advisory_locks.store.LockStore;
 import org.junit.jupiter.api.Test;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class LockServerPickleTest {
+class RemoteLockServicePickleTest {
 
   @Test
   void shouldPickleAndUnpickleTryAcquireLock() {

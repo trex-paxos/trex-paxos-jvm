@@ -30,7 +30,8 @@ import java.util.concurrent.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class PaxosLockServer implements AutoCloseable {
+/// TODO the names is a little odd. The `LockSever` logic will likely move to the core package and take a callback form this class.
+public class LockApplication implements AutoCloseable {
   private static final String HELP = "help";
   private static final String SERVER_PORT = "server-port";
   private final ServerSocket serverSocket;
@@ -38,9 +39,9 @@ public class PaxosLockServer implements AutoCloseable {
   private final ExecutorService virtualThreadExecutor;
   private volatile boolean running = true;
   private static final int BUFFER_SIZE = 8192;
-  private static final Logger LOGGER = Logger.getLogger(PaxosLockServer.class.getName());
+  private static final Logger LOGGER = Logger.getLogger(LockApplication.class.getName());
 
-  public PaxosLockServer(int port, CommandProcessor processor) throws IOException {
+  public LockApplication(int port, CommandProcessor processor) throws IOException {
     this.serverSocket = new ServerSocket(port);
     this.processor = processor;
     this.virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
@@ -166,7 +167,7 @@ public class PaxosLockServer implements AutoCloseable {
     }
 
     LoggerConfig.initialize();
-    try (PaxosLockServer server = new PaxosLockServer(Integer.parseInt(parser.getOption(SERVER_PORT)), new CommandProcessor())) {
+    try (LockApplication server = new LockApplication(Integer.parseInt(parser.getOption(SERVER_PORT)), new CommandProcessor())) {
       server.start();
     } catch (IOException e) {
       LOGGER.log(Level.SEVERE, "Could not start server: " + e.getMessage(), e);
@@ -174,7 +175,7 @@ public class PaxosLockServer implements AutoCloseable {
   }
 
   private static void printHelp() {
-    System.out.println("Usage: java " + PaxosLockServer.class.getName() + " [options]");
+    System.out.println("Usage: java " + LockApplication.class.getName() + " [options]");
     System.out.println("  --" + SERVER_PORT + "=9999    Server TCP Port to listen on");
     System.out.println("  -h, --help        Show this help message");
   }

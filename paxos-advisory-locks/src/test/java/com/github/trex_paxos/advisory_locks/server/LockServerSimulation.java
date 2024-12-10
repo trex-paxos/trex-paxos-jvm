@@ -1,8 +1,11 @@
 package com.github.trex_paxos.advisory_locks.server;
 
 import com.github.trex_paxos.*;
-import com.github.trex_paxos.msg.*;
 import com.github.trex_paxos.advisory_locks.store.LockStore;
+import com.github.trex_paxos.msg.Accept;
+import com.github.trex_paxos.msg.BroadcastMessage;
+import com.github.trex_paxos.msg.DirectMessage;
+import com.github.trex_paxos.msg.TrexMessage;
 import org.h2.mvstore.MVStore;
 
 import java.util.ArrayList;
@@ -15,20 +18,19 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class LockServerSimulation
-    implements Consumer<List<TrexMessage>>
-{
+    implements Consumer<List<TrexMessage>> {
   private static final Logger LOGGER = Logger.getLogger(LockServerSimulation.class.getName());
 
   private final Map<Byte, TestLockServerTrexEngine> engines = new HashMap<>();
-  private final Map<Byte, LockServer> servers = new HashMap<>();
+  private final Map<Byte, RemoteLockService> servers = new HashMap<>();
 
   public LockServerSimulation(MVStore store, ScheduledExecutorService scheduler) {
     // Setup two nodes
-    setupNode((byte)1, store, scheduler);
-    setupNode((byte)2, store, scheduler);
+    setupNode((byte) 1, store, scheduler);
+    setupNode((byte) 2, store, scheduler);
   }
 
-  public LockServer getServer(byte b) {
+  public RemoteLockService getServer(byte b) {
     return servers.get(b);
   }
 
@@ -43,12 +45,11 @@ public class LockServerSimulation
     TrexNode node = new TrexNode(Level.INFO, nodeId, new SimpleMajority(2), journal);
     TestLockServerTrexEngine engine = new TestLockServerTrexEngine(
         node,
-        scheduler,
         this
     );
-    LockServer lockServer = new LockServer(lockStore, engine, this);
+    RemoteLockService remoteLockService = new RemoteLockService(lockStore, engine, this);
     engines.put(nodeId, engine);
-    servers.put(nodeId, lockServer);
+    servers.put(nodeId, remoteLockService);
   }
 
   public void deliverMessages(List<TrexMessage> messages) {
@@ -60,8 +61,8 @@ public class LockServerSimulation
         var outboundMessages = e.paxosThenUpCall(List.of(dm));
         newMessages.addAll(outboundMessages);
       } else if (msg instanceof BroadcastMessage bm) {
-        for (LockServer engine : servers.values()) {
-          if( engine.nodeId() == bm.from() ) {
+        for (RemoteLockService engine : servers.values()) {
+          if (engine.nodeId() == bm.from()) {
             continue;
           }
           LOGGER.info("Delivering broadcast message: " + bm + " to node " + engine.nodeId());

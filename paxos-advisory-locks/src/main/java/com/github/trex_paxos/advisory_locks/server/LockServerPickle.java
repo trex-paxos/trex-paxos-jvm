@@ -12,11 +12,12 @@ import java.util.logging.Logger;
 public class LockServerPickle {
 
   private static final Logger LOGGER = java.util.logging.Logger.getLogger(LockServerPickle.class.getName());
+
   public static byte[] pickle(LockServerCommandValue value) {
     try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
          DataOutputStream dos = new DataOutputStream(baos)) {
 
-      switch(value) {
+      switch (value) {
         case LockServerCommandValue.TryAcquireLock cmd -> {
           dos.writeByte(0);
           dos.writeUTF(cmd.lockId());
@@ -43,7 +44,7 @@ public class LockServerPickle {
     try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
          DataInputStream dis = new DataInputStream(bais)) {
 
-      return switch(dis.readByte()) {
+      return switch (dis.readByte()) {
         case 0 -> new LockServerCommandValue.TryAcquireLock(
             dis.readUTF(),
             Duration.ofMillis(dis.readLong())
@@ -58,7 +59,7 @@ public class LockServerPickle {
         default -> throw new IOException("Unknown command type");
       };
     } catch (IOException e) {
-      LOGGER.log(Level.SEVERE, "Exception unpickling command: " + e.getMessage(), e);
+      LOGGER.log(Level.SEVERE, "Exception unpicking command: " + e.getMessage(), e);
       throw new UncheckedIOException(e);
     }
   }
@@ -67,7 +68,7 @@ public class LockServerPickle {
     try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
          DataOutputStream dos = new DataOutputStream(baos)) {
 
-      switch(value) {
+      switch (value) {
         case LockServerReturnValue.TryAcquireLockReturn ret -> {
           dos.writeByte(0);
           writeOptionalLockEntry(dos, ret.result());
@@ -92,7 +93,7 @@ public class LockServerPickle {
     try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
          DataInputStream dis = new DataInputStream(bais)) {
 
-      return switch(dis.readByte()) {
+      return switch (dis.readByte()) {
         case 0 -> new LockServerReturnValue.TryAcquireLockReturn(
             readOptionalLockEntry(dis)
         );
@@ -109,6 +110,7 @@ public class LockServerPickle {
     }
   }
 
+  @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   private static void writeOptionalLockEntry(DataOutputStream dos, Optional<LockStore.LockEntry> entry) throws IOException {
     dos.writeBoolean(entry.isPresent());
     if (entry.isPresent()) {

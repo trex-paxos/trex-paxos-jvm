@@ -17,8 +17,8 @@ import java.util.logging.Logger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-class TrexLockServerTests {
-  private static final Logger LOGGER = Logger.getLogger(TrexLockServerTests.class.getName());
+class TrexRemoteLockServiceTests {
+  private static final Logger LOGGER = Logger.getLogger(TrexRemoteLockServiceTests.class.getName());
 
   private MVStore store;
   private LockServerSimulation simulation;
@@ -41,11 +41,12 @@ class TrexLockServerTests {
   @Test
   void shouldAcquireLockWithTwoNodes() {
     // Given: Two-node simulation setup
-    var cmd = new LockServerCommandValue.TryAcquireLock("test-lock",  Duration.ofSeconds(30));
+    var cmd = new LockServerCommandValue.TryAcquireLock("test-lock", Duration.ofSeconds(30));
+
+    CompletableFuture<LockServerReturnValue> future = new CompletableFuture<>();
 
     // When: Process command on leader node
-    CompletableFuture<LockServerReturnValue> future =
-        simulation.getServer((byte) 1).processCommand(cmd);
+    simulation.getServer((byte) 1).processCommand(cmd, future);
 
     // Then: Verify result and consistency across nodes
     LockServerReturnValue result = future.join();
