@@ -43,6 +43,7 @@ public class TrexNode {
   private final Level logAtLevel;
 
   private boolean crashed = false;
+  private boolean stopped = false;
 
   /// A node is marked as crashed if:
   /// 1. The journal experiences an exception writing to the journal.
@@ -164,6 +165,7 @@ public class TrexNode {
     }
     return new TrexResult(messages, commands);
   }
+
   /// This is the main Paxos Algorithm. It is not public as it is wrapped in guards that check the invariants and
   /// ensure that the node is stopped if it is in unknown state of if the invariants were violated.
   ///
@@ -173,6 +175,10 @@ public class TrexNode {
   private void algorithm(TrexMessage input,
                          List<TrexMessage> messages,
                          TreeMap<Long, AbstractCommand> commands) {
+    if (stopped) {
+      LOGGER.warning("This node has been stopped and will not process any more messages.");
+      return;
+    }
     switch (input) {
       case Accept accept -> {
         final var number = accept.slotTerm().number();
@@ -337,8 +343,8 @@ public class TrexNode {
             .forEach(accept -> {
               journal.writeAccept(accept);
               progress = progress.withHighestFixed(accept.slot());
-            fixed(accept, commands);
-          });
+              fixed(accept, commands);
+            });
 
         if (progress != priorProgress) {
           journal.writeProgress(progress);
@@ -724,6 +730,27 @@ public class TrexNode {
         });
       }
     }
+  }
+
+  public int clusterSize() {
+    return quorumStrategy.clusterSize();
+  }
+
+  /// This node must no longer run as it is an unknown state due to an exception. You must set this to step any more
+  /// commands getting picked and sent to clients. If you are running host managed transactions then you should call
+  /// this if you ever get any exceptions you do not recover your state from the data store. `TrexEngine` will call this
+  /// when it has a thread interrupted which is assumes is due to the whole application shutting down.
+  public void crash() {
+    LOGGER.severe("We are marked as crashed which is fine during a shutdown of the cluster but a serious issue if not expected.");
+    this.crashed = true;
+  }
+
+  public void close() {
+    this.stopped = true;
+  }
+
+  public boolean isClosed() {
+    return stopped;
   }
 
   /**

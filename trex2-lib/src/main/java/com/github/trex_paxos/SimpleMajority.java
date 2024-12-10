@@ -30,7 +30,7 @@ public class SimpleMajority implements QuorumStrategy {
   final int quorum;
 
   public SimpleMajority(int clusterSize) {
-    if( clusterSize < 2 ) {
+    if (clusterSize < 2) {
       throw new IllegalArgumentException("clusterSize must be at least 2");
     }
     this.clusterSize = clusterSize;
@@ -55,5 +55,10 @@ public class SimpleMajority implements QuorumStrategy {
   @Override
   public QuorumOutcome assessAccepts(long logIndex, Set<AcceptResponse.Vote> accepts) {
     return simple(accepts.stream().map(AcceptResponse.Vote::vote).collect(Collectors.toList()));
+  }
+
+  @Override
+  public int clusterSize() {
+    return this.clusterSize;
   }
 }

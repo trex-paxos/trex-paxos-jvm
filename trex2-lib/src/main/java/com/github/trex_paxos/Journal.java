@@ -36,9 +36,6 @@ import java.util.Optional;
 /// from all databases. It is then safe to delete all `Accept` messages stored at a lower than the min fixed index seen
 /// within the cluster.
 ///
-/// Many databases suggest that if you have very large values you should store them in an external store and only store
-/// the reference in the database.
-///
 /// You do not have to use a relational database. You can use a kv stores or a document stores. MVStore is the
 /// storage subsystem of H2. It supports transactions and would make a good choice for an embedded journal.
 /// You would have the `sync()` method call `commit()` on the underlying MVStore that is behind two maps. One map would
@@ -51,7 +48,14 @@ import java.util.Optional;
 /// 2. The `progress` record is made crash durable last.
 ///
 /// VERY IMPORTANT: The journal must be crash durable. By default `{@link TrexEngine} will the {@link #sync()} method on
-/// the journal which must only return when all state is persisted.
+/// the journal which must only return when all state is persisted. Read the javadoc of the {@link #sync()} method which
+/// has health and safety warnings. If you run a five node cluster with a simple majority and nodes distributed across
+/// cloud resistance zones you might except the risks of every forcing the disk on the database to rely upon whatever
+/// the database vendor does.
+///
+/// VERY IMPORTANT: If you get exceptions writing to your database expectantly IOExceptions you do not know if the
+/// data you write is crash durable. If you are running with host managed transactions if you get any database exceptions
+/// you should call {@link TrexEngine#crash()} and then shutdown and restart the node.
 ///
 /// When an empty node is fist created the journal must have a `NoOperation.NOOP` accept journaled at log index 0.
 /// It must also have the nodes progress saved as `new Progress(noteIdentifier)`. When a cold cluster is started up the
@@ -60,10 +64,10 @@ import java.util.Optional;
 ///
 /// ```
 /// // Init a cold start journal to have the first NOOP journaled and the lowest possible promise.
-/// writeProgress(new Progress( (byte)nodeId, BallotNumber.MIN, 0));
+/// writeProgress(new Progress((byte)nodeId, BallotNumber.MIN, 0));
 /// // It is the value and log index that is important at a cold start the other details are not important as the slot is fixed.
 /// writeAccept(new Accept((byte)nodeId, 0, BallotNumber.MIN, NoOperation.NOOP));
-/// ```
+///```
 ///
 /// If you want to clone a node to create a new one you must copy the journal and the application state. Then update
 /// the journal state to have new node identifier in the progress record. This is because the journal is node specific,
@@ -107,10 +111,12 @@ public interface Journal {
   /// ensure that write of the `progress` and all `accepts` happens automatically. If your storage does not support
   /// transactions you just first flush any `accept` messages into their slots and only then flush the `progress` record.
   ///
-  /// If the {@link TrexEngine} is constructed with `hostManagedTransactions` set to true this method is never called.
-  /// It is then the responsibility of the host application to ensure that the underlying database transactions are
-  /// committed before any messages are sent out. Sending out the messages before the database transaction is committed
-  /// is a violation of the Paxos Algorithm.
+  /// If the {@link TrexEngine} is constructed with `hostManagedTransactions` set as `true` this method is not called by `TrexEngine`.
+  /// It is then the responsibility of the host application to ensure that the data is crash durable. The underlying database transactions are
+  /// not necessary crash durable on a database commit with most real world databases. If you are running a five node cluster
+  /// with a simple majority and nodes distributed across cloud availability zones you may know that the data is crash durable
+  /// to at least two nodes dying at the same time before the database flushes to disk. This means you may be conformable
+  /// in disabling any attempt to make data disk durable. This is down to your own risk assessment.
   void sync();
 
   /// Get the highest log index that has been journaled. This is used to during startup. If you are using a relational

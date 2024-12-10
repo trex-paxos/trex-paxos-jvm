@@ -17,6 +17,7 @@ package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.*;
 
+import java.io.Closeable;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
@@ -25,11 +26,13 @@ import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 /// The TrexEngine manages the timeout behaviours that surround the core Paxos algorithm.
+/// It also guards the TrexNode to let you shutdown safely by calling close.
 /// Subclasses must implement the timeout and heartbeat methods.
 /// The core paxos algorithm is implemented in the TrexNode class that is wrapped by this class.
 /// This method
-public abstract class TrexEngine {
+public abstract class TrexEngine implements Closeable {
   static final Logger LOGGER = Logger.getLogger("");
+  public static final String THREAD_INTERRUPTED = "TrexEngine was interrupted awaiting the mutex probably to shutdown while under load.";
 
   /// The underlying TrexNode that is the actual Part-time Parliament algorithm implementation guarded by this class.
   final protected TrexNode trexNode;
@@ -66,6 +69,15 @@ public abstract class TrexEngine {
     this.trexNode = trexNode;
     this.networkOutboundSockets = networkOutboundSockets;
     this.hostManagedTransactions = hostManagedTransactions;
+    final var clusterSize = trexNode.clusterSize();
+    if (clusterSize < 5 && hostManagedTransactions) {
+      LOGGER.warning(this.getClass().getCanonicalName() + " WARNING A cluster size of less than 5 with host managed " +
+          "transactions implies you might not have any real crash durability. Your cluster size is " + clusterSize + ". " +
+          "Please ensure you know exactly when your chosen Journal data store will make your data disk durable. It is not " +
+          "the case that when you commit a database transaction that the data is disk durable unless you actually change " +
+          "settings that will drastically slow down throughput. This may or may not be a problem based on the specifics " +
+          "of your system application.");
+    }
   }
 
   /// This method must schedule a call to the timeout method at some point in the future.
@@ -129,6 +141,7 @@ public abstract class TrexEngine {
             .toList();
         // if the journal is within the same transactional store as the host application and the host application is
         // managing transactions then the host application must call commit on the journal before we send out any messages.
+        // see the java doc on Journal.sync for more details.
         if (!hostManagedTransactions) {
           // we must sync the journal before we send out any messages.
           trexNode.journal.sync();
@@ -139,8 +152,11 @@ public abstract class TrexEngine {
         mutex.release();
       }
     } catch (InterruptedException e) {
+      // This is likely going to happen when we are shutting down the system. So we do not treat outs
       Thread.currentThread().interrupt();
-      throw new RuntimeException("TrexEngine was interrupted awaiting the mutex probably to shutdown while under load.", e);
+      LOGGER.warning(THREAD_INTERRUPTED);
+      trexNode.crash();
+      return TrexResult.noResult();
     }
   }
 
@@ -225,6 +241,23 @@ public abstract class TrexEngine {
 
   public boolean isLeader() {
     return trexNode.isLeader();
+  }
+
+  @Override
+  public void close() {
+    LOGGER.warning("Closing TrexEngine. We are marking TrexNode as stopped.");
+    trexNode.close();
+  }
+
+  @SuppressWarnings("unused")
+  public void crash() {
+    LOGGER.severe("Crashing TrexEngine. We are marking TrexNode as crashed.");
+    trexNode.crash();
+  }
+
+  @SuppressWarnings("unused")
+  public boolean isClosed() {
+    return trexNode.isClosed();
   }
 }
 
