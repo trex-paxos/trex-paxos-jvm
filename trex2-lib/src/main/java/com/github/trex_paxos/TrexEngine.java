@@ -17,7 +17,6 @@ package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.*;
 
-import java.io.Closeable;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
@@ -31,7 +30,7 @@ import java.util.stream.Stream;
 /// Subclasses must implement the timeout and heartbeat methods and can choose to do things like use a failure detection library.
 /// The core paxos algorithm is implemented in the TrexNode class that is wrapped by this class.
 /// This creates a clear separation between the core algorithm and the implementation of timeouts and shutdown logic.
-public abstract class TrexEngine implements Closeable {
+public abstract class TrexEngine implements AutoCloseable {
   static final Logger LOGGER = Logger.getLogger("");
   public static final String THREAD_INTERRUPTED = "TrexEngine was interrupted awaiting the mutex probably to shutdown while under load.";
 

@@ -28,8 +28,6 @@ public class TrexLockLocalTests {
         return null;
       }
 
-      final var randomStamp = System.currentTimeMillis();
-
       return store.tryAcquireLock(id, durationToHoldLock, stampGen.incrementAndGet())
           .map(entry -> new LockHandle(entry.lockId(), entry.stamp(), entry.expiryTime()))
           .orElse(null);
@@ -89,7 +87,7 @@ public class TrexLockLocalTests {
   @Test
   void shouldFailToAcquireLockedResource() {
     String lockId = "resource-3";
-    Duration holdDuration = Duration.ofSeconds(30);
+    Duration holdDuration = Duration.ofDays(1);
 
     LockHandle firstHandle = lockClient.tryLock(lockId, holdDuration);
     LockHandle secondHandle = lockClient.tryLock(lockId, holdDuration);
