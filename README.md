@@ -4,7 +4,7 @@
 
 This repository contains a Java library that implements the Paxos algorithm as described in Leslie Lamport's 2001
 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf).
-It aims to be rigorous in terms of safety preferring to mark a noe as crashed rather than ignoring any possible safety
+It aims to be rigorous in terms of safety preferring to mark a node as crashed rather than ignoring any possible safety
 violation.
 It aims to be both a library to run Paxos where you write almost everything from scratch except the algorithm itself.
 At the same time it aims to be a toolkit to help you to not have to write much code at all to run a cluster of nodes
