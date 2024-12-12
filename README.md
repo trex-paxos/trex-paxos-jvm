@@ -5,11 +5,9 @@
 This repository contains a Java library that implements the Paxos algorithm as described in Leslie Lamport's 2001
 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf).
 It aims to be rigorous in terms of safety preferring to mark a node as crashed rather than ignoring any possible safety
-violation.
-It aims to be both a library to run Paxos where you write almost everything from scratch except the algorithm itself.
-At the same time it aims to be a toolkit to help you to not have to write much code at all to run a cluster of nodes
-that
-replicate a log of commands.
+violation. 
+
+This library aims to be a toolkit to help you to not have to write much code at all to run a cluster of nodes that replicate a log of commands. Yet it will be modular in nature so that you can assemble your own custom solution that only uses the core protocol messages and the code algorithm logic. 
 
 To use this library:
 
@@ -24,12 +22,10 @@ At this the time:
 1. There are exhaustive brute force tests that the algorithm is never violated.
 2. There are runtime checks that the algorithm is never violated.
 3. The library will mark itself as crashed if it spots problems.
-4. There are junit tests that simulate randomized rolling network partitions 1,000 times and check for correctness.
-5. There is not yet a full example of how to build something concrete out of this library.
-6. There is the beginning of a demo application which is an Advisory Lock Service.
+4. There are junit tests that simulate randomized rolling network partitions 1,000 times and verifies nodes stay in sync. 
+5. There is not yet a full example of nodes communcating over network sockets.
 
-The library is therefore at the stage where the bold and brave could it where someone has a lot of knowledge about
-crash safety and distributed systems.
+The library is therefore at the stage where the bold and brave could try it out. 
 
 ### Introduction
 
