@@ -15,7 +15,10 @@
  */
 package com.github.trex_paxos;
 
-/// There are two types of commands. The NOOP which is used to speed up recovery and normal commands sent by clients of
-/// the host application
+/// There are two primary types of commands. The NOOP which is used to speed up recovery and normal commands sent by clients of
+/// the host application.
+///
+/// At a future date we are likely to add some cluster reconfiguration commands. These will be used to add and remove
+/// nodes from the cluster or to change voting weights.
 public sealed interface AbstractCommand permits NoOperation, Command {
 }

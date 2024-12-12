@@ -142,4 +142,12 @@ public abstract class PaxosService<CMD, RESULT>
   protected RESULT commandFixed(Long slot, CMD fixedCommandValue) {
     return this.apply(slot, fixedCommandValue);
   }
+
+  /// This method may be called to get the current role of the node. During a network partition there may be
+  /// two or more nodes that have role `LEAD`. Which is why this method returns an estimated role as you cannot
+  /// actually know which node is the true leader without running the Paxos algorithm over a value.
+  @SuppressWarnings("unused")
+  public TrexNode.TrexRole getEstimatedRole() {
+    return engine.getRole();
+  }
 }
