@@ -17,12 +17,12 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class LockServerSimulation
-    implements Consumer<List<TrexMessage>> {
+public class LockServerSimulation {
   private static final Logger LOGGER = Logger.getLogger(LockServerSimulation.class.getName());
 
-  private final Map<Byte, TestLockServerTrexEngine> engines = new HashMap<>();
+  private final Map<Byte, TestTrexEngine> engines = new HashMap<>();
   private final Map<Byte, RemoteLockService> servers = new HashMap<>();
+  private final Map<Byte, LockStore> lockStores = new HashMap<>();
 
   public LockServerSimulation(MVStore store, ScheduledExecutorService scheduler) {
     // Setup two nodes
@@ -34,6 +34,11 @@ public class LockServerSimulation
     return servers.get(b);
   }
 
+  public LockStore getStore(byte b) {
+    return lockStores.get(b);
+  }
+
+
   private void setupNode(byte nodeId, MVStore store, ScheduledExecutorService scheduler) {
     Journal journal = new MVStoreJournal(store) {{
       writeProgress(new Progress(nodeId, BallotNumber.MIN, 0));
@@ -42,12 +47,12 @@ public class LockServerSimulation
 
 
     LockStore lockStore = new LockStore(store);
+    lockStores.put(nodeId, lockStore);
     TrexNode node = new TrexNode(Level.INFO, nodeId, new SimpleMajority(2), journal);
-    TestLockServerTrexEngine engine = new TestLockServerTrexEngine(
-        node,
-        this
+    TestTrexEngine engine = new TestTrexEngine(
+        node
     );
-    RemoteLockService remoteLockService = new RemoteLockService(lockStore, engine, this);
+    RemoteLockService remoteLockService = new RemoteLockService(lockStore, engine, this::deliverMessages);
     engines.put(nodeId, engine);
     servers.put(nodeId, remoteLockService);
   }
@@ -56,17 +61,17 @@ public class LockServerSimulation
     List<TrexMessage> newMessages = new ArrayList<>();
     for (TrexMessage msg : messages) {
       if (msg instanceof DirectMessage dm) {
-        final var e = servers.get(dm.to());
-        LOGGER.info("Delivering direct message: " + dm + " to node " + e.nodeId());
-        var outboundMessages = e.paxosThenUpCall(List.of(dm));
+        final var server = servers.get(dm.to());
+        LOGGER.info("Delivering direct message: " + dm + " to node " + server.nodeId());
+        var outboundMessages = server.paxosThenUpCall(List.of(dm));
         newMessages.addAll(outboundMessages);
       } else if (msg instanceof BroadcastMessage bm) {
-        for (RemoteLockService engine : servers.values()) {
-          if (engine.nodeId() == bm.from()) {
+        for (RemoteLockService server : servers.values()) {
+          if (server.nodeId() == bm.from()) {
             continue;
           }
-          LOGGER.info("Delivering broadcast message: " + bm + " to node " + engine.nodeId());
-          var outboundMessages = engine.paxosThenUpCall(List.of(bm));
+          LOGGER.info("Delivering broadcast message: " + bm + " to node " + server.nodeId());
+          var outboundMessages = server.paxosThenUpCall(List.of(bm));
           newMessages.addAll(outboundMessages);
         }
       }
@@ -76,12 +81,7 @@ public class LockServerSimulation
     }
   }
 
-  public TestLockServerTrexEngine getEngine(byte nodeId) {
+  public TestTrexEngine getEngine(byte nodeId) {
     return engines.get(nodeId);
-  }
-
-  @Override
-  public void accept(List<TrexMessage> messages) {
-    deliverMessages(messages);
   }
 }

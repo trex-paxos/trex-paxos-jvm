@@ -14,5 +14,9 @@
   "java.debug.settings.onBuildFailureProceed": true,
   "java.test.config": {
     "vmArgs": []
-  }
+  },
+  "files.watcherExclude": {
+    "**/target": true
+  },
+  "maven.view": "hierarchical"
 }

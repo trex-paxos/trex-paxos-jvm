@@ -1,6 +1,6 @@
 package com.github.trex_paxos.advisory_locks.server;
 
-import com.github.trex_paxos.TestLockServerTrexEngine;
+import com.github.trex_paxos.TestTrexEngine;
 import com.github.trex_paxos.advisory_locks.store.LockStore;
 import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,7 +31,7 @@ class TrexRemoteLockServiceTests {
     simulation = new LockServerSimulation(store, scheduler);
 
     // Make node 1 the leader
-    TestLockServerTrexEngine engine1 = simulation.getEngine((byte) 1);
+    final var engine1 = simulation.getEngine((byte) 1);
     var prepareResult = engine1.timeoutForTest();
     prepareResult.ifPresent(msg -> simulation.deliverMessages(List.of(msg)));
 
@@ -60,11 +60,11 @@ class TrexRemoteLockServiceTests {
     assertThat(simulation.getEngine((byte) 1).getProgress().highestFixedIndex()).isEqualTo(2);
     assertThat(simulation.getEngine((byte) 2).getProgress().highestFixedIndex()).isEqualTo(2);
 
-    Optional<LockStore.LockEntry> node1OptionalLock = simulation.getServer((byte) 1).getLockStore().getLock("test-lock");
+    Optional<LockStore.LockEntry> node1OptionalLock = simulation.getStore((byte) 1).getLock("test-lock");
     assertThat(node1OptionalLock).isPresent();
     final var lock1 = node1OptionalLock.get();
 
-    Optional<LockStore.LockEntry> node2OptionalLock = simulation.getServer((byte) 2).getLockStore().getLock("test-lock");
+    Optional<LockStore.LockEntry> node2OptionalLock = simulation.getStore((byte) 2).getLock("test-lock");
     assertThat(node2OptionalLock).isPresent();
     final var lock2 = node2OptionalLock.get();
 

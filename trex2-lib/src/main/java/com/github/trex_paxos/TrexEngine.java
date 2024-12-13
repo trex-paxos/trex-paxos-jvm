@@ -37,10 +37,6 @@ public abstract class TrexEngine implements AutoCloseable {
   /// The underlying TrexNode that is the actual Part-time Parliament algorithm implementation guarded by this class.
   final TrexNode trexNode;
 
-  /// Our engine needs to be able to send out messages. These will go out over the network.
-  /// So we model this as a consumer of a list of TrexMessages.
-  final protected Consumer<List<TrexMessage>> networkOutboundSockets;
-
   /// This is the single most dangerous setting in the entire system. It defines if the host application is managing
   /// transactions. In which case you must catch any exceptions and call {@link #crash()}. You must also not forget
   /// to actually commit the journal before sending out any messages. You need to be aware that a SQL commit is not
@@ -53,12 +49,8 @@ public abstract class TrexEngine implements AutoCloseable {
   /// You must ensure that you supply a Journal where the data is crash durable after each call to {@link Journal#sync()}.
   ///
   /// @param trexNode               The underlying TrexNode which must be pre-configured with a Journal and QuorumStrategy.
-  /// @param networkOutboundSockets The consumer of a list of TrexMessages that will be sent out over the network.
-  public TrexEngine(TrexNode trexNode,
-                    Consumer<List<TrexMessage>> networkOutboundSockets
-  ) {
+  public TrexEngine(TrexNode trexNode) {
     this.trexNode = trexNode;
-    this.networkOutboundSockets = networkOutboundSockets;
     this.hostManagedTransactions = false;
   }
 
@@ -76,7 +68,6 @@ public abstract class TrexEngine implements AutoCloseable {
                     Consumer<List<TrexMessage>> networkOutboundSockets,
                     boolean hostManagedTransactions) {
     this.trexNode = trexNode;
-    this.networkOutboundSockets = networkOutboundSockets;
     this.hostManagedTransactions = hostManagedTransactions;
     final var clusterSize = trexNode.clusterSize();
     if (clusterSize < 5 && hostManagedTransactions) {

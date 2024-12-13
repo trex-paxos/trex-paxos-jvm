@@ -22,9 +22,7 @@ abstract class TestablePaxosEngine extends TrexEngine {
                              TransparentJournal journal
   ) {
     super(
-        new TrexNode(Level.INFO, nodeIdentifier, quorumStrategy, journal),
-        (List<TrexMessage> _) -> {
-        }
+        new TrexNode(Level.INFO, nodeIdentifier, quorumStrategy, journal)
     );
     this.journal = journal;
   }
