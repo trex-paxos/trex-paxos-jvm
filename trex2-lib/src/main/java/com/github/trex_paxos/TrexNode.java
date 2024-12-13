@@ -16,6 +16,7 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.*;
+import org.jetbrains.annotations.TestOnly;
 
 import java.util.*;
 import java.util.logging.Level;
@@ -767,6 +768,11 @@ public class TrexNode {
 
   public boolean isClosed() {
     return closed;
+  }
+
+  @TestOnly
+  public Progress progress() {
+    return progress;
   }
 
   /**

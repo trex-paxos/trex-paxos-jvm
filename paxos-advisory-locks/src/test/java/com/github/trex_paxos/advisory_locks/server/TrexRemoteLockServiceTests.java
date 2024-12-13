@@ -1,6 +1,5 @@
 package com.github.trex_paxos.advisory_locks.server;
 
-import com.github.trex_paxos.TestTrexEngine;
 import com.github.trex_paxos.advisory_locks.store.LockStore;
 import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.BeforeEach;
