@@ -11,26 +11,29 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/// The PaxosService is the base class for running the server side logic of the host application.
-/// The network distributed nature of the Paxos algorithm means that it is an RPC system.
+/// The network distributed nature of the Paxos algorithm means that PaxosService it is an RPC system.
 /// This class is defined in terms of the input client commands `CMD` and output `RESULT` values.
+/// It requires a [#host] which is th the logic the applies command values as they are learnt to have been fixed. 
 ///
 /// This is the abstract class for the embeddable the Paxos Server that will:
 ///
 /// 1. Receive the inbound client command values of generic type `CMD`.
 /// 1. Convert commands to `byte[]` within `Command` objects.
 /// 1. Run {@link #createAndSendLeaderMessages(List)} to convert them into `accept` messages. This is how the distinguished leader assigns a primary ordering.
-/// 1. Receive intra-cluster {@link TrexMessage} messages from the other node s in the same Trex cluster.
+/// 1. Receive intra-cluster {@link TrexMessage} messages from the other nodes in the same cluster.
 /// 1. Run all the messages through the {@link TrexEngine} to get a set of {@link TrexResult} values.
-/// 1. Process any fixed command value returned by the engine to then {@link #upCall(Long, Command)} them to update the host application state.
+/// 1. Process any fixed command value returned by the engine to then will {@link #upCall(Long, Command)} them. 
+/// 1. Converts from `byte[]` to CMD then applies it to the `host` for it to update the host application state.
 /// 1. Convert any response values of generic type `RESULT` into a byte array to be sent back to the client.
 /// 1. Optional: ensure that the {@link Journal} data is persisted to disk by commiting database transactions or {@link Journal#sync()}
 /// 1. Push the outbound Paxos messages to go out over the network.
 ///
 /// It is important to note the thread that gets the client command won't return the result to the client. Only when
 /// at least one message has been exchanged in a three node cluster will value be fixed. The thread processing the
-/// response in one noe of the cluster will respond to the client. The other nodes will run the exact same commands
-/// to update state but will not respond to the client. This is the nature of the Paxos algorithm.
+/// response in one node of the cluster will respond to the client. The other nodes will run the exact same commands
+/// to update state but will not respond to the client. This is the nature of the Paxos algorithm. It is also possible 
+/// and often desirable that the node that responds to the client is not actually the leader. All nodes may proxy to the 
+/// leader such that the client connections are local to the cloud resiliency zone. 
 ///
 /// @param <CMD>    The client command value that will be fixed in a slot.
 /// @param <RESULT> The return value of the command that will be sent back to the client.
