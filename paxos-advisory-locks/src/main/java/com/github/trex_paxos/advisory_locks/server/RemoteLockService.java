@@ -11,15 +11,10 @@ import java.util.function.Consumer;
 import java.util.logging.Logger;
 import java.util.function.BiFunction;
 
-/// The `RemoteLockService` runs the server side logic that runs at each node the fixed sequence of remote
-/// procedure calls. It is the host application logic based on fixed values from the Paxos algorithm.
+// TODO remove this 
 public class RemoteLockService extends PaxosService<LockServerCommandValue, LockServerReturnValue> {
   static final Logger LOGGER = Logger.getLogger("");
 
-  /// @param lockStore The lock store which is our application host logic. Paxos keeps the lock store state
-  ///                  at each node in the Paxos cluster identical.
-  /// @param engine The Paxos engine that handles timeouts, heartbeats, and message processing. It guards
-  ///               a `TrexNode` which runs the Paxos algorithm.
   public RemoteLockService(LockStore lockStore,
                            TrexEngine engine,
                            final Consumer<List<TrexMessage>> networkOutboundSockets
@@ -27,6 +22,7 @@ public class RemoteLockService extends PaxosService<LockServerCommandValue, Lock
     super(engine, new Host(lockStore), LockServerPickle.serdeCmd, LockServerPickle.serdeResult, networkOutboundSockets);
   }
 
+  // TODO break this out into separate class
   static class Host implements BiFunction<Long, LockServerCommandValue, LockServerReturnValue> {
 
     Host(LockStore lockStore){

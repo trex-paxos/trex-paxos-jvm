@@ -17,7 +17,6 @@ package com.github.trex_paxos.msg;
 
 import com.github.trex_paxos.BallotNumber;
 import com.github.trex_paxos.SlotTerm;
-import com.github.trex_paxos.TrexNode;
 
 /// The Prepare message is the first message in the Paxos protocol named in the paper Paxos Made Simple by Leslie Lamport.
 ///

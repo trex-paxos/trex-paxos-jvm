@@ -25,6 +25,7 @@ import java.util.stream.IntStream;
 /// Pickle is a utility class for serializing and deserializing record types.
 /// Java serialization is famously broken but the Java Platform team are working on it.
 /// This class does things the boilerplate way.
+// TODO: Pass in the stream so that can act on a list of messages.
 public class Pickle {
 
   public static byte[] writeProgress(Progress progress) throws IOException {
