@@ -102,7 +102,7 @@ public class PreparePropertyTests {
       assert commands.isEmpty();
 
       // Should get either nothing or a single prepare response.
-      assert messages.size() <= 1;
+      assert messages.size() <= 2;
 
       // Verify response
       if (!messages.isEmpty()) {
@@ -134,6 +134,13 @@ public class PreparePropertyTests {
             assert response.journaledAccept().isEmpty();
           }
         }
+
+        if( messages.size() == 2 ) {
+          assert testCase.fixedSlotRelation == ArbitraryValues.FixedSlotRelation.LESS;
+          var fixed = (Fixed) messages.getLast();
+          assert fixed.from() == nodeId;
+          assert fixed.slot() == otherIndex;
+        }
       }
 
       // Verify role changes
@@ -148,6 +155,7 @@ public class PreparePropertyTests {
   /// Provides test cases covering all combinations of relationships between
   /// the node under test and the prepare message properties
   @Provide
+  @SuppressWarnings("unused")
   Arbitrary<TestCase> testCases() {
     return Combinators.combine(
         Arbitraries.of(ArbitraryValues.RoleState.values()),

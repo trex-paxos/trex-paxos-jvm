@@ -244,6 +244,12 @@ public class TrexNode {
         if (number.lessThan(progress.highestPromised()) || logIndex <= progress.highestFixedIndex()) {
           // nack a low nextPrepareMessage else any nextPrepareMessage for a fixed slot sending any accepts they are missing
           messages.add(nack(prepare));
+          // if the other node is behind tell them that the slot is fixed. this will force them to catchup.
+          if( logIndex < progress.highestFixedIndex() ) {
+            journal.readAccept(progress.highestFixedIndex())
+                .ifPresent(fixedAccept ->
+                    messages.add(new Fixed(nodeIdentifier, fixedAccept.slot(), fixedAccept.number())));
+          }
         } else if (number.greaterThan(progress.highestPromised())) {
           // ack a higher nextPrepareMessage
           final var newProgress = progress.withHighestPromised(number);
@@ -320,9 +326,9 @@ public class TrexNode {
 
         /// If the other node has seen a higher promise then we must increase our term
         /// to be higher. We do not update our promise as we would be doing that in a learning
-        ///  message which is not part of the protocol. Instead, we bump or term. Next time we
-        ///  produce an `accept` we will use our term and do a self accept to that which will
-        ///  bump pur promise. We do not want to alter the promise when not an `accept` or `prepare` message.
+        /// message which is not part of the protocol. Instead, we bump or term. Next time we
+        /// produce an `accept` we will use our term and do a self accept to that which will
+        /// bump pur promise. We do not want to alter the promise when not an `accept` or `prepare` message.
         if (otherHighestPromised.greaterThan(progress.highestPromised())) {
           if (role == TrexRole.LEAD) {
             assert this.term != null;
