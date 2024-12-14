@@ -15,7 +15,7 @@ To use this library:
   documents or key-values) in the database that your application uses.
 * At this time you will need to set up the cluster membership manually. You will need to assign a unique node identifier
   to each node in the cluster.
-* This library is designed to be transport agnostic. Examples of plugging in network transport are not complete.
+* This library is designed to be transport agnostic. Examples of plugging in network transport as either QUIC or TCP are planned.
 
 At this the time:
 
