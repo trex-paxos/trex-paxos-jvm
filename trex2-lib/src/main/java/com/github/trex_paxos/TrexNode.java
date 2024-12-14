@@ -198,8 +198,10 @@ public class TrexNode {
       case Accept accept -> {
         final var number = accept.slotTerm().number();
         final var logIndex = accept.slotTerm().logIndex();
-        if (lowerAccept(accept) || fixedSlot(accept)) {
+        if (lowerAccept(accept) || fixedSlot(accept.slot())) {
           messages.add(nack(accept.slotTerm()));
+          // if the other node is behind tell them that the slot is fixed. this will force them to catchup.
+          sendFixedToBehindNode(accept.slot(), messages);
         } else if (equalOrHigherAccept(accept)) {
           // always journal first
           journal.writeAccept(accept);
@@ -240,16 +242,11 @@ public class TrexNode {
       }
       case Prepare prepare -> {
         final var number = prepare.slotTerm().number();
-        final var logIndex = prepare.slotTerm().logIndex();
-        if (number.lessThan(progress.highestPromised()) || logIndex <= progress.highestFixedIndex()) {
+        if (number.lessThan(progress.highestPromised()) || fixedSlot(prepare.slot())) {
           // nack a low nextPrepareMessage else any nextPrepareMessage for a fixed slot sending any accepts they are missing
           messages.add(nack(prepare));
           // if the other node is behind tell them that the slot is fixed. this will force them to catchup.
-          if( logIndex < progress.highestFixedIndex() ) {
-            journal.readAccept(progress.highestFixedIndex())
-                .ifPresent(fixedAccept ->
-                    messages.add(new Fixed(nodeIdentifier, fixedAccept.slot(), fixedAccept.number())));
-          }
+          sendFixedToBehindNode(prepare.slot(), messages);
         } else if (number.greaterThan(progress.highestPromised())) {
           // ack a higher nextPrepareMessage
           final var newProgress = progress.withHighestPromised(number);
@@ -359,7 +356,7 @@ public class TrexNode {
         // values are fixed so it does not matter if we have a higher promise as it
         // a majority of the nodes have accepted the that message.
         catchup.stream()
-            .dropWhile(this::fixedSlot)
+            .dropWhile(a->fixedSlot(a.slot()))
             .takeWhile(accept -> accept.slot() <= highestContiguous)
             .forEach(accept -> {
               journal.writeAccept(accept);
@@ -374,8 +371,20 @@ public class TrexNode {
     }
   }
 
-  private boolean fixedSlot(Accept accept) {
-    return accept.slot() <= progress.highestFixedIndex();
+  private void sendFixedToBehindNode(Long otherSlot, List<TrexMessage> messages) {
+    if (behind(otherSlot)) {
+      journal.readAccept(progress.highestFixedIndex())
+          .ifPresent(fixedAccept ->
+              messages.add(new Fixed(nodeIdentifier, fixedAccept.slot(), fixedAccept.number())));
+    }
+  }
+
+  private boolean behind(long slot) {
+    return slot < progress.highestFixedIndex();
+  }
+
+  private boolean fixedSlot(long slot) {
+    return slot <= progress.highestFixedIndex();
   }
 
   static final String PROTOCOL_VIOLATION_PROMISES = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED Paxos Protocol Violation the promise has been changed when the message is not a PaxosMessage type.";
