@@ -8,7 +8,9 @@
     <name>paxos-advisory-locks</name>
     <url>https://github.com/trex-paxos/trex-paxos-jvm</url>
     <description>
-        Advisory locks are application-level locks that allow developers to coordinate access to shared resources across multiple database sessions. They are explicitly controlled by the application code, unlike standard database locks
+        Advisory locks are application-level locks that allow developers to coordinate access to shared resources across
+        multiple database sessions. They are explicitly controlled by the application code, unlike standard database
+        locks
     </description>
     <parent>
         <groupId>com.github.trex-paxos</groupId>
@@ -17,6 +19,12 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
     <dependencies>
+        <dependency>
+            <groupId>net.jqwik</groupId>
+            <artifactId>jqwik</artifactId>
+            <version>1.9.1</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.github.trex-paxos</groupId>
             <artifactId>trex2-lib</artifactId>

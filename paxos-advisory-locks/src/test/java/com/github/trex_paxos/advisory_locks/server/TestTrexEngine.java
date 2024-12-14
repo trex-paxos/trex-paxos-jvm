@@ -18,17 +18,14 @@ public class TestTrexEngine extends TrexEngine {
 
   @Override
   protected void setRandomTimeout() {
-
   }
 
   @Override
   protected void clearTimeout() {
-
   }
 
   @Override
   protected void setNextHeartbeat() {
-
   }
 
   public Progress getProgress() {
