@@ -15,8 +15,9 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.StructuredTaskScope;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -24,12 +25,12 @@ import java.util.logging.Logger;
 @SuppressWarnings("preview")
 public class UdpLockServer implements TrexLockService, AutoCloseable {
   private static final Logger LOGGER = Logger.getLogger(UdpLockServer.class.getName());
+  public static final int ETHERNET_MTU = 1400;
   private final NodeId nodeId;
   private final ClusterMembership membership;
   private final DatagramSocket socket;
   private final TrexLockService localService;
   private final Thread listenerThread;
-
 
   public UdpLockServer(NodeId nodeId, ClusterMembership membership,
                        TrexLockService localService, Duration socketTimeout) throws IOException {
@@ -46,14 +47,14 @@ public class UdpLockServer implements TrexLockService, AutoCloseable {
   private void listen() {
     while (!Thread.currentThread().isInterrupted() && !socket.isClosed()) {
       try {
-        byte[] buffer = new byte[8192];
-        DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+        byte[] buffer = new byte[ETHERNET_MTU];
+        DatagramPacket request = new DatagramPacket(buffer, buffer.length);
 
         LOGGER.finer(() -> nodeId + " waiting for incoming request");
-        socket.receive(packet);
-        LOGGER.finer(() -> nodeId + " received request from port " + packet.getPort());
+        socket.receive(request);
+        LOGGER.finer(() -> nodeId + " received request from port " + request.getPort());
 
-        final LockServerCommandValue command = LockServerPickle.unpickleCommand(packet.getData());
+        final LockServerCommandValue command = LockServerPickle.unpickleCommand(Arrays.copyOf(request.getData(), request.getLength()));
         LOGGER.finer(() -> nodeId + " deserialized command: " + command);
 
         // Handle the command using local service
@@ -78,8 +79,8 @@ public class UdpLockServer implements TrexLockService, AutoCloseable {
         DatagramPacket responsePacket = new DatagramPacket(
             response,
             response.length,
-            packet.getAddress(),
-            packet.getPort()
+            request.getAddress(),
+            request.getPort()
         );
         socket.send(responsePacket);
 
@@ -111,8 +112,7 @@ public class UdpLockServer implements TrexLockService, AutoCloseable {
   public Optional<LockHandle> tryLock(String id, Instant expiryTime) {
     LOGGER.fine(() -> nodeId + " attempting tryLock for id=" + id);
     try (var scope = new StructuredTaskScope<LockHandle>()) {
-      final var responses = new ConcurrentHashMap<NodeId, LockHandle>();
-
+      final var responses = new ArrayList<LockHandle>();
       membership.otherNodes(nodeId).forEach(targetId ->
           scope.fork(() -> {
             try {
@@ -124,41 +124,30 @@ public class UdpLockServer implements TrexLockService, AutoCloseable {
 
               LOGGER.finer(() -> nodeId + " sending request to " + targetId);
               socket.send(packet);
-
-              byte[] buffer = new byte[8192];
-              DatagramPacket response = new DatagramPacket(buffer, buffer.length);
-              LOGGER.finer(() -> nodeId + " waiting for response from " + targetId);
-              socket.receive(response);
-              LOGGER.finer(() -> nodeId + " received response from " + targetId);
-
-              LockServerReturnValue ret = LockServerPickle.unpickleReturn(response.getData());
-              LockHandle handle = LockStore.createHandleFromReturnValue(ret);
-              responses.put(targetId, handle);
-              LOGGER.finer(() -> nodeId + " processed response from " + targetId + " total responses=" + responses.size());
-
-              if (responses.size() == 2) {
-                LOGGER.fine(() -> nodeId + " got quorum, shutting down scope");
-                scope.shutdown();
-              }
-              return handle;
+              return null;
             } catch (Exception e) {
               LOGGER.log(Level.WARNING, nodeId + " error communicating with " + targetId, e);
               return null;
             }
           }));
-
-      LOGGER.fine(() -> nodeId + " joining scope");
       scope.join();
-
-      if (responses.size() < 2) {
-        LOGGER.warning(() -> nodeId + " failed to achieve quorum - needed 2 remote responses but got " + responses.size());
-        throw new RuntimeException("Failed to achieve quorum - needed 2 remote responses but got " + responses.size());
+      LockHandle handle;
+      do {
+        byte[] buffer = new byte[ETHERNET_MTU];
+        DatagramPacket response = new DatagramPacket(buffer, buffer.length);
+        socket.receive(response);
+        LockServerReturnValue ret = LockServerPickle
+            .unpickleReturn(Arrays.copyOf(response.getData(), response.getLength()));
+        LOGGER.finer(() -> nodeId + " received response");
+        handle = LockStore.createHandleFromReturnValue(ret);
+        responses.add(handle);
       }
-
-      LOGGER.fine(() -> nodeId + " succeeded with " + responses.size() + " responses");
-      return Optional.of(responses.values().iterator().next());
-
-    } catch (InterruptedException e) {
+      while (responses.size() < 2);
+      scope.shutdown();
+      final var result = handle;
+      LOGGER.info(() -> nodeId + " got quorum, returning handle: " + result);
+      return Optional.of(result);
+    } catch (InterruptedException | IOException e) {
       LOGGER.log(Level.WARNING, nodeId + " interrupted during tryLock", e);
       throw new RuntimeException(e);
     }

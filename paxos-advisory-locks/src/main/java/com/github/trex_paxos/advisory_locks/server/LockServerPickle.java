@@ -17,7 +17,6 @@ public class LockServerPickle {
   public static byte[] pickle(LockServerCommandValue value) {
     try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
          DataOutputStream dos = new DataOutputStream(baos)) {
-
       switch (value) {
         case LockServerCommandValue.TryAcquireLock cmd -> {
           dos.writeByte(0);
