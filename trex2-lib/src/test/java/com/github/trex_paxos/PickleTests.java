@@ -18,29 +18,46 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.*;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Optional;
 
+import static com.github.trex_paxos.Pickle.readProgress;
+import static com.github.trex_paxos.Pickle.writeProgress;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class PickleTests {
 
+  public static TrexMessage readMessage(byte[] bytes) {
+    ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
+    DataInputStream dis = new DataInputStream(bis);
+    return PicklePAXE.unpickle(dis);
+  }
+  
+  public static byte[] writeMessage(TrexMessage message) throws IOException {
+    try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+         DataOutputStream dos = new DataOutputStream(byteArrayOutputStream)) {
+      PicklePAXE.pickle(message, dos);
+      dos.flush();
+      return byteArrayOutputStream.toByteArray();
+    }
+  }
+
   @Test
   public void testPreparePickleUnpickle() throws IOException {
     Prepare prepare = new Prepare((byte) 1, 2L, new BallotNumber(3, (byte) 4));
-    byte[] pickled = Pickle.writeMessage(prepare);
-    Prepare unpickled = (Prepare) Pickle.readMessage(pickled);
+    byte[] pickled = writeMessage(prepare);
+    Prepare unpickled = (Prepare) readMessage(pickled);
     assertEquals(prepare, unpickled);
   }
 
   @Test
   public void testAcceptNoopPickleUnpickle() throws IOException {
     Accept accept = new Accept((byte) 3, 4L, new BallotNumber(2, (byte) 3), NoOperation.NOOP);
-    byte[] pickled = Pickle.writeMessage(accept);
-    Accept unpickled = (Accept) Pickle.readMessage(pickled);
+    byte[] pickled = writeMessage(accept);
+    Accept unpickled = (Accept) readMessage(pickled);
     assertEquals(accept, unpickled);
   }
 
@@ -48,16 +65,16 @@ public class PickleTests {
   public void testAcceptPickleUnpickleClientCommand() throws IOException {
     Command command = new Command("cmd", "data".getBytes(StandardCharsets.UTF_8));
     Accept accept = new Accept((byte) 3, 4L, new BallotNumber(2, (byte) 3), command);
-    byte[] pickled = Pickle.writeMessage(accept);
-    Accept unpickled = (Accept) Pickle.readMessage(pickled);
+    byte[] pickled = writeMessage(accept);
+    Accept unpickled = (Accept) readMessage(pickled);
     assertEquals(accept, unpickled);
   }
 
   @Test
   public void testAcceptPickleUnpickleNoop() throws IOException {
     Accept accept = new Accept((byte) 3, 4L, new BallotNumber(2, (byte) 3), NoOperation.NOOP);
-    byte[] pickled = Pickle.writeMessage(accept);
-    Accept unpickled = (Accept) Pickle.readMessage(pickled);
+    byte[] pickled = writeMessage(accept);
+    Accept unpickled = (Accept) readMessage(pickled);
     assertEquals(accept, unpickled);
   }
 
@@ -67,8 +84,8 @@ public class PickleTests {
         (byte) 1, (byte) 2,
         new AcceptResponse.Vote((byte) 1, (byte) 2, 4L, true),
         11L);
-    byte[] pickled = Pickle.writeMessage(acceptNack);
-    AcceptResponse unpickled = (AcceptResponse) Pickle.readMessage(pickled);
+    byte[] pickled = writeMessage(acceptNack);
+    AcceptResponse unpickled = (AcceptResponse) readMessage(pickled);
     assertEquals(acceptNack, unpickled);
   }
 
@@ -80,8 +97,8 @@ public class PickleTests {
         new PrepareResponse.Vote((byte) 1, (byte) 2, 3L, true, new BallotNumber(13, (byte) 3)),
         Optional.of(accept), 1234213424L
     );
-    byte[] pickled = Pickle.writeMessage(prepareAck);
-    PrepareResponse unpickled = (PrepareResponse) Pickle.readMessage(pickled);
+    byte[] pickled = writeMessage(prepareAck);
+    PrepareResponse unpickled = (PrepareResponse) readMessage(pickled);
     assertEquals(prepareAck, unpickled);
   }
 
@@ -94,8 +111,8 @@ public class PickleTests {
         new PrepareResponse.Vote((byte) 1, (byte) 2, 3L, true, new BallotNumber(13, (byte) 3)),
         Optional.of(accept), 1234213424L
     );
-    byte[] pickled = Pickle.writeMessage(prepareAck);
-    PrepareResponse unpickled = (PrepareResponse) Pickle.readMessage(pickled);
+    byte[] pickled = writeMessage(prepareAck);
+    PrepareResponse unpickled = (PrepareResponse) readMessage(pickled);
     assertEquals(prepareAck.journaledAccept(), unpickled.journaledAccept());
     assertEquals(prepareAck, unpickled);
   }
@@ -103,8 +120,8 @@ public class PickleTests {
   @Test
   public void testPickleProgress() throws Exception {
     Progress progress = new Progress((byte) 1, new BallotNumber(2, (byte) 3), 4L);
-    byte[] pickled = Pickle.writeProgress(progress);
-    Progress unpickled = Pickle.readProgress(pickled);
+    byte[] pickled = writeProgress(progress);
+    Progress unpickled = readProgress(pickled);
     assertEquals(progress, unpickled);
   }
 
@@ -114,16 +131,16 @@ public class PickleTests {
         (byte) 3,
         5L, new BallotNumber(10, (byte) 128)
     );
-    byte[] pickled = Pickle.writeMessage(fixed);
-    Fixed unpickled = (Fixed) Pickle.readMessage(pickled);
+    byte[] pickled = writeMessage(fixed);
+    Fixed unpickled = (Fixed) readMessage(pickled);
     assertEquals(fixed, unpickled);
   }
 
   @Test
   public void testPickleCatchup() throws Exception {
     Catchup catchup = new Catchup((byte) 2, (byte) 3, 4L, new BallotNumber(5, (byte) 6));
-    byte[] pickled = Pickle.writeMessage(catchup);
-    Catchup unpickled = (Catchup) Pickle.readMessage(pickled);
+    byte[] pickled = writeMessage(catchup);
+    Catchup unpickled = (Catchup) readMessage(pickled);
     assertEquals(catchup.from(), unpickled.from());
     assertEquals(catchup.to(), unpickled.to());
   }
@@ -135,8 +152,8 @@ public class PickleTests {
         new Accept((byte) 5, 6L, new BallotNumber(7, (byte) 8), NoOperation.NOOP)
     };
     CatchupResponse catchupResponse = new CatchupResponse((byte) 1, (byte) 2, Arrays.asList(accepts));
-    byte[] pickled = Pickle.writeMessage(catchupResponse);
-    CatchupResponse unpickled = (CatchupResponse) Pickle.readMessage(pickled);
+    byte[] pickled = writeMessage(catchupResponse);
+    CatchupResponse unpickled = (CatchupResponse) readMessage(pickled);
     assertEquals(catchupResponse.from(), unpickled.from());
     assertEquals(catchupResponse.to(), unpickled.to());
     assertArrayEquals(catchupResponse.accepts().toArray(), unpickled.accepts().toArray());
