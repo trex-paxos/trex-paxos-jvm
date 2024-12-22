@@ -371,6 +371,7 @@ public class TrexNode {
     }
   }
 
+  // TODO write two tests that a node behind a partition catches up from other follower node or a leader
   private void sendFixedToBehindNode(Long otherSlot, List<TrexMessage> messages) {
     if (behind(otherSlot)) {
       journal.readAccept(progress.highestFixedIndex())

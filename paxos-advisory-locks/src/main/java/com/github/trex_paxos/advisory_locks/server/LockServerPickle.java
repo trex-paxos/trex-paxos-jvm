@@ -1,15 +1,13 @@
 package com.github.trex_paxos.advisory_locks.server;
 
-import com.github.trex_paxos.advisory_locks.store.LockStore;
-
 import com.github.trex_paxos.SerDe;
 import com.github.trex_paxos.advisory_locks.store.LockStore;
+
+import java.io.*;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.io.*;
 import java.util.logging.Logger;
 
 public class LockServerPickle {
@@ -144,7 +142,7 @@ public class LockServerPickle {
     return Optional.empty();
   }
 
-  static SerDe<LockServerCommandValue> serdeCmd = new SerDe<LockServerCommandValue>() {
+  static SerDe<LockServerCommandValue> serdeCmd = new SerDe<>() {
     @Override
     public byte[] serialize(LockServerCommandValue value) {
       return LockServerPickle.pickle(value);
@@ -156,7 +154,7 @@ public class LockServerPickle {
     }
   };
 
-  static SerDe<LockServerReturnValue> serdeResult = new SerDe<LockServerReturnValue>() {
+  static SerDe<LockServerReturnValue> serdeResult = new SerDe<>() {
     @Override
     public byte[] serialize(LockServerReturnValue value) {
       return LockServerPickle.pickle(value);

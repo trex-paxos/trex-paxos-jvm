@@ -1,5 +1,7 @@
 package com.github.trex_paxos.advisory_locks.store;
 
+import com.github.trex_paxos.advisory_locks.LockHandle;
+import com.github.trex_paxos.advisory_locks.server.LockServerReturnValue;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.jetbrains.annotations.NotNull;
@@ -20,13 +22,15 @@ public class LockStore implements AutoCloseable {
   private final Thread cleanupThread;
   private long estimatedMaxAllocations = 0; // Tracks added lock size
   private static final long MEMORY_THRESHOLD = 1024 * 1024; // Example threshold (1 MB)
+  private final Duration safetyGap;
 
   private volatile boolean closed = false;
 
-  public LockStore(MVStore store) {
+  public LockStore(MVStore store, Duration safetyGap) {
     this.store = store;
     this.locks = store.openMap("com.github.trex_paxos.advisory_locks.store#locks");
     this.expiryIndex = store.openMap("com.github.trex_paxos.advisory_locks.store#expiryIndex");
+    this.safetyGap = safetyGap;
     this.cleanupThread = Thread.startVirtualThread(() -> {
       do {
         cleanupExpiredLocks();
@@ -34,6 +38,12 @@ public class LockStore implements AutoCloseable {
         LockSupport.park();
       } while (!closed);
     });
+  }
+
+  public static LockHandle createHandleFromReturnValue(LockServerReturnValue ret) {
+    return ret instanceof LockServerReturnValue.TryAcquireLockReturn(Optional<LockEntry> result)
+        ? result.map(entry -> new LockHandle(entry.lockId(), entry.stamp(), entry.expiryTime())).orElse(null)
+        : null;
   }
 
   /// Try to acquire or reacquire an advisory lock identified by the given lock ID and stamp for a given duration.
@@ -123,6 +133,13 @@ public class LockStore implements AutoCloseable {
       Instant expiryTime,
       long acquiredTimeMillis
   ) {
+  }
+
+  // TODO is this needed or is it just something we are doing in a test?
+  public static LockEntry createLockEntryFromHandle(LockHandle handle, Duration holdDuration, Duration safetyGap) {
+    Instant now = Instant.now();
+    Instant expiryTime = now.plus(holdDuration).plus(safetyGap);
+    return new LockEntry(handle.id(), handle.stamp(), expiryTime, System.currentTimeMillis());
   }
 
   private void incrementAllocations(LockEntry entry) {

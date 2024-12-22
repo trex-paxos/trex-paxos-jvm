@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -20,17 +21,16 @@ public class TrexLockLocalTests {
     static final AtomicLong stampGen = new AtomicLong(System.currentTimeMillis());
 
     @Override
-    public LockHandle tryLock(String id, Duration durationToHoldLock) {
+    public Optional<LockHandle> tryLock(String id, Duration durationToHoldLock) {
       if (durationToHoldLock.isNegative()) {
         throw new IllegalArgumentException("Duration cannot be negative");
       }
       if (durationToHoldLock.isZero()) {
-        return null;
+        return Optional.empty();
       }
 
       return store.tryAcquireLock(id, durationToHoldLock, stampGen.incrementAndGet())
-          .map(entry -> new LockHandle(entry.lockId(), entry.stamp(), entry.expiryTime()))
-          .orElse(null);
+          .map(entry -> new LockHandle(entry.lockId(), entry.stamp(), entry.expiryTime()));
     }
 
     @Override
@@ -56,7 +56,7 @@ public class TrexLockLocalTests {
   @BeforeAll
   static void setup() {
     MVStore mvStore = MVStore.open(null); // in-memory store
-    LockStore lockStore = new LockStore(mvStore);
+    LockStore lockStore = new LockStore(mvStore, Duration.ofSeconds(1));
     lockClient = new TrexLockServiceLocal(lockStore);
   }
 
@@ -65,7 +65,7 @@ public class TrexLockLocalTests {
     String lockId = "resource-1";
     Duration holdDuration = Duration.ofSeconds(30);
 
-    LockHandle handle = lockClient.tryLock(lockId, holdDuration);
+    LockHandle handle = lockClient.tryLock(lockId, holdDuration).orElseThrow();
 
     assertThat(handle).isNotNull();
     assertThat(handle.id()).isEqualTo(lockId);
@@ -78,7 +78,7 @@ public class TrexLockLocalTests {
     String lockId = "resource-2";
     Duration holdDuration = Duration.ofSeconds(30);
 
-    LockHandle handle = lockClient.tryLock(lockId, holdDuration);
+    LockHandle handle = lockClient.tryLock(lockId, holdDuration).orElseThrow();
     boolean released = lockClient.releaseLock(handle);
 
     assertThat(released).isTrue();
@@ -89,11 +89,11 @@ public class TrexLockLocalTests {
     String lockId = "resource-3";
     Duration holdDuration = Duration.ofDays(1);
 
-    LockHandle firstHandle = lockClient.tryLock(lockId, holdDuration);
-    LockHandle secondHandle = lockClient.tryLock(lockId, holdDuration);
+    LockHandle firstHandle = lockClient.tryLock(lockId, holdDuration).orElseThrow();
+    final var secondHandle = lockClient.tryLock(lockId, holdDuration);
 
     assertThat(firstHandle).isNotNull();
-    assertThat(secondHandle).isNull();
+    assertThat(secondHandle).isEmpty();
   }
 
   @Test
@@ -101,7 +101,7 @@ public class TrexLockLocalTests {
     String lockId = "resource-4";
     Duration holdDuration = Duration.ofSeconds(30);
 
-    LockHandle handle = lockClient.tryLock(lockId, holdDuration);
+    LockHandle handle = lockClient.tryLock(lockId, holdDuration).orElseThrow();
     long unsafeExpiry = lockClient.expireTimeUnsafe(handle);
 
     assertThat(unsafeExpiry).isGreaterThan(System.currentTimeMillis());
@@ -113,7 +113,7 @@ public class TrexLockLocalTests {
     Duration holdDuration = Duration.ofSeconds(30);
     Duration safetyGap = Duration.ofMinutes(5);
 
-    LockHandle handle = lockClient.tryLock(lockId, holdDuration);
+    LockHandle handle = lockClient.tryLock(lockId, holdDuration).orElseThrow();
     Instant safeExpiry = lockClient.expireTimeWithSafetyGap(handle, safetyGap);
 
     assertThat(safeExpiry)
@@ -126,9 +126,9 @@ public class TrexLockLocalTests {
     String lockId = "resource-6";
     Duration shortDuration = Duration.ofMillis(100);
 
-    LockHandle firstHandle = lockClient.tryLock(lockId, shortDuration);
+    LockHandle firstHandle = lockClient.tryLock(lockId, shortDuration).orElseThrow();
     Thread.sleep(200); // Wait for expiry
-    LockHandle secondHandle = lockClient.tryLock(lockId, shortDuration);
+    LockHandle secondHandle = lockClient.tryLock(lockId, shortDuration).orElseThrow();
 
     assertThat(firstHandle).isNotNull();
     assertThat(secondHandle)
@@ -142,9 +142,9 @@ public class TrexLockLocalTests {
     String lockId = "resource-7";
     Duration zeroDuration = Duration.ZERO;
 
-    LockHandle handle = lockClient.tryLock(lockId, zeroDuration);
+    var handle = lockClient.tryLock(lockId, zeroDuration);
 
-    assertThat(handle).isNull();
+    assertThat(handle).isEmpty();
   }
 
   @Test
@@ -177,8 +177,8 @@ public class TrexLockLocalTests {
 
     for (int i = 0; i < threadCount; i++) {
       threads[i] = new Thread(() -> {
-        LockHandle handle = lockClient.tryLock(lockId, holdDuration);
-        if (handle != null) {
+        var handle = lockClient.tryLock(lockId, holdDuration);
+        if (handle.isPresent()) {
           successfulLocks.incrementAndGet();
         }
       });

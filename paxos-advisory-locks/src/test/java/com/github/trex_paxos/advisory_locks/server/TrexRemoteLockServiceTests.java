@@ -16,7 +16,7 @@ import java.util.logging.Logger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-class TrexRemoteLockServiceTests {
+public class TrexRemoteLockServiceTests {
   private static final Logger LOGGER = Logger.getLogger(TrexRemoteLockServiceTests.class.getName());
 
   private MVStore store;

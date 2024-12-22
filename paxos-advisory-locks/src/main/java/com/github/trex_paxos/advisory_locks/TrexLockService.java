@@ -2,6 +2,7 @@ package com.github.trex_paxos.advisory_locks;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 
 /// The concept of a distributed lock is a fundamental building block for distributed systems.
 /// It is a bad idea to call them locks however, as they are not locks in the traditional JVM
@@ -24,7 +25,7 @@ public interface TrexLockService {
   ///
   /// @param id                 The ID of the lock which is what you want to identify whatever the logical lock is guarding.
   /// @param durationToHoldLock The duration after which the lock will expire.
-  LockHandle tryLock(String id, Duration durationToHoldLock);
+  Optional<LockHandle> tryLock(String id, Duration durationToHoldLock);
 
   /// The concept of expiry time is perilous in distributed systems. The time is not the time on the local machine.
   /// The time is the time on the machine that holds the lock. That machine may have clock drift with the local machine.

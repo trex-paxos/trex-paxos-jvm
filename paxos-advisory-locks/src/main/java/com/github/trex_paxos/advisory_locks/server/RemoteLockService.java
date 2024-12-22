@@ -1,6 +1,5 @@
 package com.github.trex_paxos.advisory_locks.server;
 
-import com.github.trex_paxos.Command;
 import com.github.trex_paxos.PaxosService;
 import com.github.trex_paxos.TrexEngine;
 import com.github.trex_paxos.advisory_locks.store.LockStore;

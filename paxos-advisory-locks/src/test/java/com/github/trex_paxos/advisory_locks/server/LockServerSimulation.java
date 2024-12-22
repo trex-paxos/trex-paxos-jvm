@@ -8,12 +8,12 @@ import com.github.trex_paxos.msg.DirectMessage;
 import com.github.trex_paxos.msg.TrexMessage;
 import org.h2.mvstore.MVStore;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -46,7 +46,7 @@ public class LockServerSimulation {
     }};
 
 
-    LockStore lockStore = new LockStore(store);
+    LockStore lockStore = new LockStore(store, Duration.ofSeconds(3));
     lockStores.put(nodeId, lockStore);
     TrexNode node = new TrexNode(Level.INFO, nodeId, new SimpleMajority(2), journal);
     TestTrexEngine engine = new TestTrexEngine(

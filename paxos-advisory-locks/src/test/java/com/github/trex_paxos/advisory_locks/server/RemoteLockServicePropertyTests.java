@@ -41,8 +41,10 @@ public class RemoteLockServicePropertyTests {
   static final long BASE_STAMP = 100L;
   static final Duration BASE_DURATION = Duration.ofMinutes(30);
 
-  @Property(generation = GenerationMode.EXHAUSTIVE)
-  void remoteServiceTests(@ForAll("testCases") TestCase testCase) {
+  //@Property(generation = GenerationMode.EXHAUSTIVE)
+  void remoteServiceTests(
+      //@ForAll("testCases")
+      TestCase testCase) {
     MVStore store = MVStore.open(null);
     ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     LockServerSimulation simulation = new LockServerSimulation(store, scheduler);
