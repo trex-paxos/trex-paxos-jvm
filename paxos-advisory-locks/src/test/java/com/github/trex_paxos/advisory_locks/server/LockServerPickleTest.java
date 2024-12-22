@@ -9,13 +9,13 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class RemoteLockServicePickleTest {
+public class LockServerPickleTest {
 
   @Test
   void shouldPickleAndUnpickleTryAcquireLock() {
     LockServerCommandValue.TryAcquireLock original = new LockServerCommandValue.TryAcquireLock(
         "test-lock",
-        Duration.ofSeconds(30)
+        LockStore.expiryTimeWithSafetyGap(Duration.ofSeconds(30), Duration.ofSeconds(1))
     );
 
     byte[] pickled = LockServerPickle.pickle(original);

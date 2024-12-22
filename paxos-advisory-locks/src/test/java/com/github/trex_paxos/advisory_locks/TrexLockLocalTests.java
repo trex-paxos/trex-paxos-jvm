@@ -21,15 +21,8 @@ public class TrexLockLocalTests {
     static final AtomicLong stampGen = new AtomicLong(System.currentTimeMillis());
 
     @Override
-    public Optional<LockHandle> tryLock(String id, Duration durationToHoldLock) {
-      if (durationToHoldLock.isNegative()) {
-        throw new IllegalArgumentException("Duration cannot be negative");
-      }
-      if (durationToHoldLock.isZero()) {
-        return Optional.empty();
-      }
-
-      return store.tryAcquireLock(id, durationToHoldLock, stampGen.incrementAndGet())
+    public Optional<LockHandle> tryLock(String id, Instant expiryTime) {
+      return store.tryAcquireLock(id, expiryTime, stampGen.incrementAndGet())
           .map(entry -> new LockHandle(entry.lockId(), entry.stamp(), entry.expiryTime()));
     }
 
@@ -63,9 +56,11 @@ public class TrexLockLocalTests {
   @Test
   void shouldAcquireLockSuccessfully() {
     String lockId = "resource-1";
-    Duration holdDuration = Duration.ofSeconds(30);
-
-    LockHandle handle = lockClient.tryLock(lockId, holdDuration).orElseThrow();
+    LockHandle handle = lockClient.tryLock(lockId,
+            LockStore.expiryTimeWithSafetyGap(
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(1)))
+        .orElseThrow();
 
     assertThat(handle).isNotNull();
     assertThat(handle.id()).isEqualTo(lockId);
@@ -78,7 +73,10 @@ public class TrexLockLocalTests {
     String lockId = "resource-2";
     Duration holdDuration = Duration.ofSeconds(30);
 
-    LockHandle handle = lockClient.tryLock(lockId, holdDuration).orElseThrow();
+    LockHandle handle = lockClient.tryLock(lockId, LockStore.expiryTimeWithSafetyGap(
+        Duration.ofSeconds(30),
+        Duration.ofSeconds(1))
+    ).orElseThrow();
     boolean released = lockClient.releaseLock(handle);
 
     assertThat(released).isTrue();
@@ -87,10 +85,13 @@ public class TrexLockLocalTests {
   @Test
   void shouldFailToAcquireLockedResource() {
     String lockId = "resource-3";
-    Duration holdDuration = Duration.ofDays(1);
 
-    LockHandle firstHandle = lockClient.tryLock(lockId, holdDuration).orElseThrow();
-    final var secondHandle = lockClient.tryLock(lockId, holdDuration);
+    final var expiryTime = LockStore.expiryTimeWithSafetyGap(
+        Duration.ofSeconds(30),
+        Duration.ofSeconds(1));
+
+    LockHandle firstHandle = lockClient.tryLock(lockId, expiryTime).orElseThrow();
+    final var secondHandle = lockClient.tryLock(lockId, expiryTime);
 
     assertThat(firstHandle).isNotNull();
     assertThat(secondHandle).isEmpty();
@@ -99,36 +100,27 @@ public class TrexLockLocalTests {
   @Test
   void shouldProvideUnsafeExpiryTime() {
     String lockId = "resource-4";
-    Duration holdDuration = Duration.ofSeconds(30);
+    final var expiryTime = LockStore.expiryTimeWithSafetyGap(
+        Duration.ofSeconds(30),
+        Duration.ofSeconds(1));
 
-    LockHandle handle = lockClient.tryLock(lockId, holdDuration).orElseThrow();
+    LockHandle handle = lockClient.tryLock(lockId, expiryTime).orElseThrow();
     long unsafeExpiry = lockClient.expireTimeUnsafe(handle);
 
     assertThat(unsafeExpiry).isGreaterThan(System.currentTimeMillis());
   }
 
   @Test
-  void shouldProvideSafeExpiryTimeWithGap() {
-    String lockId = "resource-5";
-    Duration holdDuration = Duration.ofSeconds(30);
-    Duration safetyGap = Duration.ofMinutes(5);
-
-    LockHandle handle = lockClient.tryLock(lockId, holdDuration).orElseThrow();
-    Instant safeExpiry = lockClient.expireTimeWithSafetyGap(handle, safetyGap);
-
-    assertThat(safeExpiry)
-        .isAfter(Instant.ofEpochMilli(lockClient.expireTimeUnsafe(handle)))
-        .isAfter(Instant.now().plus(safetyGap));
-  }
-
-  @Test
   void shouldAcquireLockAfterExpiry() throws InterruptedException {
     String lockId = "resource-6";
-    Duration shortDuration = Duration.ofMillis(100);
 
-    LockHandle firstHandle = lockClient.tryLock(lockId, shortDuration).orElseThrow();
+    final var expiryTime = LockStore.expiryTimeWithSafetyGap(
+        Duration.ofMillis(100),
+        Duration.ofSeconds(1));
+
+    LockHandle firstHandle = lockClient.tryLock(lockId, expiryTime).orElseThrow();
     Thread.sleep(200); // Wait for expiry
-    LockHandle secondHandle = lockClient.tryLock(lockId, shortDuration).orElseThrow();
+    LockHandle secondHandle = lockClient.tryLock(lockId, expiryTime).orElseThrow();
 
     assertThat(firstHandle).isNotNull();
     assertThat(secondHandle)
@@ -142,7 +134,7 @@ public class TrexLockLocalTests {
     String lockId = "resource-7";
     Duration zeroDuration = Duration.ZERO;
 
-    var handle = lockClient.tryLock(lockId, zeroDuration);
+    var handle = lockClient.tryLock(lockId, Instant.now());
 
     assertThat(handle).isEmpty();
   }
@@ -150,9 +142,10 @@ public class TrexLockLocalTests {
   @Test
   void shouldHandleNegativeDurationLock() {
     String lockId = "resource-8";
-    Duration negativeDuration = Duration.ofSeconds(-1);
-
-    assertThatThrownBy(() -> lockClient.tryLock(lockId, negativeDuration))
+    final var expiryTime = LockStore.expiryTimeWithSafetyGap(
+        Duration.ofSeconds(-2),
+        Duration.ofSeconds(1));
+    assertThatThrownBy(() -> lockClient.tryLock(lockId, expiryTime))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -177,7 +170,10 @@ public class TrexLockLocalTests {
 
     for (int i = 0; i < threadCount; i++) {
       threads[i] = new Thread(() -> {
-        var handle = lockClient.tryLock(lockId, holdDuration);
+        final var expiryTime = LockStore.expiryTimeWithSafetyGap(
+            holdDuration,
+            Duration.ofSeconds(1));
+        var handle = lockClient.tryLock(lockId, expiryTime);
         if (handle.isPresent()) {
           successfulLocks.incrementAndGet();
         }

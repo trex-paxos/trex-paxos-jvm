@@ -24,8 +24,8 @@ public interface TrexLockService {
   /// out of some other JVM has just acquired or released the lock.
   ///
   /// @param id                 The ID of the lock which is what you want to identify whatever the logical lock is guarding.
-  /// @param durationToHoldLock The duration after which the lock will expire.
-  Optional<LockHandle> tryLock(String id, Duration durationToHoldLock);
+  /// @param expiryTime The expiry after which the lock will expire.
+  Optional<LockHandle> tryLock(String id, Instant expiryTime);
 
   /// The concept of expiry time is perilous in distributed systems. The time is not the time on the local machine.
   /// The time is the time on the machine that holds the lock. That machine may have clock drift with the local machine.

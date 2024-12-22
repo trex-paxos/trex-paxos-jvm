@@ -39,8 +39,10 @@ public class TrexRemoteLockServiceTests {
 
   @Test
   void shouldAcquireLockWithTwoNodes() {
+    // we must define time when the leader gets the message not when the message is fixed as that will be different times on different servers
+    final var expiryTime = LockStore.expiryTimeWithSafetyGap(Duration.ofSeconds(30), Duration.ofSeconds(1));
     // Given: Two-node simulation setup
-    var cmd = new LockServerCommandValue.TryAcquireLock("test-lock", Duration.ofSeconds(30));
+    final var cmd = new LockServerCommandValue.TryAcquireLock("test-lock", expiryTime);
 
     CompletableFuture<LockServerReturnValue> future = new CompletableFuture<>();
 

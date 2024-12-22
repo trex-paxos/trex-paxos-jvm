@@ -19,7 +19,7 @@ class TestLockService implements TrexLockService {
 
 
   @Override
-  public Optional<LockHandle> tryLock(String id, Duration holdDuration) {
+  public Optional<LockHandle> tryLock(String id, Instant expiryTime) {
     tryLockIds.add(id);
     return mockHandle;
   }

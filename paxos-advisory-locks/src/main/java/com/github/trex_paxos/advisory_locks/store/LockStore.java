@@ -46,6 +46,12 @@ public class LockStore implements AutoCloseable {
         : null;
   }
 
+  public static Instant expiryTimeWithSafetyGap(Duration duration, Duration safetyGap) {
+    return Instant.ofEpochMilli(System.currentTimeMillis()
+        + duration.toMillis()
+        + safetyGap.toMillis());
+  }
+
   /// Try to acquire or reacquire an advisory lock identified by the given lock ID and stamp for a given duration.
   /// This is the basic none blocking lock acquisition method. We can get the lock if:
   ///
@@ -54,9 +60,9 @@ public class LockStore implements AutoCloseable {
   /// 2. The lock exists yet stamp is same. This makes it a reentrant advisory lock or a lease extension.
   ///
   /// @param lockId The ID of the lock to either create or acquire.
-  /// @param holdDuration The duration for which the lock should be held.
+  /// @param expiryTime The expiry time.
   /// @param stamp This is a unique identifier for the lock acquisition attempt.
-  public Optional<LockEntry> tryAcquireLock(String lockId, Duration holdDuration, long stamp) {
+  public Optional<LockEntry> tryAcquireLock(String lockId, Instant expiryTime, long stamp) {
     // Check if a lock with the given lockId exists and can be replaced
     final var otherLock = Optional.ofNullable(locks.get(lockId))
         .filter(existingLock ->
@@ -64,13 +70,10 @@ public class LockStore implements AutoCloseable {
         );
 
     // Return empty if an existing valid lock is found; otherwise, create a new one
-    return otherLock.isPresent() ? Optional.empty() : Optional.of(createNewLock(lockId, holdDuration, stamp));
+    return otherLock.isPresent() ? Optional.empty() : Optional.of(createNewLock(lockId, expiryTime, stamp));
   }
 
-  private LockEntry createNewLock(String lockId, Duration holdDuration, long stamp) {
-    // Calculate expiry time
-    final var expiryTime = Instant.now().plus(holdDuration);
-
+  private LockEntry createNewLock(String lockId, Instant expiryTime, long stamp) {
     // Create a new lock entry
     final var newLock = new LockEntry(
         lockId,
@@ -136,9 +139,8 @@ public class LockStore implements AutoCloseable {
   }
 
   // TODO is this needed or is it just something we are doing in a test?
-  public static LockEntry createLockEntryFromHandle(LockHandle handle, Duration holdDuration, Duration safetyGap) {
+  public static LockEntry createLockEntryFromHandle(LockHandle handle, Instant expiryTime, Duration safetyGap) {
     Instant now = Instant.now();
-    Instant expiryTime = now.plus(holdDuration).plus(safetyGap);
     return new LockEntry(handle.id(), handle.stamp(), expiryTime, System.currentTimeMillis());
   }
 

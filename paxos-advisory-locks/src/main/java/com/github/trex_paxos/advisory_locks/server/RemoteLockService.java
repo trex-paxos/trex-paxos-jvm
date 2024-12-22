@@ -6,9 +6,9 @@ import com.github.trex_paxos.advisory_locks.store.LockStore;
 import com.github.trex_paxos.msg.TrexMessage;
 
 import java.util.List;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
-import java.util.function.BiFunction;
 
 // TODO remove this 
 public class RemoteLockService extends PaxosService<LockServerCommandValue, LockServerReturnValue> {
@@ -17,14 +17,14 @@ public class RemoteLockService extends PaxosService<LockServerCommandValue, Lock
   public RemoteLockService(LockStore lockStore,
                            TrexEngine engine,
                            final Consumer<List<TrexMessage>> networkOutboundSockets
-                           ) {
+  ) {
     super(engine, new Host(lockStore), LockServerPickle.serdeCmd, LockServerPickle.serdeResult, networkOutboundSockets);
   }
 
   // TODO break this out into separate class
   static class Host implements BiFunction<Long, LockServerCommandValue, LockServerReturnValue> {
 
-    Host(LockStore lockStore){
+    Host(LockStore lockStore) {
       this.lockStore = lockStore;
     }
 
@@ -35,6 +35,7 @@ public class RemoteLockService extends PaxosService<LockServerCommandValue, Lock
     LockStore getLockStore() {
       return lockStore;
     }
+
     /// This the method that does the work. It has to convert the network messages which are RPC requests into
     /// meted calls on the application state. This is where the Paxos algorithm is applied. The result is the
     /// RPC response that will be sent back to the client.
@@ -45,7 +46,7 @@ public class RemoteLockService extends PaxosService<LockServerCommandValue, Lock
         case LockServerCommandValue.TryAcquireLock cmd -> new LockServerReturnValue.TryAcquireLockReturn(
             lockStore.tryAcquireLock(
                 cmd.lockId(),
-                cmd.holdDuration(),
+                cmd.expiryTime(),
                 slot
             )
         );
@@ -63,5 +64,5 @@ public class RemoteLockService extends PaxosService<LockServerCommandValue, Lock
       };
 
     }
-}
+  }
 }

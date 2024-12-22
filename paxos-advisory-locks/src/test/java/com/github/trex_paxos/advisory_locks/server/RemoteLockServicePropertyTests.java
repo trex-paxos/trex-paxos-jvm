@@ -1,6 +1,9 @@
 package com.github.trex_paxos.advisory_locks.server;
 
-import net.jqwik.api.*;
+import net.jqwik.api.Arbitraries;
+import net.jqwik.api.Arbitrary;
+import net.jqwik.api.Combinators;
+import net.jqwik.api.Provide;
 import org.h2.mvstore.MVStore;
 
 import java.time.Duration;
@@ -39,7 +42,7 @@ public class RemoteLockServicePropertyTests {
 
   static final String TEST_LOCK_ID = "test-lock";
   static final long BASE_STAMP = 100L;
-  static final Duration BASE_DURATION = Duration.ofMinutes(30);
+  static final Instant BASE_DURATION = Instant.now().plus(Duration.ofMinutes(30));
 
   //@Property(generation = GenerationMode.EXHAUSTIVE)
   void remoteServiceTests(
@@ -62,10 +65,10 @@ public class RemoteLockServicePropertyTests {
     };
 
     // Calculate test duration based on relation
-    final Duration testDuration = switch (testCase.durationRelation()) {
-      case LESS -> BASE_DURATION.minusMinutes(15);
+    final Instant testExpiryTime = switch (testCase.durationRelation()) {
+      case LESS -> BASE_DURATION; // FIXME: DUNNO
       case EQUAL -> BASE_DURATION;
-      case GREATER -> BASE_DURATION.plusMinutes(15);
+      case GREATER -> BASE_DURATION;  // FIXME: DUNNO
     };
 
     // Setup initial lock state if needed
@@ -77,7 +80,7 @@ public class RemoteLockServicePropertyTests {
     // Create command with calculated parameters
     LockServerCommandValue command = switch (testCase.command()) {
       case LockServerCommandValue.TryAcquireLock _ ->
-          new LockServerCommandValue.TryAcquireLock(TEST_LOCK_ID, testDuration);
+          new LockServerCommandValue.TryAcquireLock(TEST_LOCK_ID, testExpiryTime);
       case LockServerCommandValue.ReleaseLock _ -> new LockServerCommandValue.ReleaseLock(TEST_LOCK_ID, testStamp);
       case LockServerCommandValue.GetLock _ -> new LockServerCommandValue.GetLock(TEST_LOCK_ID);
     };

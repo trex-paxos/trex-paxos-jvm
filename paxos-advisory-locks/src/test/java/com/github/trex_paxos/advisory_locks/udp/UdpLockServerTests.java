@@ -2,6 +2,7 @@ package com.github.trex_paxos.advisory_locks.udp;
 
 import com.github.trex_paxos.advisory_locks.ClusterMembership;
 import com.github.trex_paxos.advisory_locks.NodeId;
+import com.github.trex_paxos.advisory_locks.store.LockStore;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,9 +15,9 @@ import java.util.logging.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("preview")
 @DisplayName("UdpLockServer Tests")
 public class UdpLockServerTests {
-  private static final Logger LOGGER = Logger.getLogger(UdpLockServerTests.class.getName());
 
   @BeforeAll
   static void setupLogging() {
@@ -74,7 +75,10 @@ public class UdpLockServerTests {
       var deadline = Instant.now().plusSeconds(1);
       scope.joinUntil(deadline);
 
-      var handle = server1.tryLock("test-lock", Duration.ofMinutes(1));
+      final var expiryTime = LockStore.expiryTimeWithSafetyGap(
+          Duration.ofMinutes(1),
+          Duration.ofSeconds(1));
+      var handle = server1.tryLock("test-lock", expiryTime);
 
       assertThat(handle).isNotNull();
       assertThat(testService1.tryLockIds).hasSize(1);

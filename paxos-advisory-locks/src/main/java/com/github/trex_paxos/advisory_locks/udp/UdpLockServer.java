@@ -61,9 +61,9 @@ public class UdpLockServer implements TrexLockService, AutoCloseable {
         var result = switch (command) {
           case LockServerCommandValue.TryAcquireLock cmd -> {
             LOGGER.finer(() -> nodeId + " processing TryAcquireLock command");
-            final Optional<LockHandle> handle = localService.tryLock(cmd.lockId(), cmd.holdDuration());
+            final Optional<LockHandle> handle = localService.tryLock(cmd.lockId(), cmd.expiryTime());
             Optional<LockStore.LockEntry> h2 = handle.map(h ->
-                LockStore.createLockEntryFromHandle(h, cmd.holdDuration(), Duration.ofSeconds(1L)));
+                LockStore.createLockEntryFromHandle(h, cmd.expiryTime(), Duration.ofSeconds(1L)));
             yield new LockServerReturnValue.TryAcquireLockReturn(
                 h2
             );
@@ -73,13 +73,15 @@ public class UdpLockServer implements TrexLockService, AutoCloseable {
         LOGGER.finer(() -> nodeId + " executed command, result: " + result);
         // Send response
         byte[] response = LockServerPickle.pickle(result);
+
         LOGGER.finer(() -> nodeId + " serialized response length: " + response.length);
         DatagramPacket responsePacket = new DatagramPacket(
-            response, response.length,
-            packet.getAddress(), packet.getPort()
+            response,
+            response.length,
+            packet.getAddress(),
+            packet.getPort()
         );
         socket.send(responsePacket);
-        LOGGER.finer(() -> nodeId + " sent response to port " + packet.getPort());
 
       } catch (IOException e) {
         if (!socket.isClosed()) {
@@ -106,7 +108,7 @@ public class UdpLockServer implements TrexLockService, AutoCloseable {
   }
 
   @Override
-  public Optional<LockHandle> tryLock(String id, Duration holdDuration) {
+  public Optional<LockHandle> tryLock(String id, Instant expiryTime) {
     LOGGER.fine(() -> nodeId + " attempting tryLock for id=" + id);
     try (var scope = new StructuredTaskScope<LockHandle>()) {
       final var responses = new ConcurrentHashMap<NodeId, LockHandle>();
@@ -115,7 +117,7 @@ public class UdpLockServer implements TrexLockService, AutoCloseable {
           scope.fork(() -> {
             try {
               LOGGER.finer(() -> nodeId + " preparing request to " + targetId);
-              byte[] data = LockServerPickle.pickle(new LockServerCommandValue.TryAcquireLock(id, holdDuration));
+              byte[] data = LockServerPickle.pickle(new LockServerCommandValue.TryAcquireLock(id, expiryTime));
               DatagramPacket packet = new DatagramPacket(data, data.length,
                   InetAddress.getLocalHost(),
                   membership.nodePorts().get(targetId));

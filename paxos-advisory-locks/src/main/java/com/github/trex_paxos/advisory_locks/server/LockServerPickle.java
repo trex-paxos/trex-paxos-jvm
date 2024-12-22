@@ -4,11 +4,11 @@ import com.github.trex_paxos.SerDe;
 import com.github.trex_paxos.advisory_locks.store.LockStore;
 
 import java.io.*;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.zip.CRC32;
 
 public class LockServerPickle {
 
@@ -21,8 +21,10 @@ public class LockServerPickle {
       switch (value) {
         case LockServerCommandValue.TryAcquireLock cmd -> {
           dos.writeByte(0);
-          dos.writeUTF(cmd.lockId());
-          dos.writeLong(cmd.holdDuration().toMillis());
+          final var lockId = cmd.lockId();
+          dos.writeUTF(lockId);
+          final var expiryTime = cmd.expiryTime().toEpochMilli();
+          dos.writeLong(expiryTime);
         }
         case LockServerCommandValue.ReleaseLock cmd -> {
           dos.writeByte(1);
@@ -42,13 +44,14 @@ public class LockServerPickle {
   }
 
   public static LockServerCommandValue unpickleCommand(byte[] bytes) {
+    LOGGER.finer(() -> "Unpickling command: " + bytes.length);
     try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
          DataInputStream dis = new DataInputStream(bais)) {
 
       return switch (dis.readByte()) {
         case 0 -> new LockServerCommandValue.TryAcquireLock(
             dis.readUTF(),
-            Duration.ofMillis(dis.readLong())
+            Instant.ofEpochMilli(dis.readLong())
         );
         case 1 -> new LockServerCommandValue.ReleaseLock(
             dis.readUTF(),
@@ -84,13 +87,28 @@ public class LockServerPickle {
         }
       }
       dos.flush();
-      return baos.toByteArray();
+      final var bytes = baos.toByteArray();
+      LOGGER.finer(() -> {
+        CRC32 crc32 = new CRC32();
+        crc32.update(bytes);
+        long crcValue = crc32.getValue();
+        return "LockServerReturnValue pickle length: " + bytes.length +
+            " crc32: " + crcValue;
+      });
+      return bytes;
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
   }
 
   public static LockServerReturnValue unpickleReturn(byte[] bytes) {
+    LOGGER.finer(() -> {
+      CRC32 crc32 = new CRC32();
+      crc32.update(bytes);
+      long crcValue = crc32.getValue();
+      return "LockServerReturnValue unpickle length: " + bytes.length +
+          " crc32: " + crcValue;
+    });
     try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
          DataInputStream dis = new DataInputStream(bais)) {
 
