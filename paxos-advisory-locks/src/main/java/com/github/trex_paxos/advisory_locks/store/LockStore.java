@@ -22,7 +22,7 @@ public class LockStore implements AutoCloseable {
   private final Thread cleanupThread;
   private long estimatedMaxAllocations = 0; // Tracks added lock size
   private static final long MEMORY_THRESHOLD = 1024 * 1024; // Example threshold (1 MB)
-  private final Duration safetyGap;
+  private final Duration safetyGap; // FIXME: needs to be used
 
   private volatile boolean closed = false;
 
