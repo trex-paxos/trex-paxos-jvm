@@ -167,4 +167,8 @@ public class PaxosService<CMD, RESULT> {
   public TrexNode.TrexRole getEstimatedRole() {
     return engine.getRole();
   }
+
+  public void close() {
+    executor.shutdown();
+  }
 }
