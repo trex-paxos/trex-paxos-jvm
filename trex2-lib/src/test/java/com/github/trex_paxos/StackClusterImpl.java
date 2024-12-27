@@ -1,6 +1,5 @@
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.StackService.Push;
 import com.github.trex_paxos.msg.*;
 import java.io.*;
 import java.util.*;
@@ -12,11 +11,11 @@ import java.util.logging.Logger;
 
 public class StackClusterImpl implements StackService {
     private static final Logger LOGGER = Logger.getLogger(StackClusterImpl.class.getName());
-    static {
+    public static void setLogLevel(Level level) {
         Logger root = Logger.getLogger("");
-        root.setLevel(Level.FINEST);
+        root.setLevel(level);
         ConsoleHandler handler = new ConsoleHandler();
-        handler.setLevel(Level.FINEST);
+        handler.setLevel(level);
         root.addHandler(handler);
     }
 
