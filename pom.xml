@@ -17,7 +17,7 @@
     </description>
     <modules>
         <module>trex2-lib</module>
-        <module>paxos-advisory-locks</module>
+        <module>trex-locks</module>
     </modules>
     <dependencies>
         <dependency>

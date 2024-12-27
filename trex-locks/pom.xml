@@ -3,9 +3,9 @@
          xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <modelVersion>4.0.0</modelVersion>
-    <artifactId>paxos-advisory-locks</artifactId>
+    <artifactId>trex-locks</artifactId>
     <version>1.0-SNAPSHOT</version>
-    <name>paxos-advisory-locks</name>
+    <name>trex-locks</name>
     <url>https://github.com/trex-paxos/trex-paxos-jvm</url>
     <description>
         Advisory locks are application-level locks that allow developers to coordinate access to shared resources across

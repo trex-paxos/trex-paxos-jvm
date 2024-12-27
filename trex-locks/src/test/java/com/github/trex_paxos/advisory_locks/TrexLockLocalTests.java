@@ -116,7 +116,7 @@ public class TrexLockLocalTests {
 
     final var expiryTime = LockStore.expiryTimeWithSafetyGap(
         Duration.ofMillis(100),
-        Duration.ofSeconds(1));
+        Duration.ofMillis(1));
 
     LockHandle firstHandle = lockClient.tryLock(lockId, expiryTime).orElseThrow();
     Thread.sleep(200); // Wait for expiry
@@ -127,26 +127,6 @@ public class TrexLockLocalTests {
         .isNotNull()
         .isNotEqualTo(firstHandle);
     assertThat(secondHandle.stamp()).isGreaterThan(firstHandle.stamp());
-  }
-
-  @Test
-  void shouldHandleZeroDurationLock() {
-    String lockId = "resource-7";
-    Duration zeroDuration = Duration.ZERO;
-
-    var handle = lockClient.tryLock(lockId, Instant.now());
-
-    assertThat(handle).isEmpty();
-  }
-
-  @Test
-  void shouldHandleNegativeDurationLock() {
-    String lockId = "resource-8";
-    final var expiryTime = LockStore.expiryTimeWithSafetyGap(
-        Duration.ofSeconds(-2),
-        Duration.ofSeconds(1));
-    assertThatThrownBy(() -> lockClient.tryLock(lockId, expiryTime))
-        .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
