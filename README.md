@@ -5,11 +5,8 @@
 This repository contains a Java library that implements the Paxos algorithm as described in Leslie Lamport's 2001
 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf).
 It aims to be rigorous in terms of safety preferring to mark a node as crashed rather than ignoring any possible safety
-violation.
+violation. 
 
-This library aims to be a toolkit to help you to not have to write much code at all to run a cluster of nodes that
-replicate a log of commands. Yet it will be modular in nature so that you can assemble your own custom solution that
-only uses the core protocol messages and the code algorithm logic.
 
 To use this library:
 
@@ -17,8 +14,12 @@ To use this library:
   documents or key-values) in the database that your application uses.
 * At this time you will need to set up the cluster membership manually. You will need to assign a unique node identifier
   to each node in the cluster.
-* This library is designed to be transport agnostic. Examples of plugging in network transport as either QUIC or TCP are
-  planned.
+* This library is designed to be transport agnostic. Examples of plugging in network transport as either QUIC, TCP and 
+  a lean UDP implementation inspired by QUIC are planned.
+
+This library aims to be a toolkit to help you to not have to write much code at all to run a cluster of nodes that
+replicate an ordered sequence of appliation commands. Yet it modular in nature so that you can assemble your own custom solution that
+only uses the core protocol messages and the code algorithm logic.
 
 At this the time:
 
