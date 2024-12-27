@@ -1,7 +1,7 @@
 # run ust one test
 mvn test -Dtest=TrexLockLocalTests -pl trex-locks
 
-# flast tests
+# fast tests
 mvn -DNO_LOGGING=true -B package
 
 # jshell

@@ -3,10 +3,10 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.github.trex-paxos</groupId>
-    <artifactId>trex2</artifactId>
+    <artifactId>trex</artifactId>
     <packaging>pom</packaging>
     <version>1.0-SNAPSHOT</version>
-    <name>trex2</name>
+    <name>trex</name>
     <url>https://github.com/trex-paxos/trex-paxos-jvm</url>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -16,7 +16,7 @@
     <description>This is an implementation of the Paxos Logarithm as written in Paxos Made Simple by Leslie Lamport
     </description>
     <modules>
-        <module>trex2-lib</module>
+        <module>trex-lib</module>
         <module>trex-locks</module>
     </modules>
     <dependencies>
