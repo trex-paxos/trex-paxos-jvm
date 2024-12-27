@@ -11,13 +11,13 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <maven.compiler.release>22</maven.compiler.release>
+        <maven.compiler.release>23</maven.compiler.release>
     </properties>
     <description>This is an implementation of the Paxos Logarithm as written in Paxos Made Simple by Leslie Lamport
     </description>
     <modules>
         <module>trex2-lib</module>
-        <module>paxos-advisory-locks</module>
+        <module>trex-locks</module>
     </modules>
     <dependencies>
         <dependency>
@@ -42,6 +42,7 @@
                 <configuration>
                     <compilerArgs>
                         <arg>-Werror</arg>
+                        <arg>--enable-preview</arg>
                     </compilerArgs>
                 </configuration>
             </plugin>
