@@ -9,7 +9,7 @@
     <url>https://github.com/trex-paxos/trex-paxos-jvm</url>
     <parent>
         <groupId>com.github.trex-paxos</groupId>
-        <artifactId>trex2</artifactId>
+        <artifactId>trex</artifactId>
         <version>1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>

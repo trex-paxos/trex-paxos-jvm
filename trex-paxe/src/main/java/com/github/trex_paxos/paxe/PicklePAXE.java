@@ -1,6 +1,8 @@
-package com.github.trex_paxos;
+package com.github.trex_paxos.paxe;
 
 import com.github.trex_paxos.msg.*;
+
+import com.github.trex_paxos.*;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;

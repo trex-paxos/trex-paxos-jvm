@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.trex_paxos;
+package com.github.trex_paxos.paxe;
 
 import com.github.trex_paxos.msg.*;
+import com.github.trex_paxos.*;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
