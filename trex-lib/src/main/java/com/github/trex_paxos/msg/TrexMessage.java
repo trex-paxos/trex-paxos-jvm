@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 package com.github.trex_paxos.msg;
+import com.github.trex_paxos.Message;
 
 /// TrexMessage is the base interface for all messages in the protocol.
-public sealed interface TrexMessage permits
+public sealed interface TrexMessage extends Message permits
     Accept,
     AcceptResponse,
     BroadcastMessage,
@@ -25,7 +26,7 @@ public sealed interface TrexMessage permits
     Fixed,
     DirectMessage,
     Prepare,
-    PrepareResponse {
+    PrepareResponse  {
   /// @return the node in the cluster that sent this message.
   byte from();
 }

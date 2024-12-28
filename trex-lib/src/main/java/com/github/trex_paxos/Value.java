@@ -13,10 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.trex_paxos.msg;
+package com.github.trex_paxos;
 
-public sealed interface DirectMessage extends TrexMessage 
-permits AcceptResponse, Catchup, CatchupResponse, PrepareResponse {
-  /// @return the node in the cluster that this message is intended for.
-  byte to();
+import java.util.UUID;
+
+public record Value(UUID uuid, byte[] bytes) implements Message {
+    public Value {
+        if (uuid == null) {
+            throw new IllegalArgumentException("uuid cannot be null");
+        }
+        if (bytes == null) {
+            throw new IllegalArgumentException("bytes cannot be null");
+        }
+        if( bytes.length > 1472 ) {
+            // https://notes.shichao.io/tcpv1/ch10/
+            throw new IllegalArgumentException("bytes cannot be longer than 1472 bytes");
+        }
+    }
 }

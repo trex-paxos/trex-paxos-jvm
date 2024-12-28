@@ -64,7 +64,7 @@ public class FixedPropertyTests {
       public Optional<Accept> readAccept(long logIndex) {
         if (logIndex == otherIndex) {
 
-          final Command test = new Command("test", "data".getBytes());
+          final Command test = new Command("data".getBytes());
 
           return switch (testCase.journalState) {
             case EMPTY -> Optional.empty();

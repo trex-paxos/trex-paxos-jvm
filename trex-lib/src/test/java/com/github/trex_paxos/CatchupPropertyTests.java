@@ -61,9 +61,9 @@ public class CatchupPropertyTests {
       case NONE -> {
         // Do nothing
       }
-      case ONE -> accepts.add(new Accept(thisNodeId, thisFixed, thisPromise, new Command("test", "data".getBytes())));
+      case ONE -> accepts.add(new Accept(thisNodeId, thisFixed, thisPromise, new Command("data".getBytes())));
       case MULTIPLE -> IntStream.range(0, 3).forEach(i ->
-          accepts.add(new Accept(thisNodeId, thisFixed + i, thisPromise, new Command("test", "data".getBytes()))));
+          accepts.add(new Accept(thisNodeId, thisFixed + i, thisPromise, new Command("data".getBytes()))));
     }
 
     final var journaledProgress = new AtomicReference<Progress>();

@@ -31,7 +31,9 @@ import java.util.stream.Stream;
 /// The core paxos algorithm is implemented in the TrexNode class that is wrapped by this class.
 /// This creates a clear separation between the core algorithm and the implementation of timeouts and shutdown logic.
 public abstract class TrexEngine implements AutoCloseable {
+
   static final Logger LOGGER = Logger.getLogger("");
+  
   public static final String THREAD_INTERRUPTED = "TrexEngine was interrupted awaiting the mutex probably to shutdown while under load.";
 
   /// The underlying TrexNode that is the actual Part-time Parliament algorithm implementation guarded by this class.
@@ -61,11 +63,9 @@ public abstract class TrexEngine implements AutoCloseable {
   /// to the network.
   ///
   /// @param trexNode               The underlying TrexNode which must be pre-configured with a Journal and QuorumStrategy.
-  /// @param networkOutboundSockets The consumer of a list of TrexMessages that will be sent out over the network.
   /// @param hostManagedTransactions If true the host application will manage transactions and the TrexNode will not call {@link Journal#sync()} the journal.
   @SuppressWarnings("unused") // TODO: maybe do a postgres example
   public TrexEngine(TrexNode trexNode,
-                    Consumer<List<TrexMessage>> networkOutboundSockets,
                     boolean hostManagedTransactions) {
     this.trexNode = trexNode;
     this.hostManagedTransactions = hostManagedTransactions;

@@ -1,13 +1,5 @@
-package com.github.trex_paxos.advisory_locks.udp;
+package com.github.trex_paxos.paxe;
 
-import com.github.trex_paxos.advisory_locks.ClusterMembership;
-import com.github.trex_paxos.advisory_locks.LockHandle;
-import com.github.trex_paxos.advisory_locks.NodeId;
-import com.github.trex_paxos.advisory_locks.TrexLockService;
-import com.github.trex_paxos.advisory_locks.server.LockServerCommandValue;
-import com.github.trex_paxos.advisory_locks.server.LockServerPickle;
-import com.github.trex_paxos.advisory_locks.server.LockServerReturnValue;
-import com.github.trex_paxos.advisory_locks.store.LockStore;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -21,20 +13,19 @@ import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class UdpLockServer implements TrexLockService, AutoCloseable {
+public class UdpLockServer implements AutoCloseable {
   private static final Logger LOGGER = Logger.getLogger(UdpLockServer.class.getName());
   public static final int ETHERNET_MTU = 1400;
   private final NodeId nodeId;
   private final ClusterMembership membership;
   private final DatagramSocket socket;
-  private final TrexLockService localService;
+
   private final Thread listenerThread;
 
   public UdpLockServer(NodeId nodeId, ClusterMembership membership,
-                       TrexLockService localService, Duration socketTimeout) throws IOException {
+                       Duration socketTimeout) throws IOException {
     this.nodeId = nodeId;
     this.membership = membership;
-    this.localService = localService;
     this.socket = new DatagramSocket(membership.nodePorts().get(nodeId));
     this.socket.setSoTimeout((int) socketTimeout.toMillis());
     // Start listener thread for incoming requests

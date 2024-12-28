@@ -1,8 +1,5 @@
-package com.github.trex_paxos.advisory_locks.udp;
+package com.github.trex_paxos.paxe
 
-import com.github.trex_paxos.advisory_locks.ClusterMembership;
-import com.github.trex_paxos.advisory_locks.NodeId;
-import com.github.trex_paxos.advisory_locks.store.LockStore;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
