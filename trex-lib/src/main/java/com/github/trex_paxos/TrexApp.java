@@ -152,7 +152,7 @@ public class TrexApp<T, R> {
                     network.accept(messages);
                 } else {
                     // forward to the leader
-                    network.accept(List.of(new Value(uuid, valueBytes)));
+                    network.accept(List.of(new Value(engine.trexNode.nodeIdentifier, uuid, valueBytes)));
                 }
             } catch (Exception e) {
                 LOGGER.log(Level.SEVERE, "Exception processing command: " + e.getMessage(), e);

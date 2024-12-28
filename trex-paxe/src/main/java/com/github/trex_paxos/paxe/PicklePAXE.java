@@ -5,7 +5,6 @@ import com.github.trex_paxos.msg.*;
 import com.github.trex_paxos.*;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
