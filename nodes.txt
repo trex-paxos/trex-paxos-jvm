@@ -1,8 +1,9 @@
 # fast tests
 mvn -DNO_LOGGING=true -B package
 
-# run ust one test
-mvn test -Dtest=TrexLockLocalTests -pl trex-locks
+# run just one test
+mvn -DskipTests clean package && \
+    mvn test -Dtest=SRPUtilsTests -pl trex-paxe
 
 # jshell
 

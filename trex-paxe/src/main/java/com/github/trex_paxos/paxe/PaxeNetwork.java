@@ -7,7 +7,6 @@ import java.net.InetAddress;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
-import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -139,49 +138,50 @@ public class PaxeNetwork implements AutoCloseable {
         return PaxeMessage.deserialize(decrypted);
     }
 
-private void encryptAndSend(PaxeMessage message, byte[] key) throws IOException {
-    var nonce = new byte[PaxePacket.NONCE_SIZE];
-    ThreadLocalRandom.current().nextBytes(nonce);
-    
-    try {
-        // Real encryption using AES-GCM
-        var cipher = Cipher.getInstance("AES/GCM/NoPadding"); 
-        var gcmSpec = new GCMParameterSpec(
-            PaxePacket.AUTH_TAG_SIZE * 8, nonce);
-        cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), gcmSpec);
+    private void encryptAndSend(PaxeMessage message, byte[] key) throws IOException {
+        var nonce = new byte[PaxePacket.NONCE_SIZE];
+        ThreadLocalRandom.current().nextBytes(nonce);
 
-        var plaintext = message.serialize();
-        var authData = buildAuthenticatedData(message);
-        cipher.updateAAD(authData);
-        
-        // Domal result contains both ciphertext and auth tag together
-        var ciphertextAndTag = cipher.doFinal(plaintext);
-        
-        // Split the result into ciphertext and tag
-        var ciphertextLength = ciphertextAndTag.length - PaxePacket.AUTH_TAG_SIZE;
-        var ciphertext = Arrays.copyOfRange(ciphertextAndTag, 0, ciphertextLength);
-        var authTag = Arrays.copyOfRange(ciphertextAndTag, ciphertextLength, ciphertextAndTag.length);
+        try {
+            // Real encryption using AES-GCM
+            var cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            var gcmSpec = new GCMParameterSpec(
+                    PaxePacket.AUTH_TAG_SIZE * 8, nonce);
+            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), gcmSpec);
 
-        var packet = new PaxePacket(
-                localNode,
-                message.to(),
-                message.channel(),
-                (byte) 0,
-                nonce, 
-                authTag,
-                ciphertext);
+            var plaintext = message.serialize();
+            var authData = buildAuthenticatedData(message);
+            cipher.updateAAD(authData);
 
-        sendPacket(packet);
-    } catch (GeneralSecurityException e) {
-        throw new IOException("Encryption failed", e);
+            // Domal result contains both ciphertext and auth tag together
+            var ciphertextAndTag = cipher.doFinal(plaintext);
+
+            // Split the result into ciphertext and tag
+            var ciphertextLength = ciphertextAndTag.length - PaxePacket.AUTH_TAG_SIZE;
+            var ciphertext = Arrays.copyOfRange(ciphertextAndTag, 0, ciphertextLength);
+            var authTag = Arrays.copyOfRange(ciphertextAndTag, ciphertextLength, ciphertextAndTag.length);
+
+            var packet = new PaxePacket(
+                    localNode,
+                    message.to(),
+                    message.channel(),
+                    (byte) 0,
+                    nonce,
+                    authTag,
+                    ciphertext);
+
+            sendPacket(packet);
+        } catch (GeneralSecurityException e) {
+            throw new IOException("Encryption failed", e);
+        }
     }
-}
-        // Extensions for PaxePacket to support AEAD
+
+    // Extensions for PaxePacket to support AEAD
     public static byte[] buildAuthenticatedData(PaxeMessage message) {
         // Additional authenticated data includes routing info
         var buffer = ByteBuffer.allocate(3); // from, to, channel
         buffer.put(message.from().value());
-        buffer.put(message.to().value()); 
+        buffer.put(message.to().value());
         buffer.put(message.channel().value());
         return buffer.array();
     }

@@ -126,13 +126,12 @@ public class PicklePAXE {
             case NoOperation _ ->
                 // Here we use zero bytes as a sentinel to represent the NOOP command.
                 buffer.putInt(0);
-            case Command command -> {
-                buffer.putInt(command.operationBytes().length);
-                buffer.put(command.operationBytes());
-                final var uuid = command.uuid();
-                buffer.putLong(uuid.getMostSignificantBits());
-                buffer.putLong(uuid.getLeastSignificantBits());
-            }
+                case Command(final UUID uuid, final var operationBytes) -> {
+                    buffer.putInt(operationBytes.length);
+                    buffer.put(operationBytes);
+                    buffer.putLong(uuid.getMostSignificantBits());
+                    buffer.putLong(uuid.getLeastSignificantBits());
+                }
         }
     }
 

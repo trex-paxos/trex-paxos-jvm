@@ -18,5 +18,6 @@
   "files.watcherExclude": {
     "**/target": true
   },
-  "maven.view": "hierarchical"
+  "maven.view": "hierarchical",
+  "java.format.settings.url": "eclipse-formatter.xml"
 }
