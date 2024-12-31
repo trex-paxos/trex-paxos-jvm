@@ -112,12 +112,12 @@ This is achieved by encoding the node identifier in each `N`s lower bits.
 This library uses a record with a signature similar to this:
 
 ```java
-public record BallotNumber(int counter, byte nodeIdentifier) implements Comparable<BallotNumber> {
+public record BallotNumber(int counter, short nodeIdentifier) implements Comparable<BallotNumber> {
 }
 ```
 
 The `compareTo` method treats the four-byte counter as having the most significant bits and the
-single-byte `nodeIndentifier` as having the least significant bits. The cluster operator must ensure they assign unique
+two-byte `nodeIndentifier` as having the least significant bits. The cluster operator must ensure they assign unique
 `nodeIdentifier` values to every node added to the cluster.
 
 In this implementation, nodes never recycle their numbers. They increment their counter each time they attempt to lead.
@@ -150,7 +150,7 @@ public record Command(String uuid,
                       byte[] operationBytes) {
 }
 
-public record BallotNumber(int counter, byte nodeIdentifier) {
+public record BallotNumber(int counter, short nodeIdentifier) {
 }
 
 public record Accept(long logIndex,
@@ -404,7 +404,7 @@ The list of tasks:
 - [x] Write a test harness that injects rolling network partitions.
 - [x] Write property based tests to exhaustively verify correctness.
 - [x] Write extensive documentation including detailed JavaDoc.
-- [ ] Include a record based distributed CAS as a default embedded pattern.
+- [ ] Write a transport for a demo. As Kwik does not support connection failover will start with my own UDP. 
 - [ ] Implement distributed advisor lock service as a full demo.
 - [ ] Implement cluster membership changes as UPaxos.
 - [ ] Add optionality so that randomized timeouts can be replaced by some other leader failure detection (e.g. JGroups).

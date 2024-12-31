@@ -24,11 +24,11 @@ import com.github.trex_paxos.SlotTerm;
 /// @param from see {@link TrexMessage}
 /// @param slotTerm  This is the `{S,N}` that identifies the fixed `V`.
 /// @param command  The command to be accepted by the acceptor. This may be a NOOP or a client command.
-public record Accept(byte from,
+public record Accept(short from,
                      SlotTerm slotTerm,
                      AbstractCommand command) implements TrexMessage, BroadcastMessage, PaxosMessage {
 
-  public Accept(byte from, long logIndex, BallotNumber number, AbstractCommand command) {
+  public Accept(short from, long logIndex, BallotNumber number, AbstractCommand command) {
     this(from, new SlotTerm(logIndex, number), command);
 
   }

@@ -22,8 +22,8 @@ import java.util.List;
 /// @param from                 see {@link TrexMessage}
 /// @param to                   see {@link DirectMessage}
 /// @param accepts              the list of fixed accepts above the slot index requested.
-public record CatchupResponse(byte from,
-                              byte to,
+public record CatchupResponse(short from,
+                                short to,
                               List<Accept> accepts
 ) implements TrexMessage, DirectMessage, LearningMessage {
 }

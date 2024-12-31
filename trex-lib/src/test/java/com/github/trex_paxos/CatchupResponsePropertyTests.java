@@ -28,11 +28,11 @@ public class CatchupResponsePropertyTests {
   @Property(generation = GenerationMode.EXHAUSTIVE)
   void catchupResponseTests(@ForAll("testCases") TestCase testCase) {
 
-    final var thisNodeId = (byte) 2;
+    final var thisNodeId = (short) 2;
     final var otherNodeId = switch (testCase.nodeIdentifierRelation) {
-      case LESS -> (byte) (thisNodeId - 1);
+      case LESS -> (short) (thisNodeId - 1);
       case EQUAL -> thisNodeId;
-      case GREATER -> (byte) (thisNodeId + 1);
+      case GREATER -> (short) (thisNodeId + 1);
     };
 
     final var thisCounter = 100;

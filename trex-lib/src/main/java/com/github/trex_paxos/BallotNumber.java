@@ -19,14 +19,14 @@ package com.github.trex_paxos;
 /// nodeIdentifier in the least significant fifth byte. This works as long as we make the nodeIdentifier unique within the cluster
 /// at any given configuration. It must also be unique across the overlaps of cluster membership reconfigurations. We can use Paxos itself to
 /// ensure this uniqueness.
-public record BallotNumber(int counter, byte nodeIdentifier) implements Comparable<BallotNumber> {
+public record BallotNumber(int counter, Short nodeIdentifier) implements Comparable<BallotNumber> {
 
-  public static final BallotNumber MIN = new BallotNumber(Integer.MIN_VALUE, Byte.MIN_VALUE);
+  public static final BallotNumber MIN = new BallotNumber(Integer.MIN_VALUE, Short.MIN_VALUE);
 
   @Override
   public int compareTo(BallotNumber that) {
     if (this.counter == that.counter) {
-      return Byte.compare(this.nodeIdentifier, that.nodeIdentifier);
+      return Short.compare(this.nodeIdentifier, that.nodeIdentifier);
     }
     return Integer.compare(this.counter, that.counter);
   }

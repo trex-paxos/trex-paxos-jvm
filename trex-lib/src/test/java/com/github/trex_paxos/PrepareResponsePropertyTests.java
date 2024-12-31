@@ -1,5 +1,6 @@
 package com.github.trex_paxos;
 
+import com.github.trex_paxos.TrexNode.TrexRole;
 import com.github.trex_paxos.msg.*;
 import net.jqwik.api.*;
 
@@ -32,7 +33,7 @@ public class PrepareResponsePropertyTests {
 
   @Property(generation = GenerationMode.EXHAUSTIVE)
   void prepareResponseTests(@ForAll("testCases") TestCase testCase) {
-    final var thisNodeId = (byte) 2;
+    final var thisNodeId = (short) 2;
     final var otherNodeId = switch (testCase.nodeIdentifierRelation) {
       case LESS -> (byte) (thisNodeId - 1);
       case EQUAL -> thisNodeId;
@@ -79,7 +80,7 @@ public class PrepareResponsePropertyTests {
       if (role != TrexRole.FOLLOW) {
         term = thisPromise;
         final var slot = slotAtomic.get();
-        final var responses = new TreeMap<Byte, PrepareResponse>();
+        final var responses = new TreeMap<Short, PrepareResponse>();
         final var prepareResponse = createPrepareResponse(slot, thisVote);
         responses.put(thisNodeId, prepareResponse);
         prepareResponsesByLogIndex.put(slot, responses);
@@ -135,8 +136,8 @@ public class PrepareResponsePropertyTests {
   }
 
   private PrepareResponse createPrepareResponse(long slot, boolean vote) {
-    final var v = new PrepareResponse.Vote((byte) 2, (byte) 2, slot, vote, new BallotNumber(100, (byte) 2));
-    return new PrepareResponse((byte) 2, (byte) 2, v, Optional.empty(), slot);
+    final var v = new PrepareResponse.Vote((short) 2, (short) 2, slot, vote, new BallotNumber(100, (short) 2));
+    return new PrepareResponse((short) 2, (short) 2, v, Optional.empty(), slot);
   }
 
   @Provide

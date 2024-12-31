@@ -23,13 +23,13 @@ public class FixedPropertyTests {
   @Property(generation = GenerationMode.EXHAUSTIVE)
   void fixedTests(@ForAll("testCases") TestCase testCase) {
     // Set up the identifier of the node under test
-    final var thisNodeId = (byte) 2;
+    final var thisNodeId = (short) 2;
 
     // Set up the identifier of the other node relative to the node under test
     final var otherNodeId = switch (testCase.nodeIdentifierRelation) {
-      case LESS -> (byte) (thisNodeId - 1);
+      case LESS -> (short) (thisNodeId - 1);
       case EQUAL -> thisNodeId;
-      case GREATER -> (byte) (thisNodeId + 1);
+      case GREATER -> (short) (thisNodeId + 1);
     };
 
     // Setup ballot number of the node under test

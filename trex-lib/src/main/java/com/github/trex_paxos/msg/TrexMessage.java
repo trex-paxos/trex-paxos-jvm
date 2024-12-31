@@ -28,6 +28,6 @@ public sealed interface TrexMessage extends Message permits
     Prepare,
     PrepareResponse  {
   /// @return the node in the cluster that sent this message.
-  byte from();
+  short from();
 }
 

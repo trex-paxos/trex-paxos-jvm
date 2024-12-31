@@ -18,5 +18,5 @@ package com.github.trex_paxos.msg;
 public sealed interface DirectMessage extends TrexMessage 
 permits AcceptResponse, Catchup, CatchupResponse, PrepareResponse {
   /// @return the node in the cluster that this message is intended for.
-  byte to();
+  short to();
 }

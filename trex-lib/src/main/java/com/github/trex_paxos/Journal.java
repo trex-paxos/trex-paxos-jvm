@@ -66,7 +66,7 @@ public interface Journal {
   ///
   /// @param nodeIdentifier The node identifier to load the progress record for. To avoid accidentally loading the wrong
   ///                                                                                                                                                           history when moving nodes between servers we require the node identifier. This is only a safety feature.
-  Progress readProgress(byte nodeIdentifier);
+  Progress readProgress(short nodeIdentifier);
 
   /// Save a value into the log.
   /// Logically this method is storing `accept(S,N,V)` so it needs to store the values `{N,V}` at log slot `S`

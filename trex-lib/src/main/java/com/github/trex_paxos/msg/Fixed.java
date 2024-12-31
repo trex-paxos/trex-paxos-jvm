@@ -25,10 +25,10 @@ import com.github.trex_paxos.SlotTerm;
 /// @param from          see {@link TrexMessage}
 /// @param slotTerm  This is the `{S,N}` that identifies the fixed `V`. `
 public record Fixed(
-    byte from,
+  short from,
     SlotTerm slotTerm
 ) implements TrexMessage, BroadcastMessage, LearningMessage {
-  public Fixed(byte from, long logIndex, BallotNumber number) {
+  public Fixed(short from, long logIndex, BallotNumber number) {
     this(from, new SlotTerm(logIndex, number));
   }
 

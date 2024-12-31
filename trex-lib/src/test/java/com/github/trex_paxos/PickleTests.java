@@ -29,7 +29,7 @@ public class PickleTests {
 
   @Test
   public void testPickleProgress() throws Exception {
-    Progress progress = new Progress((byte) 1, new BallotNumber(2, (byte) 3), 4L);
+    Progress progress = new Progress((short) 1, new BallotNumber(2, (short) 3), 4L);
     byte[] pickled = Pickle.writeProgress(progress);
     Progress unpickled = Pickle.readProgress(pickled);
     assertEquals(progress, unpickled);
@@ -37,7 +37,7 @@ public class PickleTests {
 
   @Test
   public void testPickleBallotNumber() throws Exception {
-    BallotNumber ballotNumber = new BallotNumber(2, (byte) 3);
+    BallotNumber ballotNumber = new BallotNumber(2, (short) 3);
     byte[] pickled = Pickle.write(ballotNumber);
     BallotNumber unpickled = Pickle.readBallotNumber(pickled);
     assertEquals(ballotNumber, unpickled);
@@ -53,7 +53,7 @@ public class PickleTests {
 
     @Test
   public void testAcceptNoopPickleUnpickle() throws IOException {
-    Accept accept = new Accept((byte) 3, 4L, new BallotNumber(2, (byte) 3), NoOperation.NOOP);
+    Accept accept = new Accept((short) 3, 4L, new BallotNumber(2, (short) 3), NoOperation.NOOP);
     byte[] pickled = Pickle.write(accept);
     Accept unpickled = (Accept) Pickle.readAccept(pickled);
     assertEquals(accept, unpickled);
@@ -62,7 +62,7 @@ public class PickleTests {
     @Test
   public void testAcceptPickleUnpickleClientCommand() throws IOException {
     Command command = new Command( "data".getBytes(StandardCharsets.UTF_8));
-    Accept accept = new Accept((byte) 3, 4L, new BallotNumber(2, (byte) 3), command);
+    Accept accept = new Accept((short) 3, 4L, new BallotNumber(2, (short) 3), command);
     byte[] pickled = Pickle.write(accept);
     Accept unpickled = (Accept) Pickle.readAccept(pickled);
     assertEquals(accept, unpickled);

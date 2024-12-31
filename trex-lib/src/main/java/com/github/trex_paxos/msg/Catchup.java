@@ -24,11 +24,10 @@ import com.github.trex_paxos.BallotNumber;
 /// @param to                   see {@link DirectMessage}
 /// @param highestFixedIndex the highest index that the replica has fixed.
 /// @param highestPromised      the highest ballot number that the replica has promised.
-public record Catchup(byte from,
-                      byte to,
-                      long highestFixedIndex,
-                      BallotNumber highestPromised
-) implements DirectMessage, TrexMessage {
+public record Catchup(short from,
+    short to,
+    long highestFixedIndex,
+    BallotNumber highestPromised) implements DirectMessage, TrexMessage {
 
   @Override
   public String toString() {

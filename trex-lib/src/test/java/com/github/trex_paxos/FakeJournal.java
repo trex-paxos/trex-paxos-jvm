@@ -22,7 +22,7 @@ public class FakeJournal implements Journal {
   }
 
   @Override
-  public Progress readProgress(byte nodeIdentifier) {
+  public Progress readProgress(short nodeIdentifier) {
     return new Progress(nodeIdentifier, promise, highestFixed);
   }
 

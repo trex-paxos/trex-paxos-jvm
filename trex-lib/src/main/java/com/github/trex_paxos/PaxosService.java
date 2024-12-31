@@ -90,7 +90,7 @@ public class PaxosService<CMD, RESULT> {
   }
 
   /// Shorthand to get the node id which must be unique in the paxos cluster. It is th responsibility of the cluster owner to ensure that it is unique.
-  public byte nodeId() {
+  public short nodeId() {
     return engine.trexNode.nodeIdentifier();
   }
 

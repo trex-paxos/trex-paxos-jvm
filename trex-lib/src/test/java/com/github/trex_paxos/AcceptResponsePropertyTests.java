@@ -26,12 +26,12 @@ public class AcceptResponsePropertyTests {
 
   @Property(generation = GenerationMode.EXHAUSTIVE)
   void acceptResponseTests(@ForAll("testCases") TestCase testCase) {
-    final var thisNodeId = (byte) 2;
+    final var thisNodeId = (short) 2;
 
     final var otherNodeId = switch (testCase.nodeIdentifierRelation) {
-      case LESS -> (byte) (thisNodeId - 1);
+      case LESS -> (short) (thisNodeId - 1);
       case EQUAL -> thisNodeId;
-      case GREATER -> (byte) (thisNodeId + 1);
+      case GREATER -> (short) (thisNodeId + 1);
     };
 
     final var thisCounter = 100;
@@ -103,7 +103,7 @@ public class AcceptResponsePropertyTests {
       ///  Set up an `accept` and `acceptVotes` for a given slot
       private CreatedData createAcceptVotes(long s) {
         final var a = new Accept(thisNodeId, s, thisPromise, NoOperation.NOOP);
-        final Map<Byte, AcceptResponse> responses = new TreeMap<>();
+        final Map<Short, AcceptResponse> responses = new TreeMap<>();
         responses.put(thisNodeId, new AcceptResponse(thisNodeId, thisNodeId,
             new AcceptResponse.Vote(thisNodeId, thisNodeId, s, thisVote), s));
         AcceptVotes votes = new AcceptVotes(a.slotTerm(), responses, false);

@@ -7,7 +7,7 @@ import java.util.Optional;
 import java.util.TreeMap;
 
 class TransparentJournal implements Journal {
-  public TransparentJournal(byte nodeIdentifier) {
+  public TransparentJournal(short nodeIdentifier) {
     progress = new Progress(nodeIdentifier);
     fakeJournal.put(0L, new Accept(nodeIdentifier, 0, BallotNumber.MIN, NoOperation.NOOP));
   }
@@ -27,7 +27,7 @@ class TransparentJournal implements Journal {
   }
 
   @Override
-  public Progress readProgress(byte nodeIdentifier) {
+  public Progress readProgress(short nodeIdentifier) {
     return progress;
   }
 

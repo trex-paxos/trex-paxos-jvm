@@ -19,8 +19,8 @@ import java.util.stream.IntStream;
 /// The purpose of the fixed size header is for rapid multiplexing and demultiplexing of messages.
 public class PicklePAXE {
 
-    private static final int HEADER_SIZE = 3; // fromNode(1) + toNode(1) + type(1)
-    private static final int BALLOT_NUMBER_SIZE = Integer.BYTES + 1; // counter(4) + nodeId(1)
+    private static final int HEADER_SIZE = 5; // fromNode(2) + toNode(2) + type(1)
+    private static final int BALLOT_NUMBER_SIZE = Integer.BYTES + 2; // counter(4) + nodeId(2)
 
     public static byte[] pickle(TrexMessage msg) {
         // Calculate size needed for the message
@@ -63,8 +63,8 @@ public class PicklePAXE {
             case DirectMessage dm -> dm.to();
         };
         final var type = toByte(msg);
-        buffer.put(fromNode);
-        buffer.put(toNode);
+        buffer.putShort(fromNode);
+        buffer.putShort(toNode);
         buffer.put(type);
     }
 
@@ -82,8 +82,8 @@ public class PicklePAXE {
     }
 
     public static TrexMessage unpickle(ByteBuffer buffer) {
-        byte fromNode = buffer.get();
-        byte toNode = buffer.get();
+        short fromNode = buffer.getShort();
+        short toNode = buffer.getShort();
         byte type = buffer.get();
         return switch (type) {
             case 1 -> readPrepare(buffer, fromNode);
@@ -113,7 +113,7 @@ public class PicklePAXE {
         return size;
     }
 
-    public static PrepareResponse readPrepareResponse(ByteBuffer buffer, byte from, byte to) {
+    public static PrepareResponse readPrepareResponse(ByteBuffer buffer, short from, short to) {
         final var vote = readVotePrepare(buffer, from, to);
         long highestFixedIndex = buffer.getLong();
         Optional<Accept> highestUnfixed = buffer.get() == 1 ? 
@@ -156,32 +156,32 @@ public class PicklePAXE {
         return calculateVoteAcceptSize(m.vote()) + Long.BYTES;
     }
 
-    public static AcceptResponse readAcceptResponse(ByteBuffer buffer, byte from, byte to) {
+    public static AcceptResponse readAcceptResponse(ByteBuffer buffer, short from, short to) {
         final var vote = readVoteAccept(buffer);
         final long highestFixedIndex = buffer.getLong();
         return new AcceptResponse(from, to, vote, highestFixedIndex);
     }
 
     public static AcceptResponse.Vote readVoteAccept(ByteBuffer buffer) {
-        byte from = buffer.get();
-        byte to = buffer.get();
+        short from = buffer.getShort();
+        short to = buffer.getShort();
         long logIndex = buffer.getLong();
         boolean vote = buffer.get() != 0;
         return new AcceptResponse.Vote(from, to, logIndex, vote);
     }
 
     private static int calculateVoteAcceptSize(AcceptResponse.Vote vote) {
-        return 2 + Long.BYTES + 1; // from + to + logIndex + vote
+        return Short.BYTES + Short.BYTES + Long.BYTES + 1; // from + to + logIndex + vote
     }
 
     public static void write(AcceptResponse.Vote m, ByteBuffer buffer) {
-        buffer.put(m.from());
-        buffer.put(m.to());
+        buffer.putShort(m.from());
+        buffer.putShort(m.to());
         buffer.putLong(m.logIndex());
         buffer.put((byte) (m.vote() ? 1 : 0));
     }
 
-    public static PrepareResponse.Vote readVotePrepare(ByteBuffer buffer, byte from, byte to) {
+    public static PrepareResponse.Vote readVotePrepare(ByteBuffer buffer, short from, short to) {
         long logIndex = buffer.getLong();
         boolean vote = buffer.get() != 0;
         BallotNumber number = readBallotNumber(buffer);
@@ -217,17 +217,17 @@ public class PicklePAXE {
     }
 
     public static void writeInner(Accept m, ByteBuffer buffer) {
-        buffer.put(m.from());
+        buffer.putShort(m.from());
         buffer.putLong(m.slot());
         write(m.number(), buffer);
         write(m.command(), buffer);
     }
 
     private static int calculateAcceptInnerSize(Accept m) {
-        return 1 + calculateAcceptSize(m); // from + accept size
+        return Short.BYTES + calculateAcceptSize(m); // from + accept size
     }
 
-    public static Accept readAccept(ByteBuffer buffer, byte from) {
+    public static Accept readAccept(ByteBuffer buffer, short from) {
         final long logIndex = buffer.getLong();
         final BallotNumber number = readBallotNumber(buffer);
         final var command = readCommand(buffer);
@@ -235,7 +235,7 @@ public class PicklePAXE {
     }
 
     public static Accept readAcceptInner(ByteBuffer buffer) {
-        final byte from = buffer.get();
+        final short from = buffer.getShort();
         final long logIndex = buffer.getLong();
         final BallotNumber number = readBallotNumber(buffer);
         final var command = readCommand(buffer);
@@ -247,13 +247,13 @@ public class PicklePAXE {
         write(m.highestPromised(), buffer);
     }
 
-    public static Catchup readCatchup(ByteBuffer buffer, byte from, byte to) {
+    public static Catchup readCatchup(ByteBuffer buffer, short from, short to) {
         final var highestFixedIndex = buffer.getLong();
         final var highestPromised = readBallotNumber(buffer);
         return new Catchup(from, to, highestFixedIndex, highestPromised);
     }
 
-    public static CatchupResponse readCatchupResponse(ByteBuffer buffer, byte from, byte to) {
+    public static CatchupResponse readCatchupResponse(ByteBuffer buffer, short from, short to) {
         final int catchupSize = buffer.getInt();
         List<Accept> catchup = new ArrayList<>();
         IntStream.range(0, catchupSize).forEach(_ -> 
@@ -281,13 +281,13 @@ public class PicklePAXE {
         write(m.slotTerm().number(), buffer);
     }
 
-    public static Fixed readFixed(ByteBuffer buffer, byte from) {
+    public static Fixed readFixed(ByteBuffer buffer, short from) {
         final var fixedLogIndex = buffer.getLong();
         final var number = readBallotNumber(buffer);
         return new Fixed(from, fixedLogIndex, number);
     }
 
-    public static Prepare readPrepare(ByteBuffer buffer, byte from) {
+    public static Prepare readPrepare(ByteBuffer buffer, short from) {
         final long logIndex = buffer.getLong();
         final BallotNumber number = readBallotNumber(buffer);
         return new Prepare(from, logIndex, number);
@@ -301,10 +301,10 @@ public class PicklePAXE {
     // Utility methods for BallotNumber
     private static void write(BallotNumber n, ByteBuffer buffer) {
         buffer.putInt(n.counter());
-        buffer.put(n.nodeIdentifier());
+        buffer.putShort(n.nodeIdentifier());
     }
 
     private static BallotNumber readBallotNumber(ByteBuffer buffer) {
-        return new BallotNumber(buffer.getInt(), buffer.get());
+        return new BallotNumber(buffer.getInt(), buffer.getShort());
     }
 }

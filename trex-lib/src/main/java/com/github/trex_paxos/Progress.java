@@ -24,7 +24,7 @@ package com.github.trex_paxos;
  * @param highestFixedIndex The highest log index that has been learnt to have been fixed and so not fixed.
  */
 public record Progress(
-    byte nodeIdentifier,
+  short nodeIdentifier,
     BallotNumber highestPromised,
     long highestFixedIndex
 ) {
@@ -34,7 +34,7 @@ public record Progress(
    *
    * @param nodeIdentifier The current node identifier.
    */
-  public Progress(byte nodeIdentifier) {
+  public Progress(short nodeIdentifier) {
     this(nodeIdentifier, BallotNumber.MIN, 0);
   }
 

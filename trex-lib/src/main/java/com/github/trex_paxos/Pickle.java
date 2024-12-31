@@ -38,7 +38,7 @@ public class Pickle {
     }
 
     public static void write(Progress progress, DataOutputStream dos) throws IOException {
-        dos.writeByte(progress.nodeIdentifier());
+        dos.writeShort(progress.nodeIdentifier());
         write(progress.highestPromised(), dos);
         dos.writeLong(progress.highestFixedIndex());
     }
@@ -51,7 +51,7 @@ public class Pickle {
     }
 
     private static Progress readProgress(DataInputStream dis) throws IOException {
-        return new Progress(dis.readByte(), readBallotNumber(dis), dis.readLong());
+        return new Progress(dis.readShort(), readBallotNumber(dis), dis.readLong());
     }
 
     public static byte[] write(BallotNumber n) throws IOException {
@@ -64,7 +64,7 @@ public class Pickle {
 
     public static void write(BallotNumber n, DataOutputStream dataOutputStream) throws IOException {
         dataOutputStream.writeInt(n.counter());
-        dataOutputStream.writeByte(n.nodeIdentifier());
+        dataOutputStream.writeShort(n.nodeIdentifier());
     }
 
     public static BallotNumber readBallotNumber(byte[] pickled) throws IOException {
@@ -75,18 +75,18 @@ public class Pickle {
     }
 
     public static BallotNumber readBallotNumber(DataInputStream dataInputStream) throws IOException {
-        return new BallotNumber(dataInputStream.readInt(), dataInputStream.readByte());
+        return new BallotNumber(dataInputStream.readInt(), dataInputStream.readShort());
     }
 
     public static void write(Accept m, DataOutputStream dataStream) throws IOException {
-        dataStream.writeByte(m.from());
+        dataStream.writeShort(m.from());
         dataStream.writeLong(m.slot());
         write(m.number(), dataStream);
         write(m.command(), dataStream);
     }
 
     public static Accept readAccept(DataInputStream dataInputStream) throws IOException {
-        final byte from = dataInputStream.readByte();
+        final short from = dataInputStream.readShort();
         final long logIndex = dataInputStream.readLong();
         final BallotNumber number = readBallotNumber(dataInputStream);
         final var command = readCommand(dataInputStream);

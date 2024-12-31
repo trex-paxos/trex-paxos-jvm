@@ -34,13 +34,13 @@ public class PreparePropertyTests {
   void prepareTests(@ForAll("testCases") TestCase testCase) {
 
     // Set up the identifier of the node
-    final byte nodeId = 2;
+    final short nodeId = 2;
 
     // Set up the identifier of the other node relative to the node under test
     final var otherNodeId = switch (testCase.nodeIdentifierRelation) {
-      case LESS -> (byte) (nodeId - 1);
+      case LESS -> (short) (nodeId - 1);
       case EQUAL -> nodeId;
-      case GREATER -> (byte) (nodeId + 1);
+      case GREATER -> (short) (nodeId + 1);
     };
 
     // Setup ballot number of the node under test

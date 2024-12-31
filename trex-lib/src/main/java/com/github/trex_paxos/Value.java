@@ -17,7 +17,7 @@ package com.github.trex_paxos;
 
 import java.util.UUID;
 
-public record Value(byte from, UUID uuid, byte[] bytes) implements Message {
+public record Value(short from, UUID uuid, byte[] bytes) implements Message {
     public Value {
         if (uuid == null) {
             throw new IllegalArgumentException("uuid cannot be null");

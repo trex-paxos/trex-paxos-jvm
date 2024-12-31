@@ -28,17 +28,17 @@ import java.util.Optional;
 /// @param journaledAccept      the highest unfixed log entry if any.
 /// @param highestAcceptedIndex additional information about the highest accepted index so that a leader can learn of more slots that it needs to recover.
 public record PrepareResponse(
-    byte from,
-    byte to,
+  short from,
+  short to,
     Vote vote,
     Optional<Accept> journaledAccept,
     long highestAcceptedIndex
 ) implements TrexMessage, DirectMessage {
   public record Vote(
       // spookily intellij says there are no usages of this field, but if I remove it everything breaks
-      byte from,
+      short from,
       // spookily intellij says there are no usages of this field, but if I remove it everything breaks
-      byte to,
+      short to,
       long logIndex,
       boolean vote,
       BallotNumber number

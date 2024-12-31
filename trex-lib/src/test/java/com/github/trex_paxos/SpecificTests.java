@@ -15,6 +15,7 @@
  */
 package com.github.trex_paxos;
 
+import com.github.trex_paxos.TrexNode.TrexRole;
 import com.github.trex_paxos.msg.*;
 import org.junit.jupiter.api.Test;
 
@@ -47,10 +48,10 @@ public class SpecificTests {
   public void testCatchupDoesNotViolateInvariantsYetDoesLearnDespiteHigherSelfPromise() {
 
     // Given that node 1 has accepted a value at slot 1 and has made a very high self promise
-    final var nodeId1 = (byte) 1;
-    final var journal = new TransparentJournal((byte) 1);
-    final var acceptPreviouslyFixedSlot1 = new Accept((byte) 1, 1L, new BallotNumber(1, (byte) 1), new Command( "data".getBytes()));
-    final var higherSelfPromiseNumber = new BallotNumber(1000, (byte) 1);
+    final var nodeId1 = (short) 1;
+    final var journal = new TransparentJournal((short) 1);
+    final var acceptPreviouslyFixedSlot1 = new Accept((short) 1, 1L, new BallotNumber(1, (short) 1), new Command( "data".getBytes()));
+    final var higherSelfPromiseNumber = new BallotNumber(1000, (short) 1);
     TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {{
       this.journal.writeAccept(acceptPreviouslyFixedSlot1);
       this.progress = new Progress(nodeIdentifier, higherSelfPromiseNumber, 1L);
@@ -58,8 +59,8 @@ public class SpecificTests {
 
     // When node 2 sends a catchup response that has fixed values made under a previous leaders ballot number
     // And where the actual fixed message at slot one is different to the one that node 1 thinks is already fixed.
-    final var nodeId2 = (byte) 2;
-    final var ballotNumber2 = new BallotNumber(2, (byte) 2);
+    final var nodeId2 = (short) 2;
+    final var ballotNumber2 = new BallotNumber(2, (short) 2);
     final var ignoreAcceptSlot1 = new Accept(nodeId2, 1L, ballotNumber2, new Command("data2".getBytes()));
     final var freshAcceptSlot2 = new Accept(nodeId2, 2L, ballotNumber2, new Command("data3".getBytes()));
     final var catchUpResponse = new CatchupResponse(nodeId1, nodeId2, List.of(ignoreAcceptSlot1, freshAcceptSlot2));
@@ -85,10 +86,10 @@ public class SpecificTests {
   @Test
   public void testCatchupWithHigherBallotNumberAndLowerFixedSlotCausesLeaderToIncrementTheTerm() {
     // Given leader node 1
-    final var nodeId1 = (byte) 1;
+    final var nodeId1 = (short) 1;
     final var originalNumber = new BallotNumber(1, nodeId1);
     final var journal = new TransparentJournal(nodeId1);
-    final var acceptPreviouslyFixedSlot1 = new Accept((byte) 1, 1L, new BallotNumber(1, (byte) 1), new Command( "data".getBytes()));
+    final var acceptPreviouslyFixedSlot1 = new Accept((short) 1, 1L, new BallotNumber(1, (short) 1), new Command( "data".getBytes()));
     TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {{
       this.progress = new Progress(nodeIdentifier, originalNumber, 1L);
       this.journal.writeAccept(acceptPreviouslyFixedSlot1);
@@ -99,7 +100,7 @@ public class SpecificTests {
     assert node.progress.highestPromised().equals(originalNumber);
 
     // When we get a higher self promise catchup request
-    final var nodeId2 = (byte) 2;
+    final var nodeId2 = (short) 2;
     final var higherSelfPromiseNumber = new BallotNumber(originalNumber.counter() + 1, nodeId2);
 
     assert node.progress.highestPromised().lessThan(higherSelfPromiseNumber);

@@ -79,7 +79,7 @@ public class TrexNode {
   /// @param nodeIdentifier The unique node identifier. This must be unique across the cluster and across enough time for prior messages to have been forgotten.
   /// @param quorumStrategy The quorum strategy that may be a simple majority, else things like FPaxos or UPaxos
   /// @param journal        The durable storage and durable log. This must be pre-initialised.
-  public TrexNode(Level logAtLevel, byte nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal) {
+  public TrexNode(Level logAtLevel, short nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal) {
     this.nodeIdentifier = nodeIdentifier;
     this.journal = journal;
     this.quorumStrategy = quorumStrategy;
@@ -92,7 +92,7 @@ public class TrexNode {
   }
 
   /// The current node identifier. This must be globally unique in the cluster.
-  final byte nodeIdentifier;
+  final short nodeIdentifier;
 
   /// The durable storage and durable log.
   final Journal journal;
@@ -108,7 +108,7 @@ public class TrexNode {
   Progress progress;
 
   /// During a recovery we will track all the slots that we are probing to find the highest accepted operationBytes.
-  final NavigableMap<Long, Map<Byte, PrepareResponse>> prepareResponsesByLogIndex = new TreeMap<>();
+  final NavigableMap<Long, Map<Short, PrepareResponse>> prepareResponsesByLogIndex = new TreeMap<>();
 
   /// When leading we will track the responses to a stream of accept messages.
   final NavigableMap<Long, AcceptVotes> acceptVotesByLogIndex = new TreeMap<>();
@@ -195,6 +195,7 @@ public class TrexNode {
       return;
     }
     switch (input) {
+
       case Accept accept -> {
         final var number = accept.slotTerm().number();
         final var logIndex = accept.slotTerm().logIndex();
@@ -368,6 +369,12 @@ public class TrexNode {
           journal.writeProgress(progress);
         }
       }
+      default -> {
+        // this is unreachable but on refactor to SHORT the compiler complaines FIXME
+        LOGGER.severe("Unknown message type: " + input);
+        throw new IllegalArgumentException("Unknown message type: " + input);
+      }
+    
     }
   }
 
@@ -612,7 +619,7 @@ public class TrexNode {
     return progress.highestFixedIndex();
   }
 
-  public byte nodeIdentifier() {
+  public short nodeIdentifier() {
     return nodeIdentifier;
   }
 
@@ -703,7 +710,7 @@ public class TrexNode {
   }
 
   private void processPrepareResponse(PrepareResponse prepareResponse, List<TrexMessage> messages) {
-    final byte from = prepareResponse.from();
+    final var from = prepareResponse.from();
     final long logIndex = prepareResponse.vote().logIndex();
     final var votes = prepareResponsesByLogIndex.computeIfAbsent(logIndex, _ -> new HashMap<>());
     votes.put(from, prepareResponse);
@@ -794,7 +801,7 @@ public class TrexNode {
   /**
    * A record of the votes received by a node from other cluster members.
    */
-  public record AcceptVotes(SlotTerm accept, Map<Byte, AcceptResponse> responses, boolean chosen) {
+  public record AcceptVotes(SlotTerm accept, Map<Short, AcceptResponse> responses, boolean chosen) {
     public AcceptVotes(SlotTerm slotTerm) {
       this(slotTerm, new HashMap<>(), false);
     }

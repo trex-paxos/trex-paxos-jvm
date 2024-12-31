@@ -23,10 +23,10 @@ import com.github.trex_paxos.SlotTerm;
 /// @param from     The node identifier of the proposer used to route the message and self-accept.
 /// @param slotTerm  This is the `{S,N}` where a successful leader will select the highest `V`.
 public record Prepare(
-    byte from,
+  short from,
     SlotTerm slotTerm
 ) implements TrexMessage, BroadcastMessage, PaxosMessage {
-  public Prepare(byte from, long logIndex, BallotNumber number) {
+  public Prepare(short from, long logIndex, BallotNumber number) {
     this(from, new SlotTerm(logIndex, number));
   }
 

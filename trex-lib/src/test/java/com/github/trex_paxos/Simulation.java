@@ -54,7 +54,7 @@ class Simulation {
     return rng;
   }
 
-  Map<Byte, Long> nodeTimeouts = new HashMap<>();
+  Map<Short, Long> nodeTimeouts = new HashMap<>();
 
   public void run(
       int iterations,
@@ -222,13 +222,13 @@ class Simulation {
   sealed interface Event permits Heartbeat, Send, Timeout, ClientCommand {
   }
 
-  record Timeout(byte nodeIdentifier) implements Event {
+  record Timeout(short nodeIdentifier) implements Event {
   }
 
   record Send(List<TrexMessage> messages) implements Event {
   }
 
-  record Heartbeat(byte nodeIdentifier) implements Event {
+  record Heartbeat(short nodeIdentifier) implements Event {
   }
 
   record ClientCommand() implements Event {
@@ -244,7 +244,7 @@ class Simulation {
     this.now = now;
   }
 
-  void setTimeout(byte nodeIdentifier) {
+  void setTimeout(short nodeIdentifier) {
     final var oldTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
     final var timeout = rng.nextInt((int) shortMaxTimeout + 1, (int) longMaxTimeout);
     final var when = Math.max(lastNow, now) + timeout;
@@ -258,7 +258,7 @@ class Simulation {
     LOGGER.fine(() -> "\tsetTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier + "+=" + timeout);
   }
 
-  void clearTimeout(byte nodeIdentifier) {
+  void clearTimeout(short nodeIdentifier) {
     final var oldTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
     Optional.ofNullable(nodeTimeouts.get(nodeIdentifier)).ifPresent(timeout -> Optional.ofNullable(eventQueue.get(timeout)).ifPresent(events -> {
           events.remove(new Timeout(nodeIdentifier));
@@ -272,7 +272,7 @@ class Simulation {
     LOGGER.fine(() -> "\tclearTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier);
   }
 
-  void setHeartbeat(byte nodeIdentifier) {
+  void setHeartbeat(short nodeIdentifier) {
     final var timeout = rng.nextInt((int) shortMaxTimeout / 2, (int) shortMaxTimeout);
     final var when = Math.max(lastNow, now) + timeout;
     final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
@@ -285,14 +285,14 @@ class Simulation {
 
   final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
 
-  final TestablePaxosEngine trexEngine1 = makeTrexEngine((byte) 1, threeNodeQuorum);
-  final TestablePaxosEngine trexEngine2 = makeTrexEngine((byte) 2, threeNodeQuorum);
-  final TestablePaxosEngine trexEngine3 = makeTrexEngine((byte) 3, threeNodeQuorum);
+  final TestablePaxosEngine trexEngine1 = makeTrexEngine((short) 1, threeNodeQuorum);
+  final TestablePaxosEngine trexEngine2 = makeTrexEngine((short) 2, threeNodeQuorum);
+  final TestablePaxosEngine trexEngine3 = makeTrexEngine((short) 3, threeNodeQuorum);
 
-  final Map<Byte, TestablePaxosEngine> engines = Map.of(
-      (byte) 1, trexEngine1,
-      (byte) 2, trexEngine2,
-      (byte) 3, trexEngine3
+  final Map<Short, TestablePaxosEngine> engines = Map.of(
+      (short) 1, trexEngine1,
+      (short) 2, trexEngine2,
+      (short) 3, trexEngine3
   );
 
   // start will launch some timeouts into the event queue
@@ -330,7 +330,7 @@ class Simulation {
 
   class SimulationPaxosEngine extends TestablePaxosEngine {
 
-    public SimulationPaxosEngine(byte nodeIdentifier,
+    public SimulationPaxosEngine(short nodeIdentifier,
                                  QuorumStrategy quorumStrategy,
                                  TransparentJournal transparentJournal
     ) {
@@ -353,7 +353,7 @@ class Simulation {
     }
   }
 
-  TestablePaxosEngine makeTrexEngine(byte nodeIdentifier, QuorumStrategy quorumStrategy) {
+  TestablePaxosEngine makeTrexEngine(short nodeIdentifier, QuorumStrategy quorumStrategy) {
     return new SimulationPaxosEngine(nodeIdentifier,
         quorumStrategy,
         new TransparentJournal(nodeIdentifier)
