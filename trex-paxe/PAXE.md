@@ -8,9 +8,9 @@ PAXE is a lightweight encrypted protocol for Paxos clusters supporting multiplex
 ```
 [UDP Header]
 [PAXE Header - 4 bytes]
-  From Node ID:    1 byte
-  To Node ID:      1 byte  
-  Channel ID:      1 byte  
+  From Node ID:    2 byte
+  To Node ID:      3 byte  
+  Channel ID:      2 byte  
   Flags:           1 byte
     bit 7: Auth Required     (0x80)
     bit 6: Is Fragmented    (0x40)
@@ -28,7 +28,6 @@ PAXE is a lightweight encrypted protocol for Paxos clusters supporting multiplex
 
 ## Channels
 - Channel 0: Reserved for PAXE consensus messages
-- Channels 1-255: Available for application streams
 
 ## Fragmentation
 Any message on any channel may be fragmented if it exceeds the MTU size:
@@ -72,8 +71,3 @@ Any message on any channel may be fragmented if it exceeds the MTU size:
    - Receiving node must buffer and reorder fragments
    - Complete message processed after last fragment received
 2. Applications must handle timeout and cleanup of incomplete fragment sequences
-
-## Versioning
-- Protocol version 2.1 
-- Incompatible with 2.0 due to flag bit reordering
-- All nodes in cluster must use same version

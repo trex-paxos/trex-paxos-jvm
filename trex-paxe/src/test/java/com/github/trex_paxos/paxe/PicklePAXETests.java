@@ -29,7 +29,7 @@ import static com.github.trex_paxos.Pickle.writeProgress;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class PickleTests {
+public class PicklePAXETests {
 
   @Test
   public void testPreparePickleUnpickle() throws IOException {
