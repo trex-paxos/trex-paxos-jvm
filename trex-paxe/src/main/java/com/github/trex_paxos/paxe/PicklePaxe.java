@@ -17,7 +17,7 @@ import java.util.stream.IntStream;
 /// In the case of a DirectMessage, the to field is used to specify the destination node.
 /// In the case of a BroadcastMessage, the to field is set to 0.
 /// The purpose of the fixed size header is for rapid multiplexing and demultiplexing of messages.
-public class PicklePAXE {
+public class PicklePaxe {
 
     private static final int HEADER_SIZE = 5; // fromNode(2) + toNode(2) + type(1)
     private static final int BALLOT_NUMBER_SIZE = Integer.BYTES + 2; // counter(4) + nodeId(2)
