@@ -3,15 +3,13 @@
 You must be running Java 23 or higher. Build the code with: 
 
 ```bash
-pushd trex2-lib 
 mvn -DNO_LOGGING=true clean test
-popd
 ```
 
 Run jshell with: 
 
 ```bash
-jshell --enable-preview --class-path ./trex-locks/target/classes:./trex-locks/target/test-classes:./trex2-lib/target/classes:./trex2-lib/target/test-classes
+jshell --enable-preview --class-path ./trex-lib/target/classes:./trex-lib/target/test-classes
 ```
 
 To exist press Ctrl+d
