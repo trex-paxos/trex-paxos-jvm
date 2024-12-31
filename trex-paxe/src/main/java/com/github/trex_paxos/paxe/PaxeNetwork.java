@@ -132,7 +132,9 @@ public class PaxeNetwork implements AutoCloseable {
         return PaxePacket.decrypt(encrypted.packet(), key);
     }
 
-    public void encryptAndSend(PaxeMessage message, byte[] key) throws Exception {
+    public void encryptAndSend(PaxeMessage message) throws Exception {
+        final var pairKey = new SessionKeyPair(localNode, message.to());
+        final var key = sessionKeys.get(pairKey);
         final var pexePacket = PaxePacket.encrypt(message, localNode, key);
         outboundQueue.add(pexePacket);
     }

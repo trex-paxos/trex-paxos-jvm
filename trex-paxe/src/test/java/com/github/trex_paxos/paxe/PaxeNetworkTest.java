@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 
 import java.net.DatagramSocket;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
@@ -37,7 +36,7 @@ public class PaxeNetworkTest {
             node2, new NetworkAddress.InetAddress("127.0.0.1", port2)
         ));
     
-        // Shared session keys (dummy keys for simplicity)
+        // Shared session keys (dummy keys for simplicity) we only need one key per pair of nodes so only one key is defined
         byte[] sharedKey = "1234567890123456".getBytes(); // 16-byte AES key
         Map<SessionKeyPair, byte[]> sessionKeys = Map.of(
             new SessionKeyPair(node1, node2), sharedKey
@@ -75,8 +74,8 @@ public class PaxeNetworkTest {
         );
 
         // Encrypt and send messages
-        network1.encryptAndSend(messageFromNode1, "1234567890123456".getBytes());
-        network2.encryptAndSend(messageFromNode2, "1234567890123456".getBytes());
+        network1.encryptAndSend(messageFromNode1);
+        network2.encryptAndSend(messageFromNode2);
 
         // Receive messages
         PaxeMessage receivedByNode2 = network2.receive(channel);
