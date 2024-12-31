@@ -49,7 +49,7 @@ public class PickleTests {
 
   @Test
   public void testAcceptPickleUnpickleClientCommand() throws IOException {
-    Command command = new Command("cmd", "data".getBytes(StandardCharsets.UTF_8));
+    Command command = new Command( "data".getBytes(StandardCharsets.UTF_8));
     Accept accept = new Accept((byte) 3, 4L, new BallotNumber(2, (byte) 3), command);
     byte[] pickled = PicklePAXE.pickle(accept);
     Accept unpickled = (Accept) PicklePAXE.unpickle(java.nio.ByteBuffer.wrap(pickled));
@@ -90,7 +90,7 @@ public class PickleTests {
 
   @Test
   public void testPrepareResponsePickleUnpickleClientCommand() throws IOException {
-    final var cmd = new Command("cmd", "data".getBytes(StandardCharsets.UTF_8));
+    final var cmd = new Command("data".getBytes(StandardCharsets.UTF_8));
     final var accept = new Accept((byte) 4, 5L, new BallotNumber(6, (byte) 7), cmd);
     PrepareResponse prepareAck = new PrepareResponse(
         (byte) 1, (byte) 2,

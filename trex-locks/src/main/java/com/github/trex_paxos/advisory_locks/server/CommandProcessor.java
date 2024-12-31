@@ -15,9 +15,9 @@
  */
 package com.github.trex_paxos.advisory_locks.server;
 
-import com.github.trex_paxos.Command;
-
 import java.util.concurrent.*;
+
+import com.github.trex_paxos.Command;
 
 public class CommandProcessor {
     private final BlockingQueue<String> workQueue;

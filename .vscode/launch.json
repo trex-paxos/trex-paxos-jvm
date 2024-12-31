@@ -6,6 +6,20 @@
     "configurations": [
         {
             "type": "java",
+            "name": "SRPUtils",
+            "request": "launch",
+            "mainClass": "com.github.trex_paxos.paxe.SRPUtils",
+            "projectName": "trex-paxe"
+        },
+        {
+            "type": "java",
+            "name": "SecureRemotePasswordProtocolRFC5054",
+            "request": "launch",
+            "mainClass": "com.github.trex_paxos.paxe.SecureRemotePasswordProtocolRFC5054",
+            "projectName": "trex-paxe"
+        },
+        {
+            "type": "java",
             "name": "UUIDv7Generator",
             "request": "launch",
             "mainClass": "com.github.trex_paxos.demo.UUIDv7Generator",

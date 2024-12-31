@@ -10,6 +10,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.UUID;
 
 /// The network distributed nature of the Paxos algorithm means that PaxosService it is an RPC system.
 /// This class is defined in terms of the input client commands `CMD` and output `RESULT` values.
@@ -44,7 +45,7 @@ public class PaxosService<CMD, RESULT> {
   /// We will keep a map of futures that we will complete when we have run the command value against the lock store.
   /// We actually want to store the future along with the time sent the command and order by time ascending. Then we
   /// can check for old records to see if they have timed out and return exceptionally. We will also need a timeout thread.
-  protected final ConcurrentNavigableMap<String, CompletableFuture<RESULT>> replyToClientFutures
+  protected final ConcurrentNavigableMap<UUID, CompletableFuture<RESULT>> replyToClientFutures
       = new ConcurrentSkipListMap<>();
 
   /// The consumer of a list of outbound `TrexMessage` that it will be sent out over the network.
@@ -110,7 +111,7 @@ public class PaxosService<CMD, RESULT> {
 
   private void upCall(Long slot, Command command) {
     // we need the clientMsgUuid to complete the future if and only if this is the node that the client sent the command to
-    final String clientMsgUuid = command.clientMsgUuid();
+    final UUID clientMsgUuid = command.uuid();
     // unpickle host application command
     final var value = serdeCmd.deserialize(command.operationBytes());
     // Process fixed command
@@ -135,9 +136,9 @@ public class PaxosService<CMD, RESULT> {
     executor.submit(() -> {
       try {
         final byte[] valueBytes = serdeCmd.serialize(value);
-        final var command = new Command(UUIDGenerator.generateUUID().toString(), valueBytes);
-        LOGGER.info(() -> "processCommand value=" + value + " clientMsgUuid=" + command.clientMsgUuid());
-        replyToClientFutures.put(command.clientMsgUuid(), future);
+        final var command = new Command(UUIDGenerator.generateUUID(), valueBytes);
+        LOGGER.info(() -> "processCommand value=" + value + " uuid=" + command.uuid());
+        replyToClientFutures.put(command.uuid(), future);
         createAndSendLeaderMessages(List.of(command));
       } catch (Exception e) {
         LOGGER.log(Level.SEVERE, "Exception processing command: " + e.getMessage(), e);

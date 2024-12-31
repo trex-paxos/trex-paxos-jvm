@@ -5,10 +5,10 @@ import com.github.trex_paxos.msg.*;
 import com.github.trex_paxos.*;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.IntStream;
 
 /// The PaXE protocol is designed to be compatible with QUIC or even raw UDP.
@@ -126,13 +126,12 @@ public class PicklePAXE {
             case NoOperation _ ->
                 // Here we use zero bytes as a sentinel to represent the NOOP command.
                 buffer.putInt(0);
-            case Command command -> {
-                buffer.putInt(command.operationBytes().length);
-                buffer.put(command.operationBytes());
-                byte[] clientMsgBytes = command.clientMsgUuid().getBytes(StandardCharsets.UTF_8);
-                buffer.putInt(clientMsgBytes.length);
-                buffer.put(clientMsgBytes);
-            }
+                case Command(final UUID uuid, final var operationBytes) -> {
+                    buffer.putInt(operationBytes.length);
+                    buffer.put(operationBytes);
+                    buffer.putLong(uuid.getMostSignificantBits());
+                    buffer.putLong(uuid.getLeastSignificantBits());
+                }
         }
     }
 
@@ -143,11 +142,9 @@ public class PicklePAXE {
         }
         byte[] bytes = new byte[byteLength];
         buffer.get(bytes);
-        int stringLength = buffer.getInt();
-        byte[] stringBytes = new byte[stringLength];
-        buffer.get(stringBytes);
-        String clientMsgUuid = new String(stringBytes, StandardCharsets.UTF_8);
-        return new Command(clientMsgUuid, bytes);
+        long mostSigBits = buffer.getLong();
+        long leastSigBits = buffer.getLong();
+        return new Command(new UUID(mostSigBits, leastSigBits), bytes);
     }
 
     public static void write(AcceptResponse m, ByteBuffer buffer) {
@@ -215,7 +212,7 @@ public class PicklePAXE {
         return switch (command) {
             case NoOperation _ -> Integer.BYTES;
             case Command c -> Integer.BYTES + c.operationBytes().length + 
-                            Integer.BYTES + c.clientMsgUuid().getBytes(StandardCharsets.UTF_8).length;
+                           Long.BYTES + Long.BYTES; // operationBytes + UUID
         };
     }
 

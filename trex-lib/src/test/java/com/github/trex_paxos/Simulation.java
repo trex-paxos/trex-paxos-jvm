@@ -116,7 +116,7 @@ class Simulation {
                       .flatMap(e -> {
                         final var commands = IntStream.range(0, 3).mapToObj(i -> {
                           final var data = now + ":" + e.getKey() + i;
-                          return new Command(data, data.getBytes());
+                          return new Command( data.getBytes());
                         }).toList();
                         final var engine = e.getValue();
                         return engine.isLeader() ? engine.nextLeaderBatchOfMessages(commands).stream()

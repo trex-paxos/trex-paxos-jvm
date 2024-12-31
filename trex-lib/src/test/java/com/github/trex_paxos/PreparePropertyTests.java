@@ -60,7 +60,7 @@ public class PreparePropertyTests {
     final var cmd = switch (testCase.value) {
       case NULL -> null;
       case NOOP -> NoOperation.NOOP;
-      case COMMAND -> new Command("test", "data".getBytes());
+      case COMMAND -> new Command("data".getBytes());
     };
 
     // Setup journal

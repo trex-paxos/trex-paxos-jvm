@@ -15,46 +15,136 @@
  */
 package com.github.trex_paxos;
 
-import java.nio.ByteBuffer;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.UUID;
+
+import com.github.trex_paxos.msg.Accept;
 
 /// Pickle is a utility class for serializing and deserializing the record types that the [Journal] uses.
 /// Java serialization is famously broken but the Java Platform team are working on it.
 /// This class does things the boilerplate way.
 public class Pickle {
-    
-    private static final int BALLOT_NUMBER_SIZE = Integer.BYTES + 1; // counter (4 bytes) + nodeIdentifier (1 byte)
-    private static final int PROGRESS_SIZE = 1 + BALLOT_NUMBER_SIZE + Long.BYTES; // nodeIdentifier (1 byte) + BallotNumber + highestFixedIndex (8 bytes)
 
-    public static byte[] writeProgress(Progress progress) {
-        ByteBuffer buffer = ByteBuffer.allocate(PROGRESS_SIZE);
-        write(progress, buffer);
-        return buffer.array();
+    public static byte[] writeProgress(Progress progress) throws IOException {
+        try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                DataOutputStream dos = new DataOutputStream(byteArrayOutputStream)) {
+            write(progress, dos);
+            return byteArrayOutputStream.toByteArray();
+        }
     }
 
-    public static void write(Progress progress, ByteBuffer buffer) {
-        buffer.put(progress.nodeIdentifier());
-        write(progress.highestPromised(), buffer);
-        buffer.putLong(progress.highestFixedIndex());
+    public static void write(Progress progress, DataOutputStream dos) throws IOException {
+        dos.writeByte(progress.nodeIdentifier());
+        write(progress.highestPromised(), dos);
+        dos.writeLong(progress.highestFixedIndex());
     }
 
-    public static Progress readProgress(byte[] pickled) {
-        ByteBuffer buffer = ByteBuffer.wrap(pickled);
-        return readProgress(buffer);
+    public static Progress readProgress(byte[] pickled) throws IOException {
+        try (ByteArrayInputStream bis = new ByteArrayInputStream(pickled);
+                DataInputStream dis = new DataInputStream(bis)) {
+            return readProgress(dis);
+        }
     }
 
-    private static Progress readProgress(ByteBuffer buffer) {
-        byte nodeId = buffer.get();
-        BallotNumber ballotNumber = readBallotNumber(buffer);
-        long highestFixedIndex = buffer.getLong();
-        return new Progress(nodeId, ballotNumber, highestFixedIndex);
+    private static Progress readProgress(DataInputStream dis) throws IOException {
+        return new Progress(dis.readByte(), readBallotNumber(dis), dis.readLong());
     }
 
-    public static void write(BallotNumber n, ByteBuffer buffer) {
-        buffer.putInt(n.counter());
-        buffer.put(n.nodeIdentifier());
+    public static byte[] write(BallotNumber n) throws IOException {
+        try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                DataOutputStream dos = new DataOutputStream(byteArrayOutputStream)) {
+            write(n, dos);
+            return byteArrayOutputStream.toByteArray();
+        }
     }
 
-    public static BallotNumber readBallotNumber(ByteBuffer buffer) {
-        return new BallotNumber(buffer.getInt(), buffer.get());
+    public static void write(BallotNumber n, DataOutputStream dataOutputStream) throws IOException {
+        dataOutputStream.writeInt(n.counter());
+        dataOutputStream.writeByte(n.nodeIdentifier());
+    }
+
+    public static BallotNumber readBallotNumber(byte[] pickled) throws IOException {
+        try (ByteArrayInputStream bis = new ByteArrayInputStream(pickled);
+                DataInputStream dis = new DataInputStream(bis)) {
+            return readBallotNumber(dis);
+        }
+    }
+
+    public static BallotNumber readBallotNumber(DataInputStream dataInputStream) throws IOException {
+        return new BallotNumber(dataInputStream.readInt(), dataInputStream.readByte());
+    }
+
+    public static void write(Accept m, DataOutputStream dataStream) throws IOException {
+        dataStream.writeByte(m.from());
+        dataStream.writeLong(m.slot());
+        write(m.number(), dataStream);
+        write(m.command(), dataStream);
+    }
+
+    public static Accept readAccept(DataInputStream dataInputStream) throws IOException {
+        final byte from = dataInputStream.readByte();
+        final long logIndex = dataInputStream.readLong();
+        final BallotNumber number = readBallotNumber(dataInputStream);
+        final var command = readCommand(dataInputStream);
+        return new Accept(from, logIndex, number, command);
+    }
+
+    public static byte[] write(AbstractCommand c) throws IOException {
+        try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                DataOutputStream dos = new DataOutputStream(byteArrayOutputStream)) {
+            write(c, dos);
+            return byteArrayOutputStream.toByteArray();
+        }
+    }
+
+    public static void write(AbstractCommand c, DataOutputStream dataStream) throws IOException {
+        switch (c) {
+            case NoOperation _ ->
+                // Here we use zero bytes as a sentinel to represent the NOOP command.
+                dataStream.writeInt(0);
+            case Command command -> {
+                dataStream.writeInt(command.operationBytes().length);
+                dataStream.write(command.operationBytes());
+                final var uuid = command.uuid();
+                dataStream.writeLong(uuid.getMostSignificantBits());
+                dataStream.writeLong(uuid.getLeastSignificantBits());
+            }
+        }
+    }
+
+    public static AbstractCommand readCommand(byte[] pickled) throws IOException {
+        try (ByteArrayInputStream bis = new ByteArrayInputStream(pickled);
+                DataInputStream dis = new DataInputStream(bis)) {
+            return readCommand(dis);
+        }
+    }
+
+    public static AbstractCommand readCommand(DataInputStream dataInputStream) throws IOException {
+        final var byteLength = dataInputStream.readInt();
+        if (byteLength == 0) {
+            return NoOperation.NOOP;
+        }
+        byte[] bytes = new byte[byteLength];
+        dataInputStream.readFully(bytes);
+        return new Command(new UUID(dataInputStream.readLong(), dataInputStream.readLong()), bytes);
+    }
+
+    public static byte[] write(Accept a) throws IOException {
+        try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                DataOutputStream dos = new DataOutputStream(byteArrayOutputStream)) {
+            write(a, dos);
+            return byteArrayOutputStream.toByteArray();
+        }
+    }
+
+    public static Accept readAccept(byte[] pickled) throws IOException {
+        try (ByteArrayInputStream bis = new ByteArrayInputStream(pickled);
+                DataInputStream dis = new DataInputStream(bis)) {
+            return readAccept(dis);
+        }
     }
 }

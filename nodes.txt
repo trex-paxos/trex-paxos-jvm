@@ -1,10 +1,27 @@
 # fast tests
 mvn -DNO_LOGGING=true -B package
 
-# run ust one test
-mvn test -Dtest=TrexLockLocalTests -pl trex-locks
+# run just one test
+mvn -DskipTests clean package && \
+    mvn test -Dtest=SRPUtilsTests -pl trex-paxe
+
+# just run subpackage tests
+mvn -DskipTests clean package && \
+    mvn test -pl trex-paxe
 
 # jshell
 
-jshell --enable-preview --class-path ./trex-locks/target/classes:./trex-locks/target/test-classes:./trex2-lib/target/classes:./trex2-lib/target/test-classes
+jshell --enable-preview --class-path ./trex-locks/target/classes:./trex-locks/target/test-classes:./trex-lib/target/classes:./trex-lib/target/test-classes
 
+```
+jshell> import com.github.trex_paxos.*
+jshell> var stack = new StackClusterImpl() // Give it a moment to elect a leader
+jshell> stack.push("hello") 
+jshell> stack.push("world")
+jshell> stack.peek()
+jshell> stack.peek()
+jshell> stack.pop()
+jshell> stack.pop()
+jshell> stack.pop()
+jshell> stack.shutdown()
+```

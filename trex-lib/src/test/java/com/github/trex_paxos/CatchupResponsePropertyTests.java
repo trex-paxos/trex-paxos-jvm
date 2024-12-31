@@ -2,6 +2,7 @@ package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.Accept;
 import com.github.trex_paxos.msg.CatchupResponse;
+
 import net.jqwik.api.*;
 
 import java.util.ArrayList;
@@ -79,7 +80,7 @@ public class CatchupResponsePropertyTests {
             otherNodeId,
             otherIndex + i,
             otherNumber,
-            new Command("test" + i, ("data" + i).getBytes())
+            new Command( ("data" + i).getBytes())
         ))
         .toList();
 

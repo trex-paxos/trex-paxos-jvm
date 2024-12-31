@@ -49,7 +49,7 @@ public class SpecificTests {
     // Given that node 1 has accepted a value at slot 1 and has made a very high self promise
     final var nodeId1 = (byte) 1;
     final var journal = new TransparentJournal((byte) 1);
-    final var acceptPreviouslyFixedSlot1 = new Accept((byte) 1, 1L, new BallotNumber(1, (byte) 1), new Command("cmd", "data".getBytes()));
+    final var acceptPreviouslyFixedSlot1 = new Accept((byte) 1, 1L, new BallotNumber(1, (byte) 1), new Command( "data".getBytes()));
     final var higherSelfPromiseNumber = new BallotNumber(1000, (byte) 1);
     TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {{
       this.journal.writeAccept(acceptPreviouslyFixedSlot1);
@@ -60,8 +60,8 @@ public class SpecificTests {
     // And where the actual fixed message at slot one is different to the one that node 1 thinks is already fixed.
     final var nodeId2 = (byte) 2;
     final var ballotNumber2 = new BallotNumber(2, (byte) 2);
-    final var ignoreAcceptSlot1 = new Accept(nodeId2, 1L, ballotNumber2, new Command("cmd", "data2".getBytes()));
-    final var freshAcceptSlot2 = new Accept(nodeId2, 2L, ballotNumber2, new Command("cmd", "data3".getBytes()));
+    final var ignoreAcceptSlot1 = new Accept(nodeId2, 1L, ballotNumber2, new Command("data2".getBytes()));
+    final var freshAcceptSlot2 = new Accept(nodeId2, 2L, ballotNumber2, new Command("data3".getBytes()));
     final var catchUpResponse = new CatchupResponse(nodeId1, nodeId2, List.of(ignoreAcceptSlot1, freshAcceptSlot2));
 
     // And node1 processes the message
@@ -88,7 +88,7 @@ public class SpecificTests {
     final var nodeId1 = (byte) 1;
     final var originalNumber = new BallotNumber(1, nodeId1);
     final var journal = new TransparentJournal(nodeId1);
-    final var acceptPreviouslyFixedSlot1 = new Accept((byte) 1, 1L, new BallotNumber(1, (byte) 1), new Command("cmd", "data".getBytes()));
+    final var acceptPreviouslyFixedSlot1 = new Accept((byte) 1, 1L, new BallotNumber(1, (byte) 1), new Command( "data".getBytes()));
     TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {{
       this.progress = new Progress(nodeIdentifier, originalNumber, 1L);
       this.journal.writeAccept(acceptPreviouslyFixedSlot1);
@@ -107,7 +107,7 @@ public class SpecificTests {
     final var catchup = new Catchup(nodeId2, nodeId1, 1L, higherSelfPromiseNumber);
     node.paxos(catchup);
 
-    final var nextAccept = node.nextAcceptMessage(new Command("cmd", "data2".getBytes()));
+    final var nextAccept = node.nextAcceptMessage(new Command("data2".getBytes()));
 
     final var finalHighestPromised = nextAccept.number();
     assertTrue(finalHighestPromised.greaterThan(originalNumber));
