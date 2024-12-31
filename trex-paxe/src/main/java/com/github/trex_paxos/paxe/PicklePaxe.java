@@ -265,7 +265,7 @@ public class PicklePaxe {
     private static int calculateCatchupResponseSize(CatchupResponse m) {
         return Integer.BYTES + // size of list
                m.accepts().stream()
-                .mapToInt(PicklePAXE::calculateAcceptInnerSize)
+                .mapToInt(PicklePaxe::calculateAcceptInnerSize)
                 .sum();
     }
 
