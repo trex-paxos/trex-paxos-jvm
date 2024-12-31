@@ -5,21 +5,14 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
-import java.nio.ByteBuffer;
-import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
-
-import javax.crypto.Cipher;
-import javax.crypto.NoSuchPaddingException;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 
 public class PaxeNetwork implements AutoCloseable {
     private static final Logger LOGGER = Logger.getLogger(PaxeNetwork.class.getName());
@@ -31,12 +24,12 @@ public class PaxeNetwork implements AutoCloseable {
     private final Thread sender;
     private final Thread receiver;
     private volatile boolean running = true;
-    final ClusterMembership membership;
+    final Supplier<ClusterMembership> membership;
 
     public PaxeNetwork(
             int port,
             NodeId localNode,
-            ClusterMembership membership,
+            Supplier<ClusterMembership> membership,
             Map<SessionKeyPair, byte[]> sessionKeys) throws SocketException {
         this.socket = new DatagramSocket(port);
         this.localNode = localNode;
@@ -67,7 +60,7 @@ public class PaxeNetwork implements AutoCloseable {
 
                 // Resolve destination address using ClusterMembership
                 NodeId destinationNode = packet.to();
-                Optional<NetworkAddress> addressOpt = membership.addressFor(destinationNode);
+                Optional<NetworkAddress> addressOpt = membership.get().addressFor(destinationNode);
 
                 if (addressOpt.isEmpty()) {
                     LOGGER.warning("Unknown destination: " + destinationNode);
