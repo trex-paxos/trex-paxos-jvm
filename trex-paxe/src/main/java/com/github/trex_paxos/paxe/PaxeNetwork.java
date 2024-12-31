@@ -9,6 +9,7 @@ import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -26,7 +27,7 @@ public class PaxeNetwork implements AutoCloseable {
     private final NodeId localNode;
     private final Map<SessionKeyPair, byte[]> sessionKeys;
     private final Map<Channel, BlockingQueue<EncryptedPaxeMessage>> channelQueues;
-    private final BlockingQueue<PaxeMessage> outboundQueue;
+    private final BlockingQueue<PaxePacket> outboundQueue;
     private final Thread sender;
     private final Thread receiver;
     private volatile boolean running = true;
@@ -53,33 +54,44 @@ public class PaxeNetwork implements AutoCloseable {
                 .start(this::processSendQueue);
     }
 
-    // Process outbound messages from queue
-    private void processSendQueue() {
-        while (running) {
-            try {
-                PaxeMessage message = outboundQueue.take();
-                var keyPair = new SessionKeyPair(localNode, message.to());
-                var key = sessionKeys.get(keyPair);
-                if (key == null) {
-                    throw new SecurityException("No session key for " + message.to());
-                }
-                encryptAndSend(message, key);
-            } catch (InterruptedException e) {
-                if (running) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            } catch (Exception e) {
-                if (running) {
-                    LOGGER.warning("Send error: " + e.getMessage());
-                }
-            }
-        }
-    }
-
     private BlockingQueue<EncryptedPaxeMessage> getOrCreateChannelQueue(Channel channel) {
         return channelQueues.computeIfAbsent(channel,
                 _ -> new LinkedBlockingQueue<>());
+    }
+
+    private void processSendQueue() {
+        while (running) {
+            try {
+                // Take the next packet from the outbound queue
+                PaxePacket packet = outboundQueue.take();
+
+                // Resolve destination address using ClusterMembership
+                NodeId destinationNode = packet.to();
+                Optional<NetworkAddress> addressOpt = membership.addressFor(destinationNode);
+
+                if (addressOpt.isEmpty()) {
+                    LOGGER.warning("Unknown destination: " + destinationNode);
+                    continue; // Skip this packet
+                }
+
+                NetworkAddress address = addressOpt.get();
+                InetAddress inetAddress = InetAddress.getByName(address.hostString());
+                int port = address.port();
+
+                // Serialize packet to bytes
+                byte[] data = packet.toBytes();
+
+                // Create and send UDP datagram
+                DatagramPacket datagram = new DatagramPacket(data, data.length, inetAddress, port);
+                socket.send(datagram);
+
+            } catch (InterruptedException e) {
+                if (!running)
+                    break; // Graceful shutdown
+            } catch (IOException e) {
+                LOGGER.warning("Failed to send packet: " + e.getMessage());
+            }
+        }
     }
 
     private void receiveLoop() {
@@ -124,92 +136,18 @@ public class PaxeNetwork implements AutoCloseable {
             throw new SecurityException("Unknown sender");
         }
 
-        return decryptMessage(encrypted.packet(), key);
+        return PaxePacket.decrypt(encrypted.packet(), key);
     }
 
-    private PaxeMessage decryptMessage(PaxePacket packet, byte[] key) throws Exception, NoSuchPaddingException {
-        // Real decryption using AES-GCM
-        var cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        var gcmSpec = new GCMParameterSpec(
-                PaxePacket.AUTH_TAG_SIZE * 8, packet.nonce());
-        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), gcmSpec);
-        cipher.updateAAD(packet.authenticatedData());
-        var decrypted = cipher.doFinal(packet.ciphertext());
-        return PaxeMessage.deserialize(decrypted);
-    }
-
-    private void encryptAndSend(PaxeMessage message, byte[] key) throws IOException {
-        var nonce = new byte[PaxePacket.NONCE_SIZE];
-        ThreadLocalRandom.current().nextBytes(nonce);
-
-        try {
-            // Real encryption using AES-GCM
-            var cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            var gcmSpec = new GCMParameterSpec(
-                    PaxePacket.AUTH_TAG_SIZE * 8, nonce);
-            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), gcmSpec);
-
-            var plaintext = message.serialize();
-            var authData = buildAuthenticatedData(message);
-            cipher.updateAAD(authData);
-
-            // Domal result contains both ciphertext and auth tag together
-            var ciphertextAndTag = cipher.doFinal(plaintext);
-
-            // Split the result into ciphertext and tag
-            var ciphertextLength = ciphertextAndTag.length - PaxePacket.AUTH_TAG_SIZE;
-            var ciphertext = Arrays.copyOfRange(ciphertextAndTag, 0, ciphertextLength);
-            var authTag = Arrays.copyOfRange(ciphertextAndTag, ciphertextLength, ciphertextAndTag.length);
-
-            var packet = new PaxePacket(
-                    localNode,
-                    message.to(),
-                    message.channel(),
-                    (byte) 0,
-                    nonce,
-                    authTag,
-                    ciphertext);
-
-            sendPacket(packet);
-        } catch (GeneralSecurityException e) {
-            throw new IOException("Encryption failed", e);
-        }
-    }
-
-    // Extensions for PaxePacket to support AEAD
-    public static byte[] buildAuthenticatedData(PaxeMessage message) {
-        // Additional authenticated data includes routing info
-        var buffer = ByteBuffer.allocate(3); // from, to, channel
-        buffer.put(message.from().value());
-        buffer.put(message.to().value());
-        buffer.put(message.channel().value());
-        return buffer.array();
-    }
-
-    // Send a packet over UDP
-    private void sendPacket(PaxePacket packet) throws IOException {
-        var address = membership.addressFor(packet.to())
-                .orElseThrow(() -> new IOException("Unknown destination: " + packet.to()));
-
-        byte[] bytes = packet.toBytes();
-        var dgPacket = new DatagramPacket(
-                bytes,
-                bytes.length,
-                InetAddress.getByName(address.hostString()),
-                address.port());
-        socket.send(dgPacket);
-    }
-
-    // Queue a message for sending
-    public void send(PaxeMessage message) {
-        outboundQueue.add(message);
+    public void encryptAndSend(PaxeMessage message, byte[] key) throws Exception {
+        final var pexePacket = PaxePacket.encrypt(message, localNode, key);
+        outboundQueue.add(pexePacket);
     }
 
     @Override
     public void close() throws Exception {
-        running = false;
-        socket.close();
-        sender.interrupt();
-        receiver.interrupt();
+        this.running = false;
+        this.receiver.interrupt();
+        this.sender.interrupt();
     }
 }

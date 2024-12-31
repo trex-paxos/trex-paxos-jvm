@@ -6,7 +6,8 @@ mvn -DskipTests clean package && \
     mvn test -Dtest=SRPUtilsTests -pl trex-paxe
 
 # just run subpackage tests
-mvn -DskipTests clean package && mvn test -pl trex-paxe
+mvn -DskipTests clean package && \
+    mvn test -pl trex-paxe
 
 # jshell
 
