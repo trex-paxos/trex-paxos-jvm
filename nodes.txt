@@ -5,6 +5,9 @@ mvn -DNO_LOGGING=true -B package
 mvn -DskipTests clean package && \
     mvn test -Dtest=SRPUtilsTests -pl trex-paxe
 
+# just run subpackage tests
+mvn -DskipTests clean package && mvn test -pl trex-paxe
+
 # jshell
 
 jshell --enable-preview --class-path ./trex-locks/target/classes:./trex-locks/target/test-classes:./trex-lib/target/classes:./trex-lib/target/test-classes
