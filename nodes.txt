@@ -3,7 +3,7 @@ mvn -DNO_LOGGING=true -B clean package
 
 # run just one test
 mvn -DskipTests clean package && \
-    mvn test -Dtest=SRPUtilsTests -pl trex-paxe
+    mvn test -Dtest=PickleHandshakeTest -pl trex-paxe
 
 # just run subpackage tests
 mvn -DskipTests clean package && \
