@@ -41,8 +41,8 @@ public record PaxePacket(
     public byte[] toBytes() {
         var size = HEADER_SIZE + NONCE_SIZE + AUTH_TAG_SIZE + payload.length;
         var buffer = ByteBuffer.allocate(size);
-        buffer.putShort(from.value());
-        buffer.putShort(to.value());
+        buffer.putShort(from.id());
+        buffer.putShort(to.id());
         buffer.put(channel.value());
         buffer.put(flags);
         buffer.put(nonce);
@@ -72,8 +72,8 @@ public record PaxePacket(
 
     public byte[] authenticatedData() {
         var buffer = ByteBuffer.allocate(AUTHENCIATED_DATA_SIZE);
-        buffer.putShort(from.value());
-        buffer.putShort(to.value());
+        buffer.putShort(from.id());
+        buffer.putShort(to.id());
         buffer.put(channel.value());
         return buffer.array();
     }

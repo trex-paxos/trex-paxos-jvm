@@ -27,6 +27,23 @@ class SRPUtilsTests {
         }
 
         @Test
+        public void testSecretKeyGeneration() {
+                String NHex = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" +
+                                "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" +
+                                "8E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29" +
+                                "7BCF1885C529F566660E57EC68EDBC3C05726CC02FD4CBF4976EAA9A" +
+                                "FD5138FE8376435B9FC61D2FC0EB06E3";
+                final var N = integer(NHex);
+                IntStream.range(0, 1000).forEach(_ -> {
+                        final var r = SRPUtils.generatedPrivateKey(NHex);
+                        assertNotNull(r);
+                        final var secret = integer(r);
+                        assertTrue(secret.compareTo(N) < 1);
+                        assertTrue(secret.compareTo(BigInteger.ZERO) > 0);
+                });
+        }
+
+        @Test
         void testAppendixB_N() {
                 assertEquals("SHA-1", SRPUtils.ALGORITHM);
 
@@ -277,22 +294,5 @@ class SRPUtilsTests {
 
                 final var finalKey = SRPUtils.hashedSecret(NHex, premaster);
                 assertTrue(finalKey.length == 20, "Final key length is not 20 bytes when hashed");
-        }
-
-        @Test
-        public void testSecretKeyGeneration() {
-                String NHex = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" +
-                                "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" +
-                                "8E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29" +
-                                "7BCF1885C529F566660E57EC68EDBC3C05726CC02FD4CBF4976EAA9A" +
-                                "FD5138FE8376435B9FC61D2FC0EB06E3";
-                final var N = integer(NHex);
-                IntStream.range(0, 1000).forEach(_ -> {
-                        final var r = SRPUtils.generatedPrivateKey(NHex);
-                        assertNotNull(r);
-                        final var secret = integer(r);
-                        assertTrue(secret.compareTo(N) < 1);
-                        assertTrue(secret.compareTo(BigInteger.ZERO) > 0);
-                });
         }
 }

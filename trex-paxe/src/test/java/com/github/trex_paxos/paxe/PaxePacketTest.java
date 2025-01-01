@@ -59,8 +59,8 @@ class PaxePacketTest {
         byte[] bytes = packet.toBytes();
 
         assertEquals(PaxePacket.HEADER_SIZE + PaxePacket.NONCE_SIZE + PaxePacket.AUTH_TAG_SIZE + payload.length, bytes.length);
-        assertEquals((short) ((bytes[0] << 8) | (bytes[1] & 0xFF)), from.value());
-        assertEquals((short) ((bytes[2] << 8) | (bytes[3] & 0xFF)), to.value());
+        assertEquals((short) ((bytes[0] << 8) | (bytes[1] & 0xFF)), from.id());
+        assertEquals((short) ((bytes[2] << 8) | (bytes[3] & 0xFF)), to.id());
         assertEquals(channel.value(), bytes[4]);
         assertEquals(flags, bytes[5]);
         assertArrayEquals(nonce, Arrays.copyOfRange(bytes, 6, 6 + PaxePacket.NONCE_SIZE));
@@ -96,10 +96,10 @@ class PaxePacketTest {
         byte[] authenticatedData = packet.authenticatedData();
 
         assertEquals(PaxePacket.AUTHENCIATED_DATA_SIZE, authenticatedData.length);
-        assertEquals((byte) (from.value() >> 8), authenticatedData[0]);
-        assertEquals((byte) from.value(), authenticatedData[1]);
-        assertEquals((byte) (to.value() >> 8), authenticatedData[2]);
-        assertEquals((byte) to.value(), authenticatedData[3]);
+        assertEquals((byte) (from.id() >> 8), authenticatedData[0]);
+        assertEquals((byte) from.id(), authenticatedData[1]);
+        assertEquals((byte) (to.id() >> 8), authenticatedData[2]);
+        assertEquals((byte) to.id(), authenticatedData[3]);
         assertEquals(channel.value(), authenticatedData[4]);
     }
 
