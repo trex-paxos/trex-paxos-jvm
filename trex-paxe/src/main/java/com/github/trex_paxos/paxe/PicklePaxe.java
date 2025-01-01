@@ -33,12 +33,12 @@ public class PicklePaxe {
 
     private static int calculateMessageSize(TrexMessage msg) {
         return switch (msg) {
-            case Prepare p -> Long.BYTES + BALLOT_NUMBER_SIZE;
+            case Prepare _ -> Long.BYTES + BALLOT_NUMBER_SIZE;
             case PrepareResponse p -> calculatePrepareResponseSize(p);
             case Accept a -> calculateAcceptSize(a);
             case AcceptResponse a -> calculateAcceptResponseSize(a);
-            case Fixed f -> Long.BYTES + BALLOT_NUMBER_SIZE;
-            case Catchup c -> Long.BYTES + BALLOT_NUMBER_SIZE;
+            case Fixed _ -> Long.BYTES + BALLOT_NUMBER_SIZE;
+            case Catchup _ -> Long.BYTES + BALLOT_NUMBER_SIZE;
             case CatchupResponse c -> calculateCatchupResponseSize(c);
         };
     }
