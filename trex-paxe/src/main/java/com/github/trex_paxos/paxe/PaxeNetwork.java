@@ -16,25 +16,34 @@ import java.util.logging.Logger;
 
 public class PaxeNetwork implements AutoCloseable {
     private static final Logger LOGGER = Logger.getLogger(PaxeNetwork.class.getName());
+
+    // Buffer of one entry of any messages that would not be sent due to not yet
+    // having a session key
+    private final Map<NodeId, PaxeMessage> pendingMessages = new ConcurrentHashMap<>();
+
+    /// Key manager for session key management which must have access to SRP verifiers. 
+    private final SessionKeyManager keyManager;
+
     private final DatagramSocket socket;
     private final NodeId localNode;
-    private final Map<SessionKeyPair, byte[]> sessionKeys;
     private final Map<Channel, BlockingQueue<EncryptedPaxeMessage>> channelQueues;
+
     private final BlockingQueue<PaxePacket> outboundQueue;
     private final Thread sender;
     private final Thread receiver;
     private volatile boolean running = true;
+
     final Supplier<ClusterMembership> membership;
 
     public PaxeNetwork(
+            SessionKeyManager keyManager,
             int port,
             NodeId localNode,
-            Supplier<ClusterMembership> membership,
-            Map<SessionKeyPair, byte[]> sessionKeys) throws SocketException {
+            Supplier<ClusterMembership> membership) throws SocketException {
+        this.keyManager = keyManager;
         this.socket = new DatagramSocket(port);
         this.localNode = localNode;
         this.membership = membership;
-        this.sessionKeys = Map.copyOf(sessionKeys);
         this.channelQueues = new ConcurrentHashMap<>();
         this.outboundQueue = new LinkedBlockingQueue<>();
 
@@ -101,9 +110,13 @@ public class PaxeNetwork implements AutoCloseable {
                     continue;
                 }
 
-                // Queue encrypted packet for decryption by consumer
-                var queue = getOrCreateChannelQueue(paxePacket.channel());
-                queue.add(new EncryptedPaxeMessage(paxePacket));
+                if (paxePacket.channel().equals(Channel.KEY_EXCHANGE_CHANNEL)) {
+                    KeyMessage keyMsg = PickleHandshake.unpickle(paxePacket.payload());
+                    keyManager.handleMessage(keyMsg);
+                } else {
+                    var queue = getOrCreateChannelQueue(paxePacket.channel());
+                    queue.add(new EncryptedPaxeMessage(paxePacket));
+                }
 
             } catch (IOException e) {
                 if (running) {
@@ -121,10 +134,7 @@ public class PaxeNetwork implements AutoCloseable {
         var queue = getOrCreateChannelQueue(channel);
         var encrypted = queue.take();
 
-        // Decrypt on consumer thread
-        var keyPair = new SessionKeyPair(
-                encrypted.packet().from(), encrypted.packet().to());
-        var key = sessionKeys.get(keyPair);
+        var key = keyManager.sessionKeys.get(encrypted.packet().from());
         if (key == null) {
             throw new SecurityException("Unknown sender");
         }
@@ -133,10 +143,50 @@ public class PaxeNetwork implements AutoCloseable {
     }
 
     public void encryptAndSend(PaxeMessage message) throws Exception {
-        final var pairKey = new SessionKeyPair(localNode, message.to());
-        final var key = sessionKeys.get(pairKey);
-        final var pexePacket = PaxePacket.encrypt(message, localNode, key);
-        outboundQueue.add(pexePacket);
+        final var key = keyManager.sessionKeys.get(message.to());
+        if (key == null) {
+            pendingMessages.put(message.to(), message);
+            keyManager.initiateHandshake(message.to())
+                    .ifPresent(keyMsg -> sendHandshake(message.to(), keyMsg));
+        } else {
+            final var pexePacket = PaxePacket.encrypt(message, localNode, key);
+            outboundQueue.add(pexePacket);
+        }
+    }
+
+    void sendHandshake(NodeId to, KeyMessage msg) {
+        Optional<NetworkAddress> addressOpt = membership.get().addressFor(to);
+
+        if (addressOpt.isEmpty()) {
+            LOGGER.warning("Unknown destination: " + to);
+            return; // Skip this packet
+        }
+
+        byte[] payload = PickleHandshake.pickle(msg);
+        
+        NetworkAddress address = addressOpt.get();
+        try {
+            InetAddress inetAddress = InetAddress.getByName(address.hostString());
+            int port = address.port();
+    
+            final var handshake  = new PaxePacket(
+                localNode, 
+                to, 
+                Channel.KEY_EXCHANGE_CHANNEL, 
+                (byte) 0, 
+                new byte[PaxePacket.NONCE_SIZE], 
+                new byte[PaxePacket.AUTH_TAG_SIZE], 
+                payload);
+
+            final var data = handshake.toBytes();
+
+            // Create and send UDP datagram
+            DatagramPacket datagram = new DatagramPacket(data, data.length, inetAddress, port);
+            socket.send(datagram);
+        }
+        catch (IOException e) {
+            LOGGER.severe("Failed to send handshake message: " + e.getMessage());
+        }
     }
 
     @Override

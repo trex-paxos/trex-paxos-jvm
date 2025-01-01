@@ -10,12 +10,18 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import static com.github.trex_paxos.paxe.SRPUtils.*;
 
-record SRPKeyPair(String publicKey, String privateKey) {}
+record SRPKeyPair(String publicKey, String privateKey) {
+}
 
 sealed interface KeyMessage {
-    record KeyHandshakeRequest(NodeId from, byte[] publicKey) implements KeyMessage {}
-    record KeyHandshakeResponse(NodeId from, byte[] publicKey) implements KeyMessage {}
+    record KeyHandshakeRequest(NodeId from, byte[] publicKey) implements KeyMessage {
+    }
+
+    record KeyHandshakeResponse(NodeId from, byte[] publicKey) implements KeyMessage {
+    }
+
     NodeId from();
+
     byte[] publicKey();
 }
 
@@ -25,17 +31,19 @@ public class SessionKeyManager {
     private final NodeId nodeId;
     private final ClusterId clusterId;
     private final NodeClientSecret localSecret;
-    private final Supplier<Map<NodeId,NodeVerifier>> verifierLookup;
+    private final Supplier<Map<NodeId, NodeVerifier>> verifierLookup;
     private final Constants srpConstants;
-    
-    private final Map<NodeId,byte[]> sessionKeys = new ConcurrentHashMap<>();
-    private final Map<NodeId,SRPKeyPair> activeHandshakes = new ConcurrentHashMap<>();
+
+    private final Map<NodeId, SRPKeyPair> activeHandshakes = new ConcurrentHashMap<>();
+
+    /// This is package private as it is used by the network to send messages
+    final Map<NodeId, byte[]> sessionKeys = new ConcurrentHashMap<>();
 
     public SessionKeyManager(
-            NodeClientSecret localSecret, 
-            Supplier<Map<NodeId,NodeVerifier>> verifierLookup,
-            Constants srpConstants) {
-        this.nodeId = localSecret.identity();
+            Constants srpConstants,
+            NodeClientSecret localSecret,
+            Supplier<Map<NodeId, NodeVerifier>> verifierLookup) {
+        this.nodeId = localSecret.id();
         this.clusterId = localSecret.clusterId();
         this.localSecret = localSecret;
         this.verifierLookup = verifierLookup;
@@ -45,11 +53,11 @@ public class SessionKeyManager {
     private SRPKeyPair generateKeyPair(NodeId peerId) {
         String privateKey = generatedPrivateKey(srpConstants.N());
         String publicKey;
-        
-        if(nodeId.id() < peerId.id()) {
-            publicKey = A(integer(privateKey), 
-                       integer(srpConstants.g()),
-                       integer(srpConstants.N())).toString(16);
+
+        if (nodeId.id() < peerId.id()) {
+            publicKey = A(integer(privateKey),
+                    integer(srpConstants.g()),
+                    integer(srpConstants.N())).toString(16);
         } else {
             publicKey = generateB(peerId, privateKey).toString(16);
         }
@@ -58,32 +66,32 @@ public class SessionKeyManager {
     }
 
     public Optional<KeyMessage> initiateHandshake(NodeId peerId) {
-        if(!verifierLookup.get().containsKey(peerId)) {
+        if (!verifierLookup.get().containsKey(peerId)) {
             LOGGER.warning("No verifier for peer: " + peerId);
             return Optional.empty();
         }
 
         SRPKeyPair keyPair = generateKeyPair(peerId);
         activeHandshakes.put(peerId, keyPair);
-        
+
         return Optional.of(new KeyMessage.KeyHandshakeRequest(
-            localSecret.identity(), 
-            fromHex(keyPair.publicKey())
-        ));
+                localSecret.id(),
+                fromHex(keyPair.publicKey())));
     }
 
-    public void handleMessage(KeyMessage msg) {
+    public Optional<KeyMessage> handleMessage(KeyMessage msg) {
         try {
-            switch(msg) {
+            return switch(msg) {
                 case KeyMessage.KeyHandshakeRequest req -> handleRequest(req);
                 case KeyMessage.KeyHandshakeResponse resp -> handleResponse(resp);
-            }
+            };
         } catch(Exception e) {
             LOGGER.log(Level.SEVERE, "Key exchange failed", e);
         }
+        return Optional.empty();
     }
 
-    private void handleRequest(KeyMessage.KeyHandshakeRequest msg) {
+    private Optional<KeyMessage> handleRequest(KeyMessage.KeyHandshakeRequest msg) {
         NodeId peerId = new NodeId(msg.from().id());
         SRPKeyPair keyPair = generateKeyPair(peerId);
         activeHandshakes.put(peerId, keyPair);
@@ -91,18 +99,19 @@ public class SessionKeyManager {
         byte[] sessionKey = computeSessionKey(peerId, toHex(msg.publicKey()), keyPair);
         sessionKeys.put(peerId, sessionKey);
 
-        // TODO: Return response or use callback
-        new KeyMessage.KeyHandshakeResponse(localSecret.identity(), fromHex(keyPair.publicKey()));
+        return Optional.of(
+                new KeyMessage.KeyHandshakeResponse(localSecret.id(), fromHex(keyPair.publicKey())));
     }
 
-    private void handleResponse(KeyMessage.KeyHandshakeResponse msg) {
+    private Optional<KeyMessage> handleResponse(KeyMessage.KeyHandshakeResponse msg) {
         NodeId peerId = msg.from();
         SRPKeyPair keyPair = activeHandshakes.get(peerId);
-        if(keyPair != null) {
+        if (keyPair != null) {
             byte[] sessionKey = computeSessionKey(peerId, toHex(msg.publicKey()), keyPair);
             sessionKeys.put(peerId, sessionKey);
             activeHandshakes.remove(peerId);
         }
+        return Optional.empty();
     }
 
     String identity() {
@@ -110,19 +119,19 @@ public class SessionKeyManager {
     }
 
     private byte[] computeSessionKey(NodeId peerId, String peerPublicKey, SRPKeyPair localKeys) {
-        if(nodeId.id() < peerId.id()) {
+        if (nodeId.id() < peerId.id()) {
             return hashedSecret(srpConstants.N(),
-                clientS(srpConstants, peerPublicKey, peerPublicKey,
-                       toHex(localSecret.salt()),
-                       identity(), 
-                       localKeys.privateKey(),
-                       localSecret.password().toString()));
+                    clientS(srpConstants, peerPublicKey, peerPublicKey,
+                            toHex(localSecret.salt()),
+                            identity(),
+                            localKeys.privateKey(),
+                            localSecret.password().toString()));
         } else {
             return hashedSecret(srpConstants.N(),
-                serverS(srpConstants,
-                       verifierLookup.get().get(peerId).verifier(),
-                       peerPublicKey, localKeys.publicKey(), 
-                       localKeys.privateKey()));
+                    serverS(srpConstants,
+                            verifierLookup.get().get(peerId).verifier(),
+                            peerPublicKey, localKeys.publicKey(),
+                            localKeys.privateKey()));
         }
     }
 
@@ -142,40 +151,40 @@ public class SessionKeyManager {
 // Package-private serialization class inside SessionKeyManager.java
 class PickleHandshake {
     static byte[] pickle(KeyMessage msg) {
-      ByteBuffer buffer = ByteBuffer.allocate(calculateSize(msg));
-      buffer.put(toByte(msg));
-      buffer.putShort(msg.from().id());
-      buffer.putInt(msg.publicKey().length);
-      buffer.put(msg.publicKey());
-      return buffer.array();
+        ByteBuffer buffer = ByteBuffer.allocate(calculateSize(msg));
+        buffer.put(toByte(msg));
+        buffer.putShort(msg.from().id());
+        buffer.putInt(msg.publicKey().length);
+        buffer.put(msg.publicKey());
+        return buffer.array();
     }
-   
+
     static KeyMessage unpickle(byte[] bytes) {
-      ByteBuffer buffer = ByteBuffer.wrap(bytes);
-      byte type = buffer.get();
-      NodeId from = new NodeId(buffer.getShort());
-      int keyLength = buffer.getInt();
-      byte[] publicKey = new byte[keyLength];
-      buffer.get(publicKey);
-      
-      return switch(type) {
-        case 1 -> new KeyMessage.KeyHandshakeRequest(from, publicKey);
-        case 2 -> new KeyMessage.KeyHandshakeResponse(from, publicKey); 
-        default -> throw new IllegalStateException("Unknown type: " + type);
-      };
+        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        byte type = buffer.get();
+        NodeId from = new NodeId(buffer.getShort());
+        int keyLength = buffer.getInt();
+        byte[] publicKey = new byte[keyLength];
+        buffer.get(publicKey);
+
+        return switch (type) {
+            case 1 -> new KeyMessage.KeyHandshakeRequest(from, publicKey);
+            case 2 -> new KeyMessage.KeyHandshakeResponse(from, publicKey);
+            default -> throw new IllegalStateException("Unknown type: " + type);
+        };
     }
-   
+
     private static int calculateSize(KeyMessage msg) {
-      return 1 + // type
-             2 + // from id
-             4 + // key length
-             msg.publicKey().length;
+        return 1 + // type
+                2 + // from id
+                4 + // key length
+                msg.publicKey().length;
     }
-   
+
     private static byte toByte(KeyMessage msg) {
-      return switch(msg) {
-        case KeyMessage.KeyHandshakeRequest _ -> 1;
-        case KeyMessage.KeyHandshakeResponse _ -> 2;
-      };
+        return switch (msg) {
+            case KeyMessage.KeyHandshakeRequest _ -> 1;
+            case KeyMessage.KeyHandshakeResponse _ -> 2;
+        };
     }
 }
