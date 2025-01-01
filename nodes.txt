@@ -1,5 +1,5 @@
-# fast tests
-mvn -DNO_LOGGING=true -B package
+# tests
+mvn -DNO_LOGGING=true -B clean package
 
 # run just one test
 mvn -DskipTests clean package && \
@@ -8,6 +8,14 @@ mvn -DskipTests clean package && \
 # just run subpackage tests
 mvn -DskipTests clean package && \
     mvn test -pl trex-paxe
+
+# Grab the files for LLM
+
+rm all.java
+find trex-lib/src/main/ trex-paxe/src/ -name \*.java | while read JAVA ; do echo "" >> all.java; \
+    echo $JAVA >> all.java; \
+    cat $JAVA >> all.java ;\
+    done;
 
 # jshell
 

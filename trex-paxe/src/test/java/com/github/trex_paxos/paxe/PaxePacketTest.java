@@ -12,8 +12,8 @@ class PaxePacketTest {
 
     @Test
     void testConstructorAndGetters() {
-        NodeId from = new NodeId((byte) 1);
-        NodeId to = new NodeId((byte) 2);
+        NodeId from = new NodeId((short) 1);
+        NodeId to = new NodeId((short) 2);
         Channel channel = new Channel((byte) 3);
         byte flags = 0x04;
         byte[] nonce = new byte[PaxePacket.NONCE_SIZE];
@@ -34,21 +34,21 @@ class PaxePacketTest {
     @Test
     void testConstructorWithInvalidNonceSize() {
         assertThrows(IllegalArgumentException.class, () -> 
-            new PaxePacket(new NodeId((byte) 1), new NodeId((byte) 2), new Channel((byte) 3), 
+            new PaxePacket(new NodeId((short) 1), new NodeId( (short)2), new Channel((byte) 3), 
                 (byte) 0, new byte[PaxePacket.NONCE_SIZE - 1], new byte[PaxePacket.AUTH_TAG_SIZE], new byte[0]));
     }
 
     @Test
     void testConstructorWithInvalidAuthTagSize() {
         assertThrows(IllegalArgumentException.class, () -> 
-            new PaxePacket(new NodeId((byte) 1), new NodeId((byte) 2), new Channel((byte) 3), 
+            new PaxePacket(new NodeId((short) 1), new NodeId((short) 2), new Channel((byte) 3), 
                 (byte) 0, new byte[PaxePacket.NONCE_SIZE], new byte[PaxePacket.AUTH_TAG_SIZE - 1], new byte[0]));
     }
 
     @Test
     void testToBytes() {
-        NodeId from = new NodeId((byte) 1);
-        NodeId to = new NodeId((byte) 2);
+        NodeId from = new NodeId((short) 1);
+        NodeId to = new NodeId((short) 2);
         Channel channel = new Channel((byte) 3);
         byte flags = 0x04;
         byte[] nonce = new byte[PaxePacket.NONCE_SIZE];
@@ -59,19 +59,19 @@ class PaxePacketTest {
         byte[] bytes = packet.toBytes();
 
         assertEquals(PaxePacket.HEADER_SIZE + PaxePacket.NONCE_SIZE + PaxePacket.AUTH_TAG_SIZE + payload.length, bytes.length);
-        assertEquals(from.value(), bytes[0]);
-        assertEquals(to.value(), bytes[1]);
-        assertEquals(channel.value(), bytes[2]);
-        assertEquals(flags, bytes[3]);
-        assertArrayEquals(nonce, Arrays.copyOfRange(bytes, 4, 4 + PaxePacket.NONCE_SIZE));
-        assertArrayEquals(authTag, Arrays.copyOfRange(bytes, 4 + PaxePacket.NONCE_SIZE, 4 + PaxePacket.NONCE_SIZE + PaxePacket.AUTH_TAG_SIZE));
-        assertArrayEquals(payload, Arrays.copyOfRange(bytes, 4 + PaxePacket.NONCE_SIZE + PaxePacket.AUTH_TAG_SIZE, bytes.length));
+        assertEquals((short) ((bytes[0] << 8) | (bytes[1] & 0xFF)), from.value());
+        assertEquals((short) ((bytes[2] << 8) | (bytes[3] & 0xFF)), to.value());
+        assertEquals(channel.value(), bytes[4]);
+        assertEquals(flags, bytes[5]);
+        assertArrayEquals(nonce, Arrays.copyOfRange(bytes, 6, 6 + PaxePacket.NONCE_SIZE));
+        assertArrayEquals(authTag, Arrays.copyOfRange(bytes, 6 + PaxePacket.NONCE_SIZE, 6 + PaxePacket.NONCE_SIZE + PaxePacket.AUTH_TAG_SIZE));
+        assertArrayEquals(payload, Arrays.copyOfRange(bytes, 6 + PaxePacket.NONCE_SIZE + PaxePacket.AUTH_TAG_SIZE, bytes.length));
     }
 
     @Test
     void testFromBytes() {
-        NodeId from = new NodeId((byte) 1);
-        NodeId to = new NodeId((byte) 2);
+        NodeId from = new NodeId((short) 1);
+        NodeId to = new NodeId((short) 2);
         Channel channel = new Channel((byte) 3);
         byte flags = 0x04;
         byte[] nonce = new byte[PaxePacket.NONCE_SIZE];
@@ -88,17 +88,19 @@ class PaxePacketTest {
 
     @Test
     void testAuthenticatedData() {
-        NodeId from = new NodeId((byte) 1);
-        NodeId to = new NodeId((byte) 2);
+        NodeId from = new NodeId((short) 1);
+        NodeId to = new NodeId((short) 2);
         Channel channel = new Channel((byte) 3);
         PaxePacket packet = new PaxePacket(from, to, channel, (byte) 0, new byte[PaxePacket.NONCE_SIZE], new byte[PaxePacket.AUTH_TAG_SIZE], new byte[0]);
 
         byte[] authenticatedData = packet.authenticatedData();
 
-        assertEquals(3, authenticatedData.length);
-        assertEquals(from.value(), authenticatedData[0]);
-        assertEquals(to.value(), authenticatedData[1]);
-        assertEquals(channel.value(), authenticatedData[2]);
+        assertEquals(PaxePacket.AUTHENCIATED_DATA_SIZE, authenticatedData.length);
+        assertEquals((byte) (from.value() >> 8), authenticatedData[0]);
+        assertEquals((byte) from.value(), authenticatedData[1]);
+        assertEquals((byte) (to.value() >> 8), authenticatedData[2]);
+        assertEquals((byte) to.value(), authenticatedData[3]);
+        assertEquals(channel.value(), authenticatedData[4]);
     }
 
     @Test
@@ -108,10 +110,10 @@ class PaxePacketTest {
         SecretKey key = keyGen.generateKey();
     
         // Create input data
-        NodeId from = new NodeId((byte) 1);
+        NodeId from = new NodeId((short) 1);
         PaxeMessage originalMessage = new PaxeMessage(
             from,
-            new NodeId((byte) 2),
+            new NodeId((short) 2),
             new Channel((byte) 1),
             "Hello, World!".getBytes()
         );

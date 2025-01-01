@@ -19,10 +19,11 @@ public record PaxePacket(
         byte[] authTag,
         byte[] payload) {
 
-    public static final int HEADER_SIZE = 4; // from, to, channel, flags
+    public static final int HEADER_SIZE = 6; // from(2), to(2), channel(1), flags(1)
+    public static final int AUTHENCIATED_DATA_SIZE = 5; // from(2), to(2), channel(1)
     public static final int NONCE_SIZE = 12;
     public static final int AUTH_TAG_SIZE = 16;
-
+    
     public PaxePacket {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
@@ -40,8 +41,8 @@ public record PaxePacket(
     public byte[] toBytes() {
         var size = HEADER_SIZE + NONCE_SIZE + AUTH_TAG_SIZE + payload.length;
         var buffer = ByteBuffer.allocate(size);
-        buffer.put(from.value());
-        buffer.put(to.value());
+        buffer.putShort(from.value());
+        buffer.putShort(to.value());
         buffer.put(channel.value());
         buffer.put(flags);
         buffer.put(nonce);
@@ -52,8 +53,8 @@ public record PaxePacket(
 
     public static PaxePacket fromBytes(byte[] bytes) {
         var buffer = ByteBuffer.wrap(bytes);
-        var from = new NodeId(buffer.get());
-        var to = new NodeId(buffer.get());
+        var from = new NodeId(buffer.getShort());
+        var to = new NodeId(buffer.getShort());
         var channel = new Channel(buffer.get());
         var flags = buffer.get();
 
@@ -70,9 +71,9 @@ public record PaxePacket(
     }
 
     public byte[] authenticatedData() {
-        var buffer = ByteBuffer.allocate(3);
-        buffer.put(from.value());
-        buffer.put(to.value());
+        var buffer = ByteBuffer.allocate(AUTHENCIATED_DATA_SIZE);
+        buffer.putShort(from.value());
+        buffer.putShort(to.value());
         buffer.put(channel.value());
         return buffer.array();
     }
