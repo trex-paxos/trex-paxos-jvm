@@ -207,5 +207,6 @@ public class PaxeNetwork implements AutoCloseable {
         this.running = false;
         this.receiver.interrupt();
         this.sender.interrupt();
+        this.socket.close();
     }
 }

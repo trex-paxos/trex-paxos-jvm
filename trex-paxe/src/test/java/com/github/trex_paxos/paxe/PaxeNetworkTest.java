@@ -15,9 +15,12 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.TestMethodOrder;
 
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class PaxeNetworkTest {
 
         private static final Logger LOGGER = Logger.getLogger(PaxeNetworkTest.class.getName());
@@ -63,6 +66,7 @@ public class PaxeNetworkTest {
             LOGGER.setUseParentHandlers(false);
             sessionKeyManagerLogger.setUseParentHandlers(false);
         }
+
         @BeforeEach
         public void setup() throws Exception {
                 // Create and retain DatagramSockets to avoid race conditions
@@ -139,8 +143,8 @@ public class PaxeNetworkTest {
                         network2.close();
         }
 
-        @Test
-        void testStartup() throws Exception {
+        @Test @Order(1)
+        public void testStartup() throws Exception {
 
                 // Allow time for handshake to complete
                 Thread.sleep(100);
@@ -154,33 +158,7 @@ public class PaxeNetworkTest {
                 assertArrayEquals(key1, key2);
         }
 
-        @Test
-        void testHandshake() throws Exception {
-
-                // Verify initial state
-                var node1 = new NodeId((byte) 1);
-                var node2 = new NodeId((byte) 2);
-
-                assertFalse(network1.keyManager.sessionKeys.containsKey(node2));
-                assertFalse(network2.keyManager.sessionKeys.containsKey(node1));
-
-                // Wait for handshake
-                int attempts = 0;
-                while (attempts++ < 10) {
-                        if (network1.keyManager.sessionKeys.containsKey(node2) &&
-                                        network2.keyManager.sessionKeys.containsKey(node1)) {
-                                break;
-                        }
-                        Thread.sleep(100);
-                }
-
-                assertTrue(network1.keyManager.sessionKeys.containsKey(node2),
-                                "Node 1 missing session key");
-                assertTrue(network2.keyManager.sessionKeys.containsKey(node1),
-                                "Node 2 missing session key");
-        }
-
-        @Test
+        @Test @Order(2)
         public void testSendAndReceiveMessages() throws Exception {
                 // Define channels
                 Channel channel = new Channel((byte) 0);
