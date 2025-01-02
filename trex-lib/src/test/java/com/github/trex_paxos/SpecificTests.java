@@ -17,22 +17,41 @@ package com.github.trex_paxos;
 
 import com.github.trex_paxos.TrexNode.TrexRole;
 import com.github.trex_paxos.msg.*;
+
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.github.trex_paxos.Simulation.LOGGER;
 
 public class SpecificTests {
-  static {
-    if (System.getProperty("NO_LOGGING") != null && System.getProperty("NO_LOGGING").equals("true")) {
-      Logger.getLogger("").setLevel(Level.OFF);
-    } else {
-      LoggerConfig.initialize();
-    }
+  @BeforeAll
+  static void setupLogging() {
+
+    final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
+    final Level level = Level.parse(logLevel);
+
+    LOGGER.setLevel(level);
+    ConsoleHandler consoleHandler = new ConsoleHandler();
+    consoleHandler.setLevel(level);
+    LOGGER.addHandler(consoleHandler);
+
+    // Configure SessionKeyManager logger
+    Logger sessionKeyManagerLogger = Logger.getLogger("");
+    sessionKeyManagerLogger.setLevel(level);
+    ConsoleHandler skmHandler = new ConsoleHandler();
+    skmHandler.setLevel(level);
+    sessionKeyManagerLogger.addHandler(skmHandler);
+
+    // Optionally disable parent handlers if needed
+    LOGGER.setUseParentHandlers(false);
+    sessionKeyManagerLogger.setUseParentHandlers(false);
   }
 
   final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
@@ -47,18 +66,24 @@ public class SpecificTests {
   @Test
   public void testCatchupDoesNotViolateInvariantsYetDoesLearnDespiteHigherSelfPromise() {
 
-    // Given that node 1 has accepted a value at slot 1 and has made a very high self promise
+    // Given that node 1 has accepted a value at slot 1 and has made a very high
+    // self promise
     final var nodeId1 = (short) 1;
     final var journal = new TransparentJournal((short) 1);
-    final var acceptPreviouslyFixedSlot1 = new Accept((short) 1, 1L, new BallotNumber(1, (short) 1), new Command( "data".getBytes()));
+    final var acceptPreviouslyFixedSlot1 = new Accept((short) 1, 1L, new BallotNumber(1, (short) 1),
+        new Command("data".getBytes()));
     final var higherSelfPromiseNumber = new BallotNumber(1000, (short) 1);
-    TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {{
-      this.journal.writeAccept(acceptPreviouslyFixedSlot1);
-      this.progress = new Progress(nodeIdentifier, higherSelfPromiseNumber, 1L);
-    }};
+    TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {
+      {
+        this.journal.writeAccept(acceptPreviouslyFixedSlot1);
+        this.progress = new Progress(nodeIdentifier, higherSelfPromiseNumber, 1L);
+      }
+    };
 
-    // When node 2 sends a catchup response that has fixed values made under a previous leaders ballot number
-    // And where the actual fixed message at slot one is different to the one that node 1 thinks is already fixed.
+    // When node 2 sends a catchup response that has fixed values made under a
+    // previous leaders ballot number
+    // And where the actual fixed message at slot one is different to the one that
+    // node 1 thinks is already fixed.
     final var nodeId2 = (short) 2;
     final var ballotNumber2 = new BallotNumber(2, (short) 2);
     final var ignoreAcceptSlot1 = new Accept(nodeId2, 1L, ballotNumber2, new Command("data2".getBytes()));
@@ -69,11 +94,15 @@ public class SpecificTests {
     node.paxos(catchUpResponse);
 
     // Then the fixed value should not have changed after processing the catchup.
-    assertEquals(acceptPreviouslyFixedSlot1, journal.fakeJournal.get(1L), "The fixed value should not have changed after processing the catchup.");
-    // And the node should accept the second slot value even having made a higher self-promise
-    assertEquals(freshAcceptSlot2, journal.fakeJournal.get(2L), "The node should accepted the second slot value even having made a higher self-promise");
-    // And the node should not have updated its progress  ballot number
-    assertEquals(higherSelfPromiseNumber, node.progress.highestPromised(), "The node should not have updated its progress to the new ballot number");
+    assertEquals(acceptPreviouslyFixedSlot1, journal.fakeJournal.get(1L),
+        "The fixed value should not have changed after processing the catchup.");
+    // And the node should accept the second slot value even having made a higher
+    // self-promise
+    assertEquals(freshAcceptSlot2, journal.fakeJournal.get(2L),
+        "The node should accepted the second slot value even having made a higher self-promise");
+    // And the node should not have updated its progress ballot number
+    assertEquals(higherSelfPromiseNumber, node.progress.highestPromised(),
+        "The node should not have updated its progress to the new ballot number");
     // And the node should have updated the progress fixed index
     assertEquals(2L, node.progress.highestFixedIndex(), "The node should have updated the progress fixed index");
   }
@@ -89,13 +118,16 @@ public class SpecificTests {
     final var nodeId1 = (short) 1;
     final var originalNumber = new BallotNumber(1, nodeId1);
     final var journal = new TransparentJournal(nodeId1);
-    final var acceptPreviouslyFixedSlot1 = new Accept((short) 1, 1L, new BallotNumber(1, (short) 1), new Command( "data".getBytes()));
-    TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {{
-      this.progress = new Progress(nodeIdentifier, originalNumber, 1L);
-      this.journal.writeAccept(acceptPreviouslyFixedSlot1);
-      this.setRole(TrexRole.LEAD);
-      this.term = originalNumber;
-    }};
+    final var acceptPreviouslyFixedSlot1 = new Accept((short) 1, 1L, new BallotNumber(1, (short) 1),
+        new Command("data".getBytes()));
+    TrexNode node = new TrexNode(Level.INFO, nodeId1, threeNodeQuorum, journal) {
+      {
+        this.progress = new Progress(nodeIdentifier, originalNumber, 1L);
+        this.journal.writeAccept(acceptPreviouslyFixedSlot1);
+        this.setRole(TrexRole.LEAD);
+        this.term = originalNumber;
+      }
+    };
 
     assert node.progress.highestPromised().equals(originalNumber);
 
@@ -118,5 +150,6 @@ public class SpecificTests {
 
   // FIXME make sure you test explicitly all the abdication scenarios
 
-  // FIXME other tests around making sure fixed messages are issued for every accept
+  // FIXME other tests around making sure fixed messages are issued for every
+  // accept
 }

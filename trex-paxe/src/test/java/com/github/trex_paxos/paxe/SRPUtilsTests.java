@@ -21,11 +21,6 @@ class SRPUtilsTests {
                 System.setProperty(SRPUtils.class.getName() + ".useHash", "SHA-1");
         }
 
-        @BeforeAll
-        static void setup() {
-                assert "SHA-1" == SRPUtils.ALGORITHM;
-        }
-
         @Test
         public void testSecretKeyGeneration() {
                 String NHex = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" +
@@ -45,8 +40,6 @@ class SRPUtilsTests {
 
         @Test
         void testAppendixB_N() {
-                assertEquals("SHA-1", SRPUtils.ALGORITHM);
-
                 String hexN = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" + //
                                 "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" + //
                                 "8E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29" + //

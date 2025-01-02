@@ -228,20 +228,21 @@ public final class SRPUtils {
     /// `com.github.trex_paxos.paxe.SRPUtils.useHash` to a string such as "SHA-1" or "SHA-256". This is primarily used for testing 
     /// where we force the use of the SHA-1 algorithm to test against the RFC test vectors that use SHA-1.
     /// The default is the first algorithm in the [MESSAGE_DIGEST_PREFERENCES] list that is available on the system.
-    public static final String ALGORITHM = initAlgorithm();
+    public static final String BEST_ALGORITHM = bestAlgorithm();
 
     public static MessageDigest getMessageDigest() {
         try {
-            return MessageDigest.getInstance(ALGORITHM);
+            final var choice = System.getProperty(SRPUtils.class.getName() + ".useHash", BEST_ALGORITHM);
+            return MessageDigest.getInstance(choice);
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("Failed to initialize MessageDigest trying to get alorithm '" + ALGORITHM
+            throw new IllegalStateException("Failed to initialize MessageDigest trying to get alorithm '" + BEST_ALGORITHM
                     + "' check that there is not a system property override setting a bad value the available ones are: "
                     +
                     Security.getAlgorithms("MessageDigest").stream().collect(Collectors.joining(",")), e);
         }
     }
 
-    public static String initAlgorithm() {
+    public static String bestAlgorithm() {
         final var defaultChoice = MESSAGE_DIGEST_PREFERENCES.stream()
                 .filter(alg -> {
                     try {
@@ -253,15 +254,14 @@ public final class SRPUtils {
                 })
                 .findFirst()
                 .orElse("SHA-256");
-        final var choice = System.getProperty(SRPUtils.class.getName() + ".useHash", defaultChoice);
-        if (!Security.getAlgorithms("MessageDigest").contains(choice)) {
+        if (!Security.getAlgorithms("MessageDigest").contains(defaultChoice)) {
             throw new IllegalArgumentException(
-                    "The algorithm '" + choice + "' is not available on this system. The available ones are: " +
+                    "The algorithm '" + defaultChoice + "' is not available on this system. The available ones are: " +
                             (Security.getAlgorithms("MessageDigest").stream().collect(Collectors.joining(",")) +
                                     " use the system property " + SRPUtils.class.getName() + ".useHash"
                                     + " to set a valid algorithm."));
         }
-        return choice;
+        return defaultChoice;
     }
 
     // To test with the RFC 5054 test vectors we need to convert between byte arrays and hex strings that are in upper case.
