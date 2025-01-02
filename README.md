@@ -11,7 +11,8 @@ violation.
 To use this library:
 
 * You will need to implement the `Journal` interface to persist the state of the algorithm. This can be tables (or
-  documents or key-values) in the database that your application uses. That allows you to run a database transaction. 
+  documents or key-values) in the database that your application uses. That allows you to run a database transaction across the 
+  state of the algorithm and the state of your main application business logic. 
 * At this time you will need to set up the cluster membership manually. You will need to assign a unique node identifier
   to each node in the cluster.
 * This library is designed to be transport agnostic. Examples of plugging in network transport as either QUIC, TCP and 
