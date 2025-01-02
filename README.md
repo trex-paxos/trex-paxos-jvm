@@ -82,8 +82,8 @@ The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) states (p. 
 This enables the algorithm to enter a steady state of streaming only `accept` messages until a leader crashes or becomes
 network-isolated. Only then are `prepare` messages necessary for simultaneous leader election and crash recovery. 
 
-The purpose of pointing out those two sections of the original paper is that there is a lot of confusion about how to build 
-a practical algorithm from Paxos. This confusion appears to be enirely due to how it is taught.  
+The purpose of pointing out those three sections of the original paper is that there is a lot of confusion about how to build 
+a practical algorithm from Paxos. This confusion appears to be enirely due to how the algorithm is taught.  
 
 The description below refers to server processes as "nodes" within a cluster. This helps to disambiguate the code
 running the algorithm from the physical server or host process. This repository provides a core library with a node
