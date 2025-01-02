@@ -37,16 +37,16 @@ public class PicklePaxeTests {
   @Test
   public void testPreparePickleUnpickle() throws IOException {
     Prepare prepare = new Prepare((short) 1, 2L, new BallotNumber(3, (short) 4));
-    byte[] pickled = PicklePaxe.pickle(prepare);
-    Prepare unpickled = (Prepare) PicklePaxe.unpickle(java.nio.ByteBuffer.wrap(pickled));
+    byte[] pickled = PickleMsg.pickle(prepare);
+    Prepare unpickled = (Prepare) PickleMsg.unpickle(java.nio.ByteBuffer.wrap(pickled));
     assertEquals(prepare, unpickled);
   }
 
   @Test
   public void testAcceptNoopPickleUnpickle() throws IOException {
     Accept accept = new Accept((short) 3, 4L, new BallotNumber(2, (short) 3), NoOperation.NOOP);
-    byte[] pickled = PicklePaxe.pickle(accept);
-    Accept unpickled = (Accept) PicklePaxe.unpickle(java.nio.ByteBuffer.wrap(pickled));
+    byte[] pickled = PickleMsg.pickle(accept);
+    Accept unpickled = (Accept) PickleMsg.unpickle(java.nio.ByteBuffer.wrap(pickled));
     assertEquals(accept, unpickled);
   }
 
@@ -54,16 +54,16 @@ public class PicklePaxeTests {
   public void testAcceptPickleUnpickleClientCommand() throws IOException {
     Command command = new Command("data".getBytes(StandardCharsets.UTF_8));
     Accept accept = new Accept((short) 3, 4L, new BallotNumber(2, (short) 3), command);
-    byte[] pickled = PicklePaxe.pickle(accept);
-    Accept unpickled = (Accept) PicklePaxe.unpickle(java.nio.ByteBuffer.wrap(pickled));
+    byte[] pickled = PickleMsg.pickle(accept);
+    Accept unpickled = (Accept) PickleMsg.unpickle(java.nio.ByteBuffer.wrap(pickled));
     assertEquals(accept, unpickled);
   }
 
   @Test
   public void testAcceptPickleUnpickleNoop() throws IOException {
     Accept accept = new Accept((short) 3, 4L, new BallotNumber(2, (short) 3), NoOperation.NOOP);
-    byte[] pickled = PicklePaxe.pickle(accept);
-    Accept unpickled = (Accept) PicklePaxe.unpickle(java.nio.ByteBuffer.wrap(pickled));
+    byte[] pickled = PickleMsg.pickle(accept);
+    Accept unpickled = (Accept) PickleMsg.unpickle(java.nio.ByteBuffer.wrap(pickled));
     assertEquals(accept, unpickled);
   }
 
@@ -73,8 +73,8 @@ public class PicklePaxeTests {
         (short) 1, (short) 2,
         new AcceptResponse.Vote((short) 1, (short) 2, 4L, true),
         11L);
-    byte[] pickled = PicklePaxe.pickle(acceptNack);
-    AcceptResponse unpickled = (AcceptResponse) PicklePaxe.unpickle(java.nio.ByteBuffer.wrap(pickled));
+    byte[] pickled = PickleMsg.pickle(acceptNack);
+    AcceptResponse unpickled = (AcceptResponse) PickleMsg.unpickle(java.nio.ByteBuffer.wrap(pickled));
     assertEquals(acceptNack, unpickled);
   }
 
@@ -85,8 +85,8 @@ public class PicklePaxeTests {
         (short) 1, (short) 2,
         new PrepareResponse.Vote((short) 1, (short) 2, 3L, true, new BallotNumber(13, (short) 3)),
         Optional.of(accept), 1234213424L);
-    byte[] pickled = PicklePaxe.pickle(prepareAck);
-    PrepareResponse unpickled = (PrepareResponse) PicklePaxe.unpickle(java.nio.ByteBuffer.wrap(pickled));
+    byte[] pickled = PickleMsg.pickle(prepareAck);
+    PrepareResponse unpickled = (PrepareResponse) PickleMsg.unpickle(java.nio.ByteBuffer.wrap(pickled));
     assertEquals(prepareAck, unpickled);
   }
 
@@ -98,8 +98,8 @@ public class PicklePaxeTests {
         (short) 1, (short) 2,
         new PrepareResponse.Vote((short) 1, (short) 2, 3L, true, new BallotNumber(13, (short) 3)),
         Optional.of(accept), 1234213424L);
-    byte[] pickled = PicklePaxe.pickle(prepareAck);
-    PrepareResponse unpickled = (PrepareResponse) PicklePaxe.unpickle(java.nio.ByteBuffer.wrap(pickled));
+    byte[] pickled = PickleMsg.pickle(prepareAck);
+    PrepareResponse unpickled = (PrepareResponse) PickleMsg.unpickle(java.nio.ByteBuffer.wrap(pickled));
     assertEquals(prepareAck.journaledAccept(), unpickled.journaledAccept());
     assertEquals(prepareAck, unpickled);
   }
@@ -117,16 +117,16 @@ public class PicklePaxeTests {
     Fixed fixed = new Fixed(
         (short) 3,
         5L, new BallotNumber(10, (short) 128));
-    byte[] pickled = PicklePaxe.pickle(fixed);
-    Fixed unpickled = (Fixed) PicklePaxe.unpickle(java.nio.ByteBuffer.wrap(pickled));
+    byte[] pickled = PickleMsg.pickle(fixed);
+    Fixed unpickled = (Fixed) PickleMsg.unpickle(java.nio.ByteBuffer.wrap(pickled));
     assertEquals(fixed, unpickled);
   }
 
   @Test
   public void testPickleCatchup() throws Exception {
     Catchup catchup = new Catchup((short) 2, (short) 3, 4L, new BallotNumber(5, (short) 6));
-    byte[] pickled = PicklePaxe.pickle(catchup);
-    Catchup unpickled = (Catchup) PicklePaxe.unpickle(java.nio.ByteBuffer.wrap(pickled));
+    byte[] pickled = PickleMsg.pickle(catchup);
+    Catchup unpickled = (Catchup) PickleMsg.unpickle(java.nio.ByteBuffer.wrap(pickled));
     assertEquals(catchup.from(), unpickled.from());
     assertEquals(catchup.to(), unpickled.to());
   }
@@ -138,8 +138,8 @@ public class PicklePaxeTests {
         new Accept((short) 5, 6L, new BallotNumber(7, (short) 8), NoOperation.NOOP)
     };
     CatchupResponse catchupResponse = new CatchupResponse((short) 1, (short) 2, Arrays.asList(accepts));
-    byte[] pickled = PicklePaxe.pickle(catchupResponse);
-    CatchupResponse unpickled = (CatchupResponse) PicklePaxe.unpickle(java.nio.ByteBuffer.wrap(pickled));
+    byte[] pickled = PickleMsg.pickle(catchupResponse);
+    CatchupResponse unpickled = (CatchupResponse) PickleMsg.unpickle(java.nio.ByteBuffer.wrap(pickled));
     assertEquals(catchupResponse.from(), unpickled.from());
     assertEquals(catchupResponse.to(), unpickled.to());
     assertArrayEquals(catchupResponse.accepts().toArray(), unpickled.accepts().toArray());

@@ -42,13 +42,13 @@ public class TrexApp<T, R> implements Network.MessageHandler {
     }
 
     private void handleConsensusMessage(Network.Message message) {
-        var trexMsg = PicklePaxe.unpickle(ByteBuffer.wrap(message.payload()));
+        var trexMsg = PickleMsg.unpickle(ByteBuffer.wrap(message.payload()));
         var results = paxosThenUpCall(List.of(trexMsg));
         results.forEach(msg -> network.send(new Network.Message(
             Channel.CONSENSUS,
             new NodeId((short)msg.from()),
             new NodeId((short)(msg.from() == 1 ? 2 : 1)), // TODO: proper routing
-            PicklePaxe.pickle(msg)
+            PickleMsg.pickle(msg)
         )));
     }
 
@@ -59,7 +59,7 @@ public class TrexApp<T, R> implements Network.MessageHandler {
             Channel.CONSENSUS,
             new NodeId((short)msg.from()),
             new NodeId((short)(msg.from() == 1 ? 2 : 1)), // TODO: proper routing
-            PicklePaxe.pickle(msg)
+            PickleMsg.pickle(msg)
         )));
     }
 
@@ -76,7 +76,7 @@ public class TrexApp<T, R> implements Network.MessageHandler {
                     Channel.CONSENSUS,
                     new NodeId((short)msg.from()),
                     new NodeId((short)(msg.from() == 1 ? 2 : 1)), // TODO: proper routing
-                    PicklePaxe.pickle(msg)
+                    PickleMsg.pickle(msg)
                 )));
             } else {
                 network.send(new Network.Message(
