@@ -22,16 +22,16 @@ public class PaxeNetwork implements AutoCloseable {
     private final Map<NodeId, PaxeMessage> pendingMessages = new ConcurrentHashMap<>();
 
     /// Key manager for session key management which must have access to SRP verifiers. 
-    private final SessionKeyManager keyManager;
+    final SessionKeyManager keyManager;
 
     private final DatagramSocket socket;
     private final NodeId localNode;
     private final Map<Channel, BlockingQueue<EncryptedPaxeMessage>> channelQueues;
 
     private final BlockingQueue<PaxePacket> outboundQueue;
-    private final Thread sender;
-    private final Thread receiver;
-    private volatile boolean running = true;
+    private Thread sender;
+    private Thread receiver;
+    private volatile boolean running = false;
 
     final Supplier<ClusterMembership> membership;
 
@@ -46,14 +46,27 @@ public class PaxeNetwork implements AutoCloseable {
         this.membership = membership;
         this.channelQueues = new ConcurrentHashMap<>();
         this.outboundQueue = new LinkedBlockingQueue<>();
+    }
 
-        // Platform thread for network reading
-        this.receiver = Thread.ofPlatform().name("receiver")
-                .start(this::receiveLoop);
+    public void start() {
+        if (running) {
+            LOGGER.warning("Network already running");
+            return;
+        }
+        running = true;
+        
+        this.receiver = Thread.ofPlatform()
+            .name("receiver-" + localNode.id())
+            .start(this::receiveLoop);
 
-        // Virtual thread for sending
-        this.sender = Thread.ofVirtual().name("sender")
-                .start(this::processSendQueue);
+        this.sender = Thread.ofVirtual()
+            .name("sender-" + localNode.id())
+            .start(this::processSendQueue);
+
+        // Initiate handshakes with other nodes
+        membership.get().otherNodes(localNode)
+            .forEach(node -> keyManager.initiateHandshake(node)
+                .ifPresent(keyMsg -> sendHandshake(node, keyMsg)));
     }
 
     private BlockingQueue<EncryptedPaxeMessage> getOrCreateChannelQueue(Channel channel) {

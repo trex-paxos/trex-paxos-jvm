@@ -1,16 +1,23 @@
 package com.github.trex_paxos.paxe;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.github.trex_paxos.paxe.SRPUtils.Constants;
 
 import java.net.DatagramSocket;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.function.Supplier;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PaxeNetworkTest {
     final static String hexN = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" + //
@@ -22,15 +29,30 @@ public class PaxeNetworkTest {
     final static String hexG = "2";
 
     final static String hexV = "7E273DE8696FFC4F4E337D05B4B375BEB0DDE1569E8FA00A9886D812" +
-                                                "9BADA1F1822223CA1A605B530E379BA4729FDC59F105B4787E5186F5" +
-                                                "C671085A1447B52A48CF1970B4FB6F8400BBF4CEBFBB168152E08AB5" +
-                                                "EA53D15C1AFF87B2B9DA6E04E058AD51CC72BFC9033B564E26480D78" +
-                                                "E955A5E29E7AB245DB2BE315E2099AFB";
+            "9BADA1F1822223CA1A605B530E379BA4729FDC59F105B4787E5186F5" +
+            "C671085A1447B52A48CF1970B4FB6F8400BBF4CEBFBB168152E08AB5" +
+            "EA53D15C1AFF87B2B9DA6E04E058AD51CC72BFC9033B564E26480D78" +
+            "E955A5E29E7AB245DB2BE315E2099AFB";
 
     final static Constants constants = new Constants(hexN, hexG);
 
     private PaxeNetwork network1;
     private PaxeNetwork network2;
+
+    @BeforeAll
+    static void setupLogging() {
+        Logger logger = Logger.getLogger(SessionKeyManager.class.getName());
+        logger.setLevel(Level.FINEST);
+
+        ConsoleHandler handler = new ConsoleHandler();
+        handler.setLevel(Level.FINEST);
+        logger.addHandler(handler);
+
+        // Remove default handlers to avoid duplication
+        Logger root = Logger.getLogger("");
+        Arrays.stream(root.getHandlers())
+                .forEach(root::removeHandler);
+    }
 
     @BeforeEach
     public void setup() throws Exception {
@@ -61,15 +83,17 @@ public class PaxeNetworkTest {
                 "blahblah",
                 SRPUtils.generateSalt());
 
-        final var v1 = SRPUtils.generateVerifier(constants, nodeClientSecret1.srpIdenity(), nodeClientSecret1.password(), nodeClientSecret1.salt());
+        final var v1 = SRPUtils.generateVerifier(constants, nodeClientSecret1.srpIdenity(),
+                nodeClientSecret1.password(), nodeClientSecret1.salt());
 
         NodeClientSecret nodeClientSecret2 = new NodeClientSecret(
                 clusterId,
                 node2,
                 "moreblahblah",
                 SRPUtils.generateSalt());
-        
-        final var v2 = SRPUtils.generateVerifier(constants, nodeClientSecret2.srpIdenity(), nodeClientSecret2.password(), nodeClientSecret2.salt());
+
+        final var v2 = SRPUtils.generateVerifier(constants, nodeClientSecret2.srpIdenity(),
+                nodeClientSecret2.password(), nodeClientSecret2.salt());
 
         Supplier<Map<NodeId, NodeVerifier>> verifierLookup = () -> Map.of(
                 node1, new NodeVerifier(nodeClientSecret1.srpIdenity(), v1.toString(16)),
@@ -81,6 +105,9 @@ public class PaxeNetworkTest {
         // Initialize networks with Supplier<ClusterMembership>
         network1 = new PaxeNetwork(keyManager1, port1, node1, () -> membership);
         network2 = new PaxeNetwork(keyManager2, port2, node2, () -> membership);
+
+        network1.start();
+        network2.start();
     }
 
     @AfterEach
@@ -89,6 +116,51 @@ public class PaxeNetworkTest {
             network1.close();
         if (network2 != null)
             network2.close();
+    }
+
+    @Test
+    void testStartup() throws Exception {
+        network1.start();
+        network2.start();
+
+        // Allow time for handshake to complete
+        Thread.sleep(100);
+
+        // Verify session keys were exchanged
+        assertTrue(network1.keyManager.sessionKeys.containsKey(new NodeId((byte) 2)));
+        assertTrue(network2.keyManager.sessionKeys.containsKey(new NodeId((byte) 1)));
+
+        final var key1 = network1.keyManager.sessionKeys.get(new NodeId((byte) 2));
+        final var key2 = network2.keyManager.sessionKeys.get(new NodeId((byte) 1));
+        assertArrayEquals(key1, key2);
+    }
+
+    @Test
+    void testHandshake() throws Exception {
+        network1.start();
+        network2.start();
+
+        // Verify initial state
+        var node1 = new NodeId((byte) 1);
+        var node2 = new NodeId((byte) 2);
+
+        assertFalse(network1.keyManager.sessionKeys.containsKey(node2));
+        assertFalse(network2.keyManager.sessionKeys.containsKey(node1));
+
+        // Wait for handshake
+        int attempts = 0;
+        while (attempts++ < 10) {
+            if (network1.keyManager.sessionKeys.containsKey(node2) &&
+                    network2.keyManager.sessionKeys.containsKey(node1)) {
+                break;
+            }
+            Thread.sleep(100);
+        }
+
+        assertTrue(network1.keyManager.sessionKeys.containsKey(node2),
+                "Node 1 missing session key");
+        assertTrue(network2.keyManager.sessionKeys.containsKey(node1),
+                "Node 2 missing session key");
     }
 
     @Test
