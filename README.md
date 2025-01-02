@@ -227,7 +227,7 @@ On leader election (p. 7):
 This library implements leader failure detection by heartbeating `fixed` messages. Leader election is then by
 random timeouts. The core algorithm is in a single class
 `TrexNode` class. The timeout logic is in the `TrexEngine` class. This allows you to use a different
-failure detection library if you like.
+failure detection library if you wish.
 
 When a node times out it attempts to run the leader takeover protocol:
 
