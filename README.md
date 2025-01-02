@@ -64,8 +64,8 @@ the server across a set of identical nodes within a cluster with strong consiste
 or if they are applied in the wrong order, we will violate consistency. In reality this example is not very instructive as 
 we can use different consistency models with a key-value store. Yet at the heart of many distributeded systems we need to have 
 some core configuration that must be strongly consistent across all nodes in a cluster (e.g. what servers are currently in the 
-cluster, which worker mode is managing which partition of data). The concept of an ordered stream of commands is how we manage 
-the core configuration of the cluster. 
+cluster, or which workera are managing which partition of data). The concept of an ordered stream of commands is how we  
+replicate the core configuration of the cluster. 
 
 The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) explicitly states that Paxos has a leader (p. 6):
 
