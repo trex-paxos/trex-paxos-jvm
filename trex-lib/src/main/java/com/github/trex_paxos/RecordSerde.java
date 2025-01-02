@@ -1,19 +1,15 @@
 package com.github.trex_paxos;
 import java.lang.reflect.*;
 import java.nio.ByteBuffer;
+import java.util.Optional;
 
 public class RecordSerde {
     
     public static <T extends Record> SerDe<T> createSerde(Class<T> recordClass) {
-        // Validate it's a record
         if (!recordClass.isRecord()) {
             throw new IllegalArgumentException("Class must be a record");
         }
-
-        // Get record components in declaration order
         RecordComponent[] components = recordClass.getRecordComponents();
-        
-        // Validate all types are supported
         for (RecordComponent comp : components) {
             if (!isSupportedType(comp.getType())) {
                 throw new IllegalArgumentException(
@@ -28,11 +24,8 @@ public class RecordSerde {
         return new SerDe<T>() {
             @Override
             public byte[] serialize(T record) {
-                if (record == null) {
-                    return new byte[0];
-                }
-
-                // First pass to calculate buffer size
+                if (record == null) return new byte[0];
+                
                 int size = 0;
                 for (RecordComponent comp : components) {
                     try {
@@ -43,7 +36,6 @@ public class RecordSerde {
                     }
                 }
 
-                // Allocate buffer and write fields
                 ByteBuffer buffer = ByteBuffer.allocate(size);
                 for (RecordComponent comp : components) {
                     try {
@@ -53,15 +45,12 @@ public class RecordSerde {
                         throw new RuntimeException("Error serializing field: " + comp.getName(), e);
                     }
                 }
-
                 return buffer.array();
             }
 
             @Override
             public T deserialize(byte[] bytes) {
-                if (bytes == null || bytes.length == 0) {
-                    return null;
-                }
+                if (bytes == null || bytes.length == 0) return null;
 
                 ByteBuffer buffer = ByteBuffer.wrap(bytes);
                 Object[] args = new Object[components.length];
@@ -83,7 +72,8 @@ public class RecordSerde {
         return type == int.class || 
                type == long.class || 
                type == boolean.class || 
-               type == String.class;
+               type == String.class ||
+               type == Optional.class;
     }
 
     private static int sizeOf(Class<?> type, Object value) {
@@ -94,6 +84,16 @@ public class RecordSerde {
             if (value == null) return Integer.BYTES;
             byte[] bytes = ((String)value).getBytes();
             return Integer.BYTES + bytes.length;
+        }
+        if (type == Optional.class) {
+            Optional<?> opt = (Optional<?>)value;
+            if (opt.isEmpty()) return 1;
+            Object innerValue = opt.get();
+            if (innerValue instanceof String) {
+                byte[] bytes = ((String)innerValue).getBytes();
+                return 1 + Integer.BYTES + bytes.length;
+            }
+            throw new IllegalArgumentException("Unsupported Optional type: " + innerValue.getClass());
         }
         throw new IllegalArgumentException("Unsupported type: " + type);
     }
@@ -115,6 +115,14 @@ public class RecordSerde {
                     buffer.put(strBytes);
                 }
             }
+        } else if (type == Optional.class) {
+            Optional<?> opt = (Optional<?>)value;
+            if (opt.isEmpty()) {
+                buffer.put((byte)0);
+            } else {
+                buffer.put((byte)1);
+                writeToBuffer(buffer, opt.get().getClass(), opt.get());
+            }
         }
     }
 
@@ -127,15 +135,15 @@ public class RecordSerde {
             return buffer.get() == 1;
         } else if (type == String.class) {
             int length = buffer.getInt();
-        if (length == -1) {
-            return null;
-        }
-        if (length == 0) {
-            return "";
-        }
-        byte[] strBytes = new byte[length];
-        buffer.get(strBytes);
-        return new String(strBytes);
+            if (length == -1) return null;
+            if (length == 0) return "";
+            byte[] strBytes = new byte[length];
+            buffer.get(strBytes);
+            return new String(strBytes);
+        } else if (type == Optional.class) {
+            byte isPresent = buffer.get();
+            if (isPresent == 0) return Optional.empty();
+            return Optional.ofNullable(readFromBuffer(buffer, String.class));
         }
         throw new IllegalArgumentException("Unsupported type: " + type);
     }
