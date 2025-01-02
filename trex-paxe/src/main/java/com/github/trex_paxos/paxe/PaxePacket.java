@@ -33,8 +33,13 @@ public record PaxePacket(
         Objects.requireNonNull(nonce, "nonce cannot be null");
         Objects.requireNonNull(authTag, "authTag cannot be null");
 
-        if (payload.length > MAX_PACKET_LENGTH) {
-            throw new IllegalArgumentException("Payload too large for UDP packet");
+        var totalSize = HEADER_SIZE + payload.length;
+        if (nonce.isPresent()) {
+            totalSize += NONCE_SIZE + AUTH_TAG_SIZE;
+        }
+        if (totalSize > MAX_PACKET_LENGTH) {
+            throw new IllegalArgumentException(
+                String.format("Total payload size %d when adding headers exceeds UDP limit of %d as %d", payload.length, MAX_PACKET_LENGTH, totalSize));
         }
 
         nonce.ifPresent(n -> {
