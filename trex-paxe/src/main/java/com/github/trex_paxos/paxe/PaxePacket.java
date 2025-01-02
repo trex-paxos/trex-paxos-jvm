@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 
 import javax.crypto.Cipher;
@@ -12,42 +13,87 @@ import javax.crypto.spec.SecretKeySpec;
 
 public record PaxePacket(
         NodeId from,
-        NodeId to,
+        NodeId to, 
         Channel channel,
-        byte flags,
-        byte[] nonce,
-        byte[] authTag,
+        Optional<byte[]> nonce,
+        Optional<byte[]> authTag,
         byte[] payload) {
 
-    public static final int HEADER_SIZE = 6; // from(2), to(2), channel(1), flags(1)
-    public static final int AUTHENCIATED_DATA_SIZE = 5; // from(2), to(2), channel(1)
+    public static final int HEADER_SIZE = 8; // from(2) + to(2) + channel(2) + length(2)
+    public static final int AUTHENCIATED_DATA_SIZE = 6; // from(2) + to(2) + channel(2)
     public static final int NONCE_SIZE = 12;
     public static final int AUTH_TAG_SIZE = 16;
+    public static final int MAX_PACKET_LENGTH = 65535;
     
     public PaxePacket {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
         Objects.requireNonNull(channel, "channel cannot be null");
+        Objects.requireNonNull(payload, "payload cannot be null");
         Objects.requireNonNull(nonce, "nonce cannot be null");
         Objects.requireNonNull(authTag, "authTag cannot be null");
-        Objects.requireNonNull(payload, "payload cannot be null");
 
-        if (nonce.length != NONCE_SIZE)
-            throw new IllegalArgumentException("Invalid nonce size");
-        if (authTag.length != AUTH_TAG_SIZE)
-            throw new IllegalArgumentException("Invalid auth tag size");
+        var totalSize = HEADER_SIZE + payload.length;
+        if (nonce.isPresent()) {
+            totalSize += NONCE_SIZE + AUTH_TAG_SIZE;
+        }
+        if (totalSize > MAX_PACKET_LENGTH) {
+            throw new IllegalArgumentException(
+                String.format("Total payload size %d when adding headers exceeds UDP limit of %d as %d", payload.length, MAX_PACKET_LENGTH, totalSize));
+        }
+
+        nonce.ifPresent(n -> {
+            if (n.length != NONCE_SIZE)
+                throw new IllegalArgumentException("Invalid nonce size");
+        });
+        
+        authTag.ifPresent(t -> {
+            if (t.length != AUTH_TAG_SIZE)
+                throw new IllegalArgumentException("Invalid auth tag size");
+        });
+
+        if (nonce.isPresent() != authTag.isPresent()) {
+            throw new IllegalArgumentException("Both nonce and authTag must be present for encrypted packets");
+        }
+    }
+
+    // Legacy constructor for compatibility
+    public PaxePacket(NodeId from, NodeId to, Channel channel, byte flags, byte[] nonce, byte[] authTag, byte[] payload) {
+        this(from, to, channel, 
+            Optional.of(nonce), 
+            Optional.of(authTag), 
+            payload);
+    }
+
+    // Constructor for unencrypted packets
+    public PaxePacket(NodeId from, NodeId to, Channel channel, byte[] payload) {
+        this(from, to, channel, Optional.empty(), Optional.empty(), payload);
+    }
+
+    private static void putLength(ByteBuffer buffer, int length) {
+        buffer.put((byte) ((length >>> 8) & 0xFF));
+        buffer.put((byte) (length & 0xFF));
+    }
+
+    private static int getLength(ByteBuffer buffer) {
+        return ((buffer.get() & 0xFF) << 8) | (buffer.get() & 0xFF);
     }
 
     public byte[] toBytes() {
-        var size = HEADER_SIZE + NONCE_SIZE + AUTH_TAG_SIZE + payload.length;
+        var size = HEADER_SIZE + 
+            (nonce.isPresent() ? NONCE_SIZE + AUTH_TAG_SIZE : 0) + 
+            payload.length;
+            
         var buffer = ByteBuffer.allocate(size);
         buffer.putShort(from.id());
         buffer.putShort(to.id());
-        buffer.put(channel.value());
-        buffer.put(flags);
-        buffer.put(nonce);
-        buffer.put(authTag);
+        buffer.putShort(channel.value());
+        putLength(buffer, payload.length);
+        
+        nonce.ifPresent(buffer::put);
+        authTag.ifPresent(buffer::put);
         buffer.put(payload);
+        
         return buffer.array();
     }
 
@@ -55,49 +101,56 @@ public record PaxePacket(
         var buffer = ByteBuffer.wrap(bytes);
         var from = new NodeId(buffer.getShort());
         var to = new NodeId(buffer.getShort());
-        var channel = new Channel(buffer.get());
-        var flags = buffer.get();
+        var channel = new Channel(buffer.getShort());
+        var payloadLength = getLength(buffer);
 
-        var nonce = new byte[NONCE_SIZE];
-        buffer.get(nonce);
+        var remaining = buffer.remaining();
+        var isEncrypted = remaining > payloadLength;
 
-        var authTag = new byte[AUTH_TAG_SIZE];
-        buffer.get(authTag);
+        Optional<byte[]> nonce = Optional.empty();
+        Optional<byte[]> authTag = Optional.empty();
 
-        var payload = new byte[buffer.remaining()];
+        if (isEncrypted) {
+            var n = new byte[NONCE_SIZE];
+            buffer.get(n);
+            nonce = Optional.of(n);
+
+            var t = new byte[AUTH_TAG_SIZE];
+            buffer.get(t);
+            authTag = Optional.of(t);
+        }
+
+        var payload = new byte[payloadLength];
         buffer.get(payload);
 
-        return new PaxePacket(from, to, channel, flags, nonce, authTag, payload);
+        return new PaxePacket(from, to, channel, nonce, authTag, payload);
     }
 
     public byte[] authenticatedData() {
         var buffer = ByteBuffer.allocate(AUTHENCIATED_DATA_SIZE);
         buffer.putShort(from.id());
         buffer.putShort(to.id());
-        buffer.put(channel.value());
+        buffer.putShort(channel.value());
         return buffer.array();
     }
 
-    public byte[] ciphertext() {
-        return payload; // Encrypted payload is the ciphertext
-    }
+    public static PaxeMessage decrypt(PaxePacket packet, byte[] key) {
+        if (packet.nonce.isEmpty() || packet.authTag.isEmpty()) {
+            throw new SecurityException("Cannot decrypt unencrypted packet");
+        }
 
-    static PaxeMessage decrypt(PaxePacket packet, byte[] key) {
         try {
-            // Real decryption using AES-GCM
             var cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            var gcmSpec = new GCMParameterSpec(
-                PaxePacket.AUTH_TAG_SIZE * 8, packet.nonce());
+            var gcmSpec = new GCMParameterSpec(AUTH_TAG_SIZE * 8, packet.nonce.get());
             cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), gcmSpec);
             cipher.updateAAD(packet.authenticatedData());
             
-            // Combine ciphertext and tag for decryption
-            var combined = new byte[packet.payload().length + packet.authTag().length];
-            System.arraycopy(packet.payload(), 0, combined, 0, packet.payload().length);
-            System.arraycopy(packet.authTag(), 0, combined, packet.payload().length, packet.authTag().length);
+            var combined = new byte[packet.payload.length + AUTH_TAG_SIZE];
+            System.arraycopy(packet.payload, 0, combined, 0, packet.payload.length);
+            System.arraycopy(packet.authTag.get(), 0, combined, packet.payload.length, AUTH_TAG_SIZE);
             
             var decrypted = cipher.doFinal(combined);
-            return PaxeMessage.deserialize(packet.from(), packet.to(), packet.channel(), decrypted);
+            return PaxeMessage.deserialize(packet.from, packet.to, packet.channel, decrypted);
         } catch (GeneralSecurityException e) {
             throw new SecurityException("Decryption failed", e);
         }
@@ -111,23 +164,14 @@ public record PaxePacket(
         var gcmSpec = new GCMParameterSpec(AUTH_TAG_SIZE * 8, nonce);
         cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), gcmSpec);
     
-        var tempPacket = new PaxePacket(
-                from,
-                message.to(),
-                message.channel(),
-                (byte) 0,
-                nonce,
-                new byte[AUTH_TAG_SIZE],
-                message.serialize());
-    
+        var tempPacket = new PaxePacket(from, message.to(), message.channel(), message.serialize());
         cipher.updateAAD(tempPacket.authenticatedData());
+        
         var ciphertext = cipher.doFinal(message.serialize());
     
-        // Extract the authentication tag from the end of the ciphertext
         var authTag = new byte[AUTH_TAG_SIZE];
         System.arraycopy(ciphertext, ciphertext.length - AUTH_TAG_SIZE, authTag, 0, AUTH_TAG_SIZE);
     
-        // Remove the authentication tag from the ciphertext
         var actualCiphertext = new byte[ciphertext.length - AUTH_TAG_SIZE];
         System.arraycopy(ciphertext, 0, actualCiphertext, 0, ciphertext.length - AUTH_TAG_SIZE);
     
@@ -135,30 +179,28 @@ public record PaxePacket(
                 from,
                 message.to(),
                 message.channel(),
-                (byte) 0,
-                nonce,
-                authTag,
+                Optional.of(nonce),
+                Optional.of(authTag),
                 actualCiphertext);
-    }    
+    }
 
-        @Override
+    @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof PaxePacket that)) return false;
-        return flags == that.flags
-                && from.equals(that.from)
+        return from.equals(that.from)
                 && to.equals(that.to)
                 && channel.equals(that.channel)
-                && Arrays.equals(nonce, that.nonce)
-                && Arrays.equals(authTag, that.authTag)
+                && Arrays.equals(nonce.orElse(null), that.nonce.orElse(null))
+                && Arrays.equals(authTag.orElse(null), that.authTag.orElse(null))
                 && Arrays.equals(payload, that.payload);
     }
 
     @Override
     public int hashCode() {
-        int result = Objects.hash(from, to, channel, flags);
-        result = 31 * result + Arrays.hashCode(nonce);
-        result = 31 * result + Arrays.hashCode(authTag);
+        int result = Objects.hash(from, to, channel);
+        result = 31 * result + Arrays.hashCode(nonce.orElse(null));
+        result = 31 * result + Arrays.hashCode(authTag.orElse(null));
         result = 31 * result + Arrays.hashCode(payload);
         return result;
     }
