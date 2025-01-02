@@ -1,6 +1,10 @@
 package com.github.trex_paxos.paxe;
+
 import java.util.Arrays;
 import java.util.Objects;
+
+import com.github.trex_paxos.network.Channel;
+import com.github.trex_paxos.network.NodeId;
 
 public record PaxeMessage(
     NodeId from,

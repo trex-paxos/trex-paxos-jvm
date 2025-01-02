@@ -79,12 +79,7 @@ public class StackClusterImpl implements StackService {
         // Set up two nodes with the first one pre-selected as leader
         for (byte i = 1; i <= 2; i++) {
             var journal = new TransparentJournal(i);
-            var node = new TrexNode(java.util.logging.Level.INFO, i, quorum, journal) {
-                void setLeader() {
-                    this.role = TrexRole.LEAD;
-                    this.term = new BallotNumber(1, this.nodeIdentifier);
-                }
-            };
+            var node = new TrexNode(java.util.logging.Level.INFO, i, quorum, journal);
             if (i == 1) {
                 // Force first node to be leader
                 node.setLeader();

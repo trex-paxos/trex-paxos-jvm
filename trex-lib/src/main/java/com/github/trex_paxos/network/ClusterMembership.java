@@ -1,4 +1,4 @@
-package com.github.trex_paxos.paxe;
+package com.github.trex_paxos.network;
 
 import java.util.Map;
 import java.util.Optional;

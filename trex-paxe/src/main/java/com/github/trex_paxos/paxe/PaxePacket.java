@@ -11,6 +11,9 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
+import com.github.trex_paxos.network.Channel;
+import com.github.trex_paxos.network.NodeId;
+
 public record PaxePacket(
         NodeId from,
         NodeId to, 

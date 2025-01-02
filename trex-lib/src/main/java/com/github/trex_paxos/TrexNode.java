@@ -826,5 +826,11 @@ public class TrexNode {
     /// who no longer needs to recover any slots.
     LEAD
   }
+
+  @TestOnly
+  protected void setLeader() {
+    this.role = TrexRole.LEAD;
+    this.term = new BallotNumber(1, this.nodeIdentifier);
+  }
 }
 

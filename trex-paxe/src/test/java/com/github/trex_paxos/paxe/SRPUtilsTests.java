@@ -1,6 +1,5 @@
 package com.github.trex_paxos.paxe;
 
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.github.trex_paxos.paxe.SRPUtils.Constants;

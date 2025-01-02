@@ -1,6 +1,9 @@
 package com.github.trex_paxos.paxe;
 
 import org.junit.jupiter.api.Test;
+
+import com.github.trex_paxos.network.NodeId;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class PickleHandshakeTest {

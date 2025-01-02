@@ -8,6 +8,7 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.github.trex_paxos.network.NodeId;
 import com.github.trex_paxos.paxe.SRPUtils.Constants;
 
 import static com.github.trex_paxos.paxe.SRPUtils.*;

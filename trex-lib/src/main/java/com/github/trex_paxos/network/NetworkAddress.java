@@ -1,4 +1,4 @@
-package com.github.trex_paxos.paxe;
+package com.github.trex_paxos.network;
 
 public sealed interface NetworkAddress {
     String hostString();

@@ -1,4 +1,4 @@
-package com.github.trex_paxos.paxe;
+package com.github.trex_paxos.network;
 
 public record NodeId(short id) implements Comparable<NodeId> {
   public NodeId {

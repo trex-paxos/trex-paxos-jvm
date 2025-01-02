@@ -281,5 +281,9 @@ public abstract class TrexEngine implements AutoCloseable {
   public TrexNode.TrexRole getRole() {
     return trexNode.getRole();
   }
+
+  public short nodeIdentifier() {
+    return trexNode.nodeIdentifier();
+  }
 }
 

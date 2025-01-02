@@ -14,6 +14,11 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 
+import com.github.trex_paxos.network.Channel;
+import com.github.trex_paxos.network.ClusterMembership;
+import com.github.trex_paxos.network.NetworkAddress;
+import com.github.trex_paxos.network.NodeId;
+
 public class PaxeNetwork implements AutoCloseable {
     private static final Logger LOGGER = Logger.getLogger(PaxeNetwork.class.getName());
 

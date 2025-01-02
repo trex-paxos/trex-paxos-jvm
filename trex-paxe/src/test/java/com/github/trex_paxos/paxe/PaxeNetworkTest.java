@@ -5,6 +5,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.github.trex_paxos.network.Channel;
+import com.github.trex_paxos.network.ClusterId;
+import com.github.trex_paxos.network.ClusterMembership;
+import com.github.trex_paxos.network.NetworkAddress;
+import com.github.trex_paxos.network.NodeId;
 import com.github.trex_paxos.paxe.SRPUtils.Constants;
 
 import java.net.DatagramSocket;

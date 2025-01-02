@@ -1,6 +1,10 @@
 package com.github.trex_paxos.paxe;
 
 import org.junit.jupiter.api.Test;
+
+import com.github.trex_paxos.network.Channel;
+import com.github.trex_paxos.network.NodeId;
+
 import javax.crypto.SecretKey;
 import javax.crypto.KeyGenerator;
 import java.security.GeneralSecurityException;
