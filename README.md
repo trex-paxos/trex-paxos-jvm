@@ -59,8 +59,13 @@ The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) states (p. 
 > The server can be described as a deterministic state machine that performs client commands in some sequence. The state
 > machine has a current state; it performs a step by taking as input a command and producing an output and a new state.
 
-For example, in a key-value store, commands might be `put(k,v)`, `get(k)` or `remove(k)` operations. These commands form
-the "values" that must be applied consistently at each server in the cluster.
+For example, in a key-value store, commands might be `put(k,v)`, `get(k)` or `remove(k)` operations. We want to replicate 
+the server across a set of identical nodes within a cluster with strong consistency. If commands are not accurately replicated 
+or if they are applied in the wrong order, we will violate consistency. In reality this example is not very instructive as 
+we can use different consistency models with a key-value store. Yet at the heart of many distributeded systems we need to have 
+some core configuration that must be strongly consistent across all nodes in a cluster (e.g. what servers are currently in the 
+cluster, which worker mode is managing which partition of data). The concept of an ordered stream of commands is how we manage 
+the core configuration of the cluster. 
 
 The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) explicitly states that Paxos has a leader (p. 6):
 
