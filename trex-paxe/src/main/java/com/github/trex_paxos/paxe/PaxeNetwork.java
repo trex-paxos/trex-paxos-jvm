@@ -30,7 +30,7 @@ public class PaxeNetwork implements AutoCloseable {
     final SessionKeyManager keyManager;
 
     private final DatagramSocket socket;
-    private final NodeId localNode;
+    final NodeId localNode;
     private final Map<Channel, BlockingQueue<EncryptedPaxeMessage>> channelQueues;
 
     private final BlockingQueue<PaxePacket> outboundQueue;
@@ -214,4 +214,5 @@ public class PaxeNetwork implements AutoCloseable {
         this.sender.interrupt();
         this.socket.close();
     }
+
 }
