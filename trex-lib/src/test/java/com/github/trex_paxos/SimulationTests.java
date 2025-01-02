@@ -18,6 +18,8 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.BroadcastMessage;
 import com.github.trex_paxos.msg.DirectMessage;
 import com.github.trex_paxos.msg.TrexMessage;
+
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -27,6 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.random.RandomGenerator;
@@ -39,13 +42,28 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class SimulationTests {
 
-  static {
-    if (System.getProperty("NO_LOGGING") != null && System.getProperty("NO_LOGGING").equals("true")) {
-      Logger.getLogger("").setLevel(Level.OFF);
-    } else {
-      LoggerConfig.initialize();
-    }
-  }
+          @BeforeAll
+        static void setupLogging() {
+
+            final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
+            final Level level = Level.parse(logLevel);
+            
+            LOGGER.setLevel(level);
+            ConsoleHandler consoleHandler = new ConsoleHandler();
+            consoleHandler.setLevel(level);
+            LOGGER.addHandler(consoleHandler);
+    
+            // Configure SessionKeyManager logger
+            Logger sessionKeyManagerLogger = Logger.getLogger("");
+            sessionKeyManagerLogger.setLevel(level);
+            ConsoleHandler skmHandler = new ConsoleHandler();
+            skmHandler.setLevel(level);
+            sessionKeyManagerLogger.addHandler(skmHandler);
+    
+            // Optionally disable parent handlers if needed
+            LOGGER.setUseParentHandlers(false);
+            sessionKeyManagerLogger.setUseParentHandlers(false);
+        }
 
   @Test
   public void testLeaderElection1000() {

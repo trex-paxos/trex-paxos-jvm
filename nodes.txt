@@ -1,5 +1,5 @@
 # tests
-mvn -DNO_LOGGING=true -B clean package
+mvn clean package
 
 # run just one test
 mvn -DskipTests clean package && \
@@ -14,6 +14,9 @@ mvn test -pl trex-paxe -Dtest=com.github.trex_paxos.paxe.PaxeNetworkTest#testSta
 
 # run just one test fine logging
 clear ; mvn test -Dtest=com.github.trex_paxos.paxe.PaxeNetworkTest#testStartup -Djava.util.logging.ConsoleHandler.level=FINEST
+
+# run just one test class fine logging
+clear ; mvn test -pl trex-paxe -Dtest=com.github.trex_paxos.paxe.PaxeNetworkTest -Djava.util.logging.ConsoleHandler.level=FINEST
 
 # Grab the files for LLM
 

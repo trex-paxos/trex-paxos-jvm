@@ -30,6 +30,9 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class PicklePaxeTests {
+  static {
+    System.setProperty(SRPUtils.class.getName() + ".useHash", "SHA-1");
+  }
 
   @Test
   public void testPreparePickleUnpickle() throws IOException {
@@ -49,7 +52,7 @@ public class PicklePaxeTests {
 
   @Test
   public void testAcceptPickleUnpickleClientCommand() throws IOException {
-    Command command = new Command( "data".getBytes(StandardCharsets.UTF_8));
+    Command command = new Command("data".getBytes(StandardCharsets.UTF_8));
     Accept accept = new Accept((short) 3, 4L, new BallotNumber(2, (short) 3), command);
     byte[] pickled = PicklePaxe.pickle(accept);
     Accept unpickled = (Accept) PicklePaxe.unpickle(java.nio.ByteBuffer.wrap(pickled));
@@ -81,8 +84,7 @@ public class PicklePaxeTests {
     PrepareResponse prepareAck = new PrepareResponse(
         (short) 1, (short) 2,
         new PrepareResponse.Vote((short) 1, (short) 2, 3L, true, new BallotNumber(13, (short) 3)),
-        Optional.of(accept), 1234213424L
-    );
+        Optional.of(accept), 1234213424L);
     byte[] pickled = PicklePaxe.pickle(prepareAck);
     PrepareResponse unpickled = (PrepareResponse) PicklePaxe.unpickle(java.nio.ByteBuffer.wrap(pickled));
     assertEquals(prepareAck, unpickled);
@@ -95,8 +97,7 @@ public class PicklePaxeTests {
     PrepareResponse prepareAck = new PrepareResponse(
         (short) 1, (short) 2,
         new PrepareResponse.Vote((short) 1, (short) 2, 3L, true, new BallotNumber(13, (short) 3)),
-        Optional.of(accept), 1234213424L
-    );
+        Optional.of(accept), 1234213424L);
     byte[] pickled = PicklePaxe.pickle(prepareAck);
     PrepareResponse unpickled = (PrepareResponse) PicklePaxe.unpickle(java.nio.ByteBuffer.wrap(pickled));
     assertEquals(prepareAck.journaledAccept(), unpickled.journaledAccept());
@@ -115,8 +116,7 @@ public class PicklePaxeTests {
   public void testPickFixed() throws Exception {
     Fixed fixed = new Fixed(
         (short) 3,
-        5L, new BallotNumber(10, (short) 128)
-    );
+        5L, new BallotNumber(10, (short) 128));
     byte[] pickled = PicklePaxe.pickle(fixed);
     Fixed unpickled = (Fixed) PicklePaxe.unpickle(java.nio.ByteBuffer.wrap(pickled));
     assertEquals(fixed, unpickled);

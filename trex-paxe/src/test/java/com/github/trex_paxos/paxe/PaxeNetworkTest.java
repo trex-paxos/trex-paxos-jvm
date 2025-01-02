@@ -22,6 +22,9 @@ import org.junit.jupiter.api.TestMethodOrder;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class PaxeNetworkTest {
+        static {
+                System.setProperty(SRPUtils.class.getName() + ".useHash", "SHA3-256");
+        }
 
         private static final Logger LOGGER = Logger.getLogger(PaxeNetworkTest.class.getName());
 
@@ -137,6 +140,7 @@ public class PaxeNetworkTest {
 
         @AfterEach
         public void teardown() throws Exception {
+                LOGGER.info("Closing network connections");
                 if (network1 != null)
                         network1.close();
                 if (network2 != null)
@@ -145,6 +149,7 @@ public class PaxeNetworkTest {
 
         @Test @Order(1)
         public void testStartup() throws Exception {
+                LOGGER.info("testStartup()");
 
                 // Allow time for handshake to complete
                 Thread.sleep(100);
@@ -160,6 +165,9 @@ public class PaxeNetworkTest {
 
         @Test @Order(2)
         public void testSendAndReceiveMessages() throws Exception {
+                LOGGER.info("testSendAndReceiveMessages()");
+                // Allow time for handshake to complete
+                Thread.sleep(100);
                 // Define channels
                 Channel channel = new Channel((byte) 0);
 
