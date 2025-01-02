@@ -19,8 +19,8 @@ To use this library:
   a lean UDP implementation inspired by QUIC are planned.
 
 This library aims to be a toolkit to help you to not have to write much code at all to run a cluster of nodes that
-replicate an ordered sequence of appliation commands. Yet it modular in nature so that you can assemble your own custom solution that
-only uses the core protocol messages and the code algorithm logic.
+replicate an ordered sequence of appliation commands. Yet it has a modular nature so that you can assemble your own custom 
+solution that only uses the core protocol messages and the code algorithm logic.
 
 At this the time:
 
