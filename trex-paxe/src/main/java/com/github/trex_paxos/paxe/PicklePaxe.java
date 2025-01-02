@@ -1,9 +1,7 @@
 package com.github.trex_paxos.paxe;
 
 import com.github.trex_paxos.msg.*;
-
 import com.github.trex_paxos.*;
-
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,19 +9,11 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
-/// The PaXE protocol is designed to be compatible with QUIC or even raw UDP.
-///
-/// This class pickles and unpickles TrexMessages with a standard from/to/type header.
-/// In the case of a DirectMessage, the to field is used to specify the destination node.
-/// In the case of a BroadcastMessage, the to field is set to 0.
-/// The purpose of the fixed size header is for rapid multiplexing and demultiplexing of messages.
 public class PicklePaxe {
-
     private static final int HEADER_SIZE = 5; // fromNode(2) + toNode(2) + type(1)
     private static final int BALLOT_NUMBER_SIZE = Integer.BYTES + 2; // counter(4) + nodeId(2)
 
     public static byte[] pickle(TrexMessage msg) {
-        // Calculate size needed for the message
         int size = HEADER_SIZE + calculateMessageSize(msg);
         ByteBuffer buffer = ByteBuffer.allocate(size);
         writeHeader(msg, buffer);
@@ -43,7 +33,6 @@ public class PicklePaxe {
         };
     }
 
-    ///  This must match the lookup table in the unpickle method
     public static byte toByte(TrexMessage msg) {
         return switch (msg) {
             case Prepare _ -> 1;
@@ -68,19 +57,6 @@ public class PicklePaxe {
         buffer.put(type);
     }
 
-    private static void writeMessageBody(TrexMessage msg, ByteBuffer buffer) {
-        switch (msg) {
-            case Prepare p -> write(p, buffer);
-            case PrepareResponse p -> write(p, buffer);
-            case Accept a -> write(a, buffer);
-            case AcceptResponse a -> write(a, buffer);
-            case Fixed f -> write(f, buffer);
-            case Catchup c -> write(c, buffer);
-            case CatchupResponse c -> write(c, buffer);
-            default -> throw new IllegalArgumentException("Unknown message type: " + msg.getClass());
-        }
-    }
-
     public static TrexMessage unpickle(ByteBuffer buffer) {
         short fromNode = buffer.getShort();
         short toNode = buffer.getShort();
@@ -95,6 +71,19 @@ public class PicklePaxe {
             case 7 -> readCatchupResponse(buffer, fromNode, toNode);
             default -> throw new IllegalStateException("Unknown type: " + type);
         };
+    }
+
+    private static void writeMessageBody(TrexMessage msg, ByteBuffer buffer) {
+        switch (msg) {
+            case Prepare p -> write(p, buffer);
+            case PrepareResponse p -> write(p, buffer);
+            case Accept a -> write(a, buffer);
+            case AcceptResponse a -> write(a, buffer);
+            case Fixed f -> write(f, buffer);
+            case Catchup c -> write(c, buffer);
+            case CatchupResponse c -> write(c, buffer);
+            default -> throw new IllegalArgumentException("Unknown message type: " + msg.getClass());
+        }
     }
 
     public static void write(PrepareResponse m, ByteBuffer buffer) {
