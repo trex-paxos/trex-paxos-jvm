@@ -9,6 +9,9 @@ mvn -DskipTests clean package && \
 mvn -DskipTests clean package && \
     mvn test -pl trex-paxe
 
+# run just one test method
+mvn test -Dtest=com.github.trex_paxos.paxe.PaxeNetworkTest#testStartup
+
 # Grab the files for LLM
 
 rm all.java

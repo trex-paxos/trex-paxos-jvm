@@ -1,6 +1,5 @@
 package com.github.trex_paxos.paxe;
 
-import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Optional;
@@ -32,7 +31,6 @@ public class SessionKeyManager {
     private static final Logger LOGGER = Logger.getLogger(SessionKeyManager.class.getName());
 
     private final NodeId nodeId;
-    private final ClusterId clusterId;
     private final NodeClientSecret localSecret;
     private final Supplier<Map<NodeId, NodeVerifier>> verifierLookup;
     private final Constants srpConstants;
@@ -43,11 +41,11 @@ public class SessionKeyManager {
     final Map<NodeId, byte[]> sessionKeys = new ConcurrentHashMap<>();
 
     public SessionKeyManager(
+            NodeId nodeId,
             Constants srpConstants,
             NodeClientSecret localSecret,
             Supplier<Map<NodeId, NodeVerifier>> verifierLookup) {
-        this.nodeId = localSecret.id();
-        this.clusterId = localSecret.clusterId();
+        this.nodeId = nodeId;
         this.localSecret = localSecret;
         this.verifierLookup = verifierLookup;
         this.srpConstants = srpConstants;
@@ -65,7 +63,14 @@ public class SessionKeyManager {
                     integer(srpConstants.N())).toString(16).toUpperCase();
             LOGGER.finest(() -> "Generated client public key: " + publicKey);
         } else {
-            publicKey = generateB(peerId, privateKey).toString(16).toUpperCase();
+            final var v = verifierLookup.get().get(peerId).verifier();
+            LOGGER.finest(() -> "Generating server public key B for peer " + peerId + " using v " + v);
+            publicKey = B(integer(privateKey),
+                    integer(v),
+                    integer(srpConstants.k()),
+                    integer(srpConstants.g()),
+                    integer(srpConstants.N())).toString(16).toUpperCase();
+
             LOGGER.finest(() -> "Generated server public key: " + publicKey);
         }
 
@@ -78,15 +83,17 @@ public class SessionKeyManager {
             return Optional.empty();
         }
 
-        // only if we have never tried to handshake with this peer will we create a new key
-        activeHandshakes.computeIfAbsent(peerId, (key)->generateKeyPair(key));
+        // only if we have never tried to handshake with this peer will we create a new
+        // key
+        activeHandshakes.computeIfAbsent(peerId, (key) -> generateKeyPair(key));
 
         final var keyPair = activeHandshakes.get(peerId);
 
-        LOGGER.finest(() -> localSecret.id() + " initiating handshake with peer: " + peerId + " using public key: " + keyPair.publicKey());
+        LOGGER.finest(() -> nodeId + " initiating handshake with peer: " + peerId + " using public key: "
+                + keyPair.publicKey());
 
         return Optional.of(new KeyMessage.KeyHandshakeRequest(
-                localSecret.id(),
+                nodeId,
                 fromHex(keyPair.publicKey())));
     }
 
@@ -105,15 +112,16 @@ public class SessionKeyManager {
     private Optional<KeyMessage> handleRequest(KeyMessage.KeyHandshakeRequest msg) {
         NodeId peerId = new NodeId(msg.from().id());
 
-        // only if we have never tried to handshake with this peer will we create a new key
-        activeHandshakes.computeIfAbsent(peerId, (key)->generateKeyPair(key));
+        // only if we have never tried to handshake with this peer will we create a new
+        // key
+        activeHandshakes.computeIfAbsent(peerId, (key) -> generateKeyPair(key));
         SRPKeyPair keyPair = activeHandshakes.get(peerId);
 
         byte[] sessionKey = computeSessionKey(peerId, toHex(msg.publicKey()), keyPair);
         sessionKeys.put(peerId, sessionKey);
 
         return Optional.of(
-                new KeyMessage.KeyHandshakeResponse(localSecret.id(), fromHex(keyPair.publicKey())));
+                new KeyMessage.KeyHandshakeResponse(nodeId, fromHex(keyPair.publicKey())));
     }
 
     private Optional<KeyMessage> handleResponse(KeyMessage.KeyHandshakeResponse msg) {
@@ -125,10 +133,6 @@ public class SessionKeyManager {
             activeHandshakes.remove(peerId);
         }
         return Optional.empty();
-    }
-
-    String identity() {
-        return clusterId.id() + "@" + nodeId.id();
     }
 
     private byte[] computeSessionKey(NodeId peerId, String peerPublicKey, SRPKeyPair localKeys) {
@@ -145,30 +149,24 @@ public class SessionKeyManager {
         });
 
         if (nodeId.id() < peerId.id()) {
-            // if we are client, local public key is A and peer public key is B
-            var u = u(srpConstants.N(), localKeys.publicKey(), peerPublicKey);
-            LOGGER.finest(() -> "Client u: " + u);
-            var key = clientS(srpConstants, peerPublicKey, localKeys.publicKey(), toHex(localSecret.salt()),
-                    identity(), localKeys.privateKey(), localSecret.password());
-            LOGGER.finest(() -> "Client premaster: " + key);
+            final var I = localSecret.srpIdenity();
+            final var a = localKeys.privateKey();
+            final var A = localKeys.publicKey();
+            final var B = peerPublicKey;
+            final var s = toHex(localSecret.salt());
+            final var P = localSecret.password();
+            var key = clientS(srpConstants, A, B, s, I, a, P);
+            LOGGER.finer(() -> "Client premaster fingerprint: " + key.chars().asLongStream().sum());
             return hashedSecret(srpConstants.N(), key);
         } else {
-            // if we are server, local public key is B and peer public key is A
-            var u = u(srpConstants.N(), peerPublicKey, localKeys.publicKey());
-            LOGGER.finest(() -> "Server u: " + u);
-            var key = serverS(srpConstants, verifierLookup.get().get(peerId).verifier(),
-                    peerPublicKey, localKeys.publicKey(), localKeys.privateKey());
-            LOGGER.finest(() -> "Server premaster: " + key);
+            final var A = peerPublicKey;
+            final var b = localKeys.privateKey();
+            final var B = localKeys.publicKey();
+            final var v = verifierLookup.get().get(peerId).verifier();
+            var key = serverS(srpConstants, v, A, B, b);
+            LOGGER.finer(() -> "Server premaster fingerprint: " + key.chars().asLongStream().sum());
             return hashedSecret(srpConstants.N(), key);
         }
-    }
-
-    private BigInteger generateB(NodeId peerId, String privateKey) {
-        return B(integer(privateKey),
-                integer(verifierLookup.get().get(peerId).verifier()),
-                integer(srpConstants.k()),
-                integer(srpConstants.g()),
-                integer(srpConstants.N()));
     }
 
     public Optional<byte[]> getSessionKey(NodeId peerId) {

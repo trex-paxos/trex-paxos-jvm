@@ -6,5 +6,4 @@ public record ClusterId(String id) {
             throw new IllegalArgumentException("id required");
         }
     }
-
 }
