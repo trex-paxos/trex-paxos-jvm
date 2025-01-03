@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.trex_paxos.paxe;
+package com.github.trex_paxos.network;
 
 import com.github.trex_paxos.msg.*;
 import com.github.trex_paxos.*;
@@ -29,10 +29,7 @@ import static com.github.trex_paxos.Pickle.writeProgress;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class PicklePaxeTests {
-  static {
-    System.setProperty(SRPUtils.class.getName() + ".useHash", "SHA-1");
-  }
+public class PickleMsgTests {
 
   @Test
   public void testPreparePickleUnpickle() throws IOException {

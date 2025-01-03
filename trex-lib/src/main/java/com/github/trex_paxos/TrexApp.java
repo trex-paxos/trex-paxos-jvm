@@ -1,10 +1,12 @@
 package com.github.trex_paxos;
 
+import com.github.trex_paxos.msg.TrexMessage;
 import com.github.trex_paxos.network.*;
 import java.util.concurrent.*;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.UUID;
 

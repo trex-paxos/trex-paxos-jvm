@@ -190,7 +190,7 @@ public class PaxeNetwork implements AutoCloseable {
             final var handshake  = new PaxePacket(
                 localNode, 
                 to, 
-                Channel.KEY_EXCHANGE_CHANNEL, 
+                Channel.KEY_EXCHANGE, 
                 (byte) 0, 
                 new byte[PaxePacket.NONCE_SIZE], 
                 new byte[PaxePacket.AUTH_TAG_SIZE], 
