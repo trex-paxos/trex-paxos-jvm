@@ -1,20 +1,28 @@
 /// This package contains the core classes and interfaces for the Trex Paxos implementation.
 ///
-/// The Trex Paxos library provides a robust and efficient implementation of the Paxos consensus algorithm.
-/// It includes components for managing distributed consensus, handling client requests, and ensuring data consistency
-/// across multiple nodes in a distributed system.
+/// The library provides fault-tolerant distributed consensus through the TrexApp class:
+/// `TrexApp<VALUE,RESULT>` runs Paxos consensus on VALUE objects across a cluster, then
+/// transforms each chosen VALUE into a RESULT locally at each node.
 ///
-/// Key classes and interfaces in this package:
-/// - `PaxosService`: An interface that defines how state is stored. It is expected that the host application will provide an implementation of this interface using a database or other durable storage mechanism.
-/// - `Journal`: An interface that defines how state is stored. It is expected that the host application will provide an implementation of this interface using a database or other durable storage mechanism.
-/// - `TrexEngine`: A wrapper class that manages the timeout behaviors around the core Paxos algorithm. Subclasses must implement the timeout and heartbeat methods.
-/// - `BallotNumber`: Represents a ballot number in the Paxos algorithm. It is used to order proposals and is held as the latest promise in a nodes `Progress`
-/// - `Progress`: The highest promised number and highest fixed log slot index of a node. This must be persisted to the journal as crash durable before messages are sent out. It is loaded at startup from the journal.
-/// - `TrexNode`: The core class that implements the Paxos algorithm. It processes inbound messages, writes into the journal, and returns fixed command values and outbound messages.
-/// - `UUIDGenerator`: As the JDK UUID class does not provide a way to generate time-ordered UUIDs. It is recommended to use this class to generate client message uuid {@link com.github.trex_paxos.Command#clientMsgUuid()} so that they are approximately time ordered.
-/// - `Pickle`: A method to binary encode and decode the messages and paxos state. Hopefully soon Java will fix serialization of records so that this is no longer needed for future JVMs.
-/// - `QuorumStrategy`: An interface that defines how quorums are calculated. This is because while in Paxos Made Simple uses a simple majority quorum later we can use UPaxos.
+/// To use TrexApp, applications need to provide:
+/// 1. A [Journal] implementation backed by the application's database, allowing atomic commits of
+///    both consensus state and application state
+/// 2. A [Pickler] implementation for thee VALUE type
+/// 3. A `TrexNetwork` that sends messages over the network
+/// 4. A `Function<VALUE,RESULT>` containing the core application logic to process each chosen VALUE
 ///
-/// The library is designed to be used in high-performance, fault-tolerant distributed systems where consensus and
-/// data consistency are critical.
+/// Supporting classes and interfaces:
+/// - [Pickler<T>]: Converts objects of type T to and from byte arrays. Required for VALUE types which are the
+///   host application command values that are passed between network nodes and written into the [Journal].
+/// - [TrexEngine]: Manages timeouts and heartbeats around the core Paxos algorithm implemented in TrexNode.
+/// - [TrexNode]: Implements the core Paxos algorithm, processing messages and maintaining consistency.
+/// - [Progress]: Tracks the highest promised ballot number and highest fixed log index for a node.
+/// - [Journal]: Interface for crash-durable storage of Paxos protocol state.
+/// - [BallotNumber]: Orders proposals in the Paxos protocol by combining a counter with node identifier.
+/// - [QuorumStrategy]: Defines how voting quorums are calculated, allowing for different strategies.
+///
+/// In order to make it easy to pickle java records and sealed traits that permits only records there are two
+/// utility pickler classes [RecordPickler] and [PermitsRecordsPickler].
+///
+/// The library focuses on correctness and performance while remaining agnostic to application specifics.
 package com.github.trex_paxos;

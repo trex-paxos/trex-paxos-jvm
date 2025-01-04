@@ -33,7 +33,7 @@ import java.util.stream.Stream;
 public abstract class TrexEngine implements AutoCloseable {
 
   static final Logger LOGGER = Logger.getLogger("");
-  
+
   public static final String THREAD_INTERRUPTED = "TrexEngine was interrupted awaiting the mutex probably to shutdown while under load.";
 
   /// The underlying TrexNode that is the actual Part-time Parliament algorithm implementation guarded by this class.
@@ -108,7 +108,7 @@ public abstract class TrexEngine implements AutoCloseable {
   /// Create the next leader batch of messages for the given set of commands. This should be called by the host application
   /// when {@link #isLeader()} is true.
   public List<TrexMessage> nextLeaderBatchOfMessages(List<Command> command) {
-    /// toList is immutable so we concat streams first.
+    // toList is immutable so we concat streams first.
     return Stream.concat(
         command.stream().map(this::command),
         Stream.of(trexNode.currentFixedMessage())

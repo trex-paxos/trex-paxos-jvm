@@ -1,114 +1,111 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.TrexMessage;
-import com.github.trex_paxos.network.*;
-import java.util.concurrent.*;
-import java.util.function.Function;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import com.github.trex_paxos.network.Channel;
+import com.github.trex_paxos.network.PickleMsg;
+import com.github.trex_paxos.network.TrexNetwork;
+
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.logging.Logger;
 
-public class TrexApp<T, R> implements Network.MessageHandler {
-    private static final Logger LOGGER = Logger.getLogger(TrexApp.class.getName());
+public class TrexApp<VALUE, RESULT> {
+  private static final Logger LOGGER = Logger.getLogger(TrexApp.class.getName());
 
-    protected final TrexEngine engine;
-    protected final SerDe<T> serdeCmd;
-    protected final Network network;
-    protected final ConcurrentNavigableMap<UUID, CompletableFuture<R>> pendingResponses = new ConcurrentSkipListMap<>();
-    protected Function<T, R> serverFunction;
+  private final TrexEngine engine;
+  private final Pickler<VALUE> cmdSerde;
+  private final TrexNetwork trexNetwork;
+  private final Map<UUID, CompletableFuture<RESULT>> pendingResponses = new ConcurrentHashMap<>();
+  private final Function<VALUE, RESULT> serverFunction;
 
-    public TrexApp(TrexEngine engine, SerDe<T> serdeCmd, Network network) {
-        this.engine = engine;
-        this.serdeCmd = serdeCmd;
-        this.network = network;
-        this.network.subscribe(this);
+  public TrexApp(TrexEngine engine,
+                 Pickler<VALUE> cmdSerde,
+                 TrexNetwork trexNetwork,
+                 Function<VALUE, RESULT> serverFunction) {
+    this.engine = engine;
+    this.cmdSerde = cmdSerde;
+    this.trexNetwork = trexNetwork;
+    this.serverFunction = serverFunction;
+  }
+
+  public void start() {
+    // Subscribe to consensus and proxy channels
+    trexNetwork.subscribe(Channel.CONSENSUS, this::handleConsensusMessage);
+    trexNetwork.subscribe(Channel.PROXY, this::handleProxyMessage);
+    trexNetwork.start();
+    engine.start();
+  }
+
+  private void handleConsensusMessage(ByteBuffer msg) {
+    TrexMessage trexMsg = PickleMsg.unpickle(msg);
+    var results = paxosThenUpCall(List.of(trexMsg));
+    for (TrexMessage result : results) {
+      trexNetwork.send(Channel.CONSENSUS,
+          ByteBuffer.wrap(PickleMsg.pickle(result)));
     }
+  }
 
-    public void setServerFunction(Function<T, R> serverFunction) {
-        this.serverFunction = serverFunction;
+  private void handleProxyMessage(ByteBuffer msg) {
+    UUID uuid = UUIDGenerator.generateUUID();
+    Command cmd = new Command(uuid, msg.array());
+
+    var messages = engine.nextLeaderBatchOfMessages(List.of(cmd));
+    for (TrexMessage message : messages) {
+      trexNetwork.send(Channel.CONSENSUS,
+          ByteBuffer.wrap(PickleMsg.pickle(message)));
     }
+  }
 
-    @Override
-    public void onMessage(Network.Message message) {
-        try {
-            if (message.channel().equals(Channel.CONSENSUS)) {
-                handleConsensusMessage(message);
-            } else if (message.channel().equals(Channel.PROXY) && engine.isLeader()) {
-                handleProxyMessage(message);
-            }
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error handling message", e);
-        }
-    }
+  public void processCommand(VALUE value, CompletableFuture<RESULT> future) {
+    UUID uuid = null;
+    try {
+      uuid = UUIDGenerator.generateUUID();
+      pendingResponses.put(uuid, future);
 
-    private void handleConsensusMessage(Network.Message message) {
-        var trexMsg = PickleMsg.unpickle(ByteBuffer.wrap(message.payload()));
-        var results = paxosThenUpCall(List.of(trexMsg));
-        results.forEach(msg -> network.send(new Network.Message(
-            Channel.CONSENSUS,
-            new NodeId((short)msg.from()),
-            new NodeId((short)(msg.from() == 1 ? 2 : 1)), // TODO: proper routing
-            PickleMsg.pickle(msg)
-        )));
-    }
+      byte[] valueBytes = cmdSerde.serialize(value);
 
-    private void handleProxyMessage(Network.Message message) {
-        Command command = new Command(UUIDGenerator.generateUUID(), message.payload());
+      if (engine.isLeader()) {
+        Command command = new Command(uuid, valueBytes);
         var messages = engine.nextLeaderBatchOfMessages(List.of(command));
-        messages.forEach(msg -> network.send(new Network.Message(
-            Channel.CONSENSUS,
-            new NodeId((short)msg.from()),
-            new NodeId((short)(msg.from() == 1 ? 2 : 1)), // TODO: proper routing
-            PickleMsg.pickle(msg)
-        )));
-    }
-
-    public void processCommand(T value, CompletableFuture<R> future) {
-        try {
-            byte[] valueBytes = serdeCmd.serialize(value);
-            UUID uuid = UUIDGenerator.generateUUID();
-            pendingResponses.put(uuid, future);
-            
-            if (engine.isLeader()) {
-                Command command = new Command(uuid, valueBytes);
-                var messages = engine.nextLeaderBatchOfMessages(List.of(command));
-                messages.forEach(msg -> network.send(new Network.Message(
-                    Channel.CONSENSUS,
-                    new NodeId((short)msg.from()),
-                    new NodeId((short)(msg.from() == 1 ? 2 : 1)), // TODO: proper routing
-                    PickleMsg.pickle(msg)
-                )));
-            } else {
-                network.send(new Network.Message(
-                    Channel.PROXY,
-                    new NodeId(engine.nodeIdentifier()),
-                    new NodeId((short)1), // TODO: proper leader routing
-                    valueBytes
-                ));
-            }
-        } catch (Exception e) {
-            future.completeExceptionally(e);
+        for (TrexMessage msg : messages) {
+          trexNetwork.send(Channel.CONSENSUS,
+              ByteBuffer.wrap(PickleMsg.pickle(msg)));
         }
+      } else {
+        trexNetwork.send(Channel.PROXY,
+            ByteBuffer.wrap(valueBytes));
+      }
+    } catch (Exception e) {
+      pendingResponses.remove(uuid);
+      future.completeExceptionally(e);
     }
+  }
 
-    protected void upCall(Long slot, Command cmd) {
-        T value = serdeCmd.deserialize(cmd.operationBytes());
-        R result = serverFunction.apply(value);
-        pendingResponses.computeIfPresent(cmd.uuid(), (_, future) -> {
-            future.complete(result);
-            return null;
-        });
-    }
+  protected void upCall(Long slot, Command cmd) {
+    VALUE value = cmdSerde.deserialize(cmd.operationBytes());
+    RESULT result = serverFunction.apply(value);
+    pendingResponses.computeIfPresent(cmd.uuid(), (_, future) -> {
+      future.complete(result);
+      return null;
+    });
+  }
 
-    public List<TrexMessage> paxosThenUpCall(List<TrexMessage> messages) {
-        var result = engine.paxos(messages);
-        if (!result.commands().isEmpty()) {
-            result.commands().entrySet().stream()
-                .filter(entry -> entry.getValue() instanceof Command)
-                .forEach(entry -> upCall(entry.getKey(), (Command)entry.getValue()));
-        }
-        return result.messages();
+  public List<TrexMessage> paxosThenUpCall(List<TrexMessage> messages) {
+    var result = engine.paxos(messages);
+    if (!result.commands().isEmpty()) {
+      result.commands().entrySet().stream()
+          .filter(entry -> entry.getValue() instanceof Command)
+          .forEach(entry -> upCall(entry.getKey(), (Command) entry.getValue()));
     }
+    return result.messages();
+  }
+
+  void stop() {
+    trexNetwork.stop();
+  }
 }

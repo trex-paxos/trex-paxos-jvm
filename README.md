@@ -5,21 +5,23 @@
 This repository contains a Java library that implements the Paxos algorithm as described in Leslie Lamport's 2001
 paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf).
 It aims to be rigorous in terms of safety preferring to mark a node as crashed rather than ignoring any possible safety
-violation. 
-
+violation.
 
 To use this library:
 
 * You will need to implement the `Journal` interface to persist the state of the algorithm. This can be tables (or
-  documents or key-values) in the database that your application uses. That allows you to run a database transaction across the 
-  state of the algorithm and the state of your main application business logic. 
+  documents or key-values) in the database that your application uses. That allows you to run a database transaction
+  across the
+  state of the algorithm and the state of your main application business logic.
 * At this time you will need to set up the cluster membership manually. You will need to assign a unique node identifier
   to each node in the cluster.
-* This library is designed to be transport agnostic. Examples of plugging in network transport as either QUIC, TCP and 
+* This library is designed to be transport agnostic. Examples of plugging in trexNetwork transport as either QUIC, TCP
+  and
   a lean UDP implementation inspired by QUIC are planned.
 
 This library aims to be a toolkit to help you to not have to write much code at all to run a cluster of nodes that
-replicate an ordered sequence of appliation commands. Yet it has a modular nature so that you can assemble your own custom 
+replicate an ordered sequence of appliation commands. Yet it has a modular nature so that you can assemble your own
+custom
 solution that only uses the core protocol messages and the code algorithm logic.
 
 At this the time:
@@ -27,9 +29,9 @@ At this the time:
 1. There are exhaustive brute force tests that the algorithm is never violated.
 2. There are runtime checks that the algorithm is never violated.
 3. The library will mark itself as crashed if it spots problems.
-4. There are junit tests that simulate randomized rolling network partitions 1,000 times and verifies nodes stay in
+4. There are junit tests that simulate randomized rolling trexNetwork partitions 1,000 times and verifies nodes stay in
    sync.
-5. There is not yet a full example of nodes communicating over network sockets.
+5. There is not yet a full example of nodes communicating over trexNetwork sockets.
 
 The library is therefore at the stage where the bold and brave could try it out.
 
@@ -59,13 +61,19 @@ The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) states (p. 
 > The server can be described as a deterministic state machine that performs client commands in some sequence. The state
 > machine has a current state; it performs a step by taking as input a command and producing an output and a new state.
 
-For example, in a key-value store, commands might be `put(k,v)`, `get(k)` or `remove(k)` operations. We want to replicate 
-the server across a set of identical nodes within a cluster with strong consistency. If commands are not accurately replicated 
-or if they are applied in the wrong order, we will violate consistency. In reality this example is not very instructive as 
-we can use different consistency models with a key-value store. Yet at the heart of many distributeded systems we need to have 
-some core configuration that must be strongly consistent across all nodes in a cluster (e.g. what servers are currently in the 
-cluster, or which workers are managing which partition of the data). The concept of an ordered stream of commands is how we  
-replicate the core configuration of the cluster. 
+For example, in a key-value store, commands might be `put(k,v)`, `get(k)` or `remove(k)` operations. We want to
+replicate
+the server across a set of identical nodes within a cluster with strong consistency. If commands are not accurately
+replicated
+or if they are applied in the wrong order, we will violate consistency. In reality this example is not very instructive
+as
+we can use different consistency models with a key-value store. Yet at the heart of many distributeded systems we need
+to have
+some core configuration that must be strongly consistent across all nodes in a cluster (e.g. what servers are currently
+in the
+cluster, or which workers are managing which partition of the data). The concept of an ordered stream of commands is how
+we  
+replicate the core configuration of the cluster.
 
 The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) explicitly states that Paxos has a leader (p. 6):
 
@@ -80,10 +88,11 @@ The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) states (p. 
 > proposal number for all instances, it can do this by sending a single reasonably short message to the other servers.
 
 This enables the algorithm to enter a steady state of streaming only `accept` messages until a leader crashes or becomes
-network-isolated. Only then are `prepare` messages necessary for simultaneous leader election and crash recovery. 
+trexNetwork-isolated. Only then are `prepare` messages necessary for simultaneous leader election and crash recovery.
 
-The purpose of pointing out those three sections of the original paper is that there is a lot of confusion about how to build 
-a practical algorithm from Paxos. This confusion appears to be enirely due to how the algorithm is taught.  
+The purpose of pointing out those three sections of the original paper is that there is a lot of confusion about how to
+build
+a practical algorithm from Paxos. This confusion appears to be enirely due to how the algorithm is taught.
 
 The description below refers to server processes as "nodes" within a cluster. This helps to disambiguate the code
 running the algorithm from the physical server or host process. This repository provides a core library with a node
@@ -135,7 +144,8 @@ This avoids the need to retransmit values when fixing slots, as explained below.
 ### Second: Steady State Galloping
 
 The objective is to fix the same command value `V` into the same command log stream index `S`, known as a log slot, at
-each node in the cluster. When the network is healthy, and servers have undertaken crash recovery, an uncontested leader
+each node in the cluster. When the trexNetwork is healthy, and servers have undertaken crash recovery, an uncontested
+leader
 sends a stream of commands using `accept(S,N,V)` messages where:
 
 * `S` is a log index slot the leader assigns to the command value.
@@ -186,7 +196,8 @@ typically only support point-to-point messaging. This means that `AcceptResponse
 As the leader is the first to learn which values are fixed, Lamport calls it the “distinguished learner”.
 
 The leader can send a short `fixed(S,N)` message to inform the other nodes when a value has been fixed. This message can
-piggyback at the front of the subsequent outbound `accept` message network packet. Due to lost messaging, a leader may
+piggyback at the front of the subsequent outbound `accept` message trexNetwork packet. Due to lost messaging, a leader
+may
 learn which slots are fixed out of sequential order. In this implementation leaders only send `fixed` messages in
 sequential slot order.
 
@@ -363,7 +374,8 @@ We may test the `TrexNode` class:
 This list gives 3^8=2187 test scenarios. The observations where is that
 even if we have a few more things we can vary we can still exhaustively test the implementation.
 
-In addition to exhaustive property-based tests we also run simulations of randomize network partitions that step through
+In addition to exhaustive property-based tests we also run simulations of randomize trexNetwork partitions that step
+through
 hundreds of in memory message exchanges between a three node cluster. This tests check that the journal at all three
 nodes
 matches and the list of fixed commands is the same across all three nodes.
@@ -376,7 +388,7 @@ The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) states (p. 
 > a sequence of proposals with increasing numbers, none of which are ever
 > chosen.
 
-One pathological scenario exists for a stable network where nodes repeated timeout in an unlucky order such:
+One pathological scenario exists for a stable trexNetwork where nodes repeated timeout in an unlucky order such:
 
 * The first node to timeout has the lowest node identifier.
 * The second node to timeouts does so before the first node can fix a value into the next slot.
@@ -410,10 +422,10 @@ TBD
 The list of tasks:
 
 - [x] Implement the Paxos Parliament Protocol for log replication.
-- [x] Write a test harness that injects rolling network partitions.
+- [x] Write a test harness that injects rolling trexNetwork partitions.
 - [x] Write property based tests to exhaustively verify correctness.
 - [x] Write extensive documentation including detailed JavaDoc.
-- [ ] Write a transport for a demo. As Kwik does not support connection failover will start with my own UDP. 
+- [ ] Write a transport for a demo. As Kwik does not support connection failover will start with my own UDP.
 - [ ] Implement distributed advisor lock service as a full demo.
 - [ ] Implement cluster membership changes as UPaxos.
 - [ ] Add optionality so that randomized timeouts can be replaced by some other leader failure detection (e.g. JGroups).

@@ -1,16 +1,16 @@
 package com.github.trex_paxos;
 
-import java.io.Serializable;
 import java.util.Optional;
 
+// @formatter:off
 public interface StackService {
-    sealed interface Command extends Serializable  {}
-    record Push(String item) implements Command {}
-    record Pop() implements Command {}
-    record Peek() implements Command {}
-    record Response(Optional<String> value) {}
-
-    Response push(String item);
-    Response pop();
-    Response peek();
+  sealed interface Value permits Push, Pop, Peek {}
+  record Push(String item) implements Value {}
+  record Pop() implements Value {}
+  record Peek() implements Value {}
+  record Response(Optional<String> value) {}
+  Response push(String item);
+  Response pop();
+  Response peek();
 }
+// @formatter:on
