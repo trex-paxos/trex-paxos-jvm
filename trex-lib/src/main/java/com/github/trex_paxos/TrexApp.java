@@ -5,14 +5,8 @@ import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
 import com.github.trex_paxos.network.Channel;
 import com.github.trex_paxos.network.ClusterMembership;
-import com.github.trex_paxos.network.PickleMsg;
-import com.github.trex_paxos.network.TrexNetwork;
 
-import java.nio.ByteBuffer;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -22,177 +16,188 @@ import java.util.logging.Logger;
 public class TrexApp<VALUE, RESULT> {
   private static final Logger LOGGER = Logger.getLogger(TrexApp.class.getName());
 
+  private class LeaderTracker {
+    private volatile Short estimatedLeader = -1;
+
+    void updateFromFixed(Fixed msg) {
+      var knownLeader = msg.leader();
+      if (!Objects.equals(estimatedLeader, knownLeader)) {
+        LOGGER.fine(() -> engine.trexNode.nodeIdentifier() +  " role changed from " + estimatedLeader + " to " + knownLeader);
+        estimatedLeader = knownLeader;
+      }
+    }
+
+    Optional<Short> currentLeader() {
+      return estimatedLeader > 0 ? Optional.of(estimatedLeader) : Optional.empty();
+    }
+  }
+
+  private class ResponseTracker<R> {
+    private final Map<UUID, CompletableFuture<R>> pending = new ConcurrentHashMap<>();
+
+    void track(UUID id, CompletableFuture<R> future) {
+      LOGGER.finer(() -> engine.trexNode.nodeIdentifier() +  " tracking response for " + id);
+      pending.put(id, future);
+    }
+
+    void complete(UUID id, R result) {
+      pending.computeIfPresent(id, (_, f) -> {
+        f.complete(result);
+        LOGGER.fine(() -> engine.trexNode.nodeIdentifier() +  " complete " + id);
+        return null;
+      });
+    }
+
+    void fail(UUID id, Throwable ex) {
+      pending.computeIfPresent(id, (_, f) -> {
+        f.completeExceptionally(ex);
+        LOGGER.fine(() -> engine.trexNode.nodeIdentifier() +  " fail " + id);
+        return null;
+      });
+    }
+
+    void remove(UUID id) {
+      pending.remove(id);
+    }
+  }
+
   private final TrexEngine engine;
-  private final Pickler<VALUE> cmdSerde;
-  private final TrexNetwork trexNetwork;
-  private final Map<UUID, CompletableFuture<RESULT>> pendingResponses = new ConcurrentHashMap<>();
+  private final NetworkLayer networkLayer;
   private final Function<VALUE, RESULT> serverFunction;
   private final Supplier<ClusterMembership> clusterMembershipSupplier;
-
-  protected volatile Short estimatedLeader = -1;
+  private final LeaderTracker leaderTracker = new LeaderTracker();
+  private final ResponseTracker<RESULT> responseTracker = new ResponseTracker<>();
+  private final Pickler<VALUE> valuePickler;
 
   public TrexApp(
       Supplier<ClusterMembership> clusterMembershipSupplier,
       TrexEngine engine,
-      Pickler<VALUE> cmdSerde,
-      TrexNetwork trexNetwork,
+      NetworkLayer networkLayer,
+      Pickler<VALUE> valuePickler,
       Function<VALUE, RESULT> serverFunction) {
     this.engine = engine;
-    this.cmdSerde = cmdSerde;
-    this.trexNetwork = trexNetwork;
+    this.networkLayer = networkLayer;
     this.serverFunction = serverFunction;
     this.clusterMembershipSupplier = clusterMembershipSupplier;
+    this.valuePickler = valuePickler;
   }
 
   public void start() {
-    // Subscribe to consensus and proxy channels
-    trexNetwork.subscribe(Channel.CONSENSUS, this::handleConsensusMessage);
-    trexNetwork.subscribe(Channel.PROXY, this::handleProxyMessage);
-    trexNetwork.start();
-    engine.start();
     if (engine.isLeader()) {
-      LOGGER.fine(this.engine.nodeIdentifier() + " start as leader");
-      estimatedLeader = engine.nodeIdentifier();
-    } else {
-      LOGGER.fine(this.engine.nodeIdentifier() + " start as follower");
+      leaderTracker.updateFromFixed(new Fixed(engine.nodeIdentifier(), 0L, BallotNumber.MIN));
     }
+    engine.start();
+    networkLayer.subscribe(Channel.CONSENSUS, this::handleConsensusMessage, "consensus-"+ engine.nodeIdentifier());
+    networkLayer.subscribe(Channel.PROXY, this::handleProxyMessage, "proxy-"+ engine.nodeIdentifier());
+    networkLayer.start();
+
   }
 
-  protected void handleConsensusMessage(ByteBuffer msg) {
-    LOGGER.finer(this.engine.nodeIdentifier() + " handleConsensusMessage");
-    try {
-      TrexMessage trexMsg = PickleMsg.unpickle(msg);
-      if (trexMsg == null || trexMsg.from() == engine.nodeIdentifier()) {
-        LOGGER.finer(() -> this.engine.nodeIdentifier() + " handleConsensusMessage Ignoring message from self");
-        return;
-      }
-      LOGGER.finer(this.engine.nodeIdentifier() + " handleConsensusMessage got message " + trexMsg);
-      var messages = paxosThenUpCall(List.of(trexMsg));
-      LOGGER.finer(() -> String.format(this.engine.nodeIdentifier() + " handleConsensusMessage Generated %d results", messages.size()));
-      messages.stream()
-          .filter(m -> m instanceof Fixed)
-          .findFirst()
-          .ifPresent(fixed -> {
-            var fixedMsg = (Fixed) fixed;
-            var knownLeader = fixedMsg.leader();
-            if (!Objects.equals(estimatedLeader, knownLeader)) {
-              estimatedLeader = knownLeader;
-              LOGGER.fine(() -> String.format(this.engine.nodeIdentifier() + " handleConsensusMessage fixed message new estimatedLeader is %d", estimatedLeader));
-            }
-          });
-      for (TrexMessage message : messages) {
-        final var pickled = PickleMsg.pickle(message);
-        if (message instanceof DirectMessage directMessage) {
-          trexNetwork.send(Channel.CONSENSUS, directMessage.to(), ByteBuffer.wrap(pickled));
-        } else {
-          final var membership = clusterMembershipSupplier.get();
-          for (var node : membership.otherNodes(engine.nodeIdentifier())) {
-            trexNetwork.send(Channel.CONSENSUS, node, ByteBuffer.wrap(pickled));
-          }
-        }
-      }
-    } catch (Exception e) {
-      LOGGER.severe(this.engine.nodeIdentifier() + " handleConsensusMessage " + e.getMessage());
-    }
+  private List<TrexMessage> createLeaderMessages(VALUE value, UUID uuid) {
+    byte[] valueBytes = valuePickler.serialize(value);
+    Command cmd = new Command(uuid, valueBytes);
+    return engine.nextLeaderBatchOfMessages(List.of(cmd));
   }
 
-  protected void handleProxyMessage(ByteBuffer msg) {
-    if (!engine.isLeader()) {
-      LOGGER.finer(this.engine.nodeIdentifier() + " handleProxyMessage Ignoring proxy message - not leader");
+  void handleConsensusMessage(TrexMessage msg) {
+    if (msg == null || msg.from() == engine.nodeIdentifier()) {
+      LOGGER.finer(() -> engine.nodeIdentifier() + " is dropping consensus message " + msg);
       return;
     }
+
+    var messages = paxosThenUpCall(List.of(msg));
+    LOGGER.finer(() -> engine.nodeIdentifier() + " has processed "+msg+" and is responding with " + messages);
+    messages.stream()
+        .filter(m -> m instanceof Fixed)
+        .map(m -> (Fixed) m)
+        .forEach(leaderTracker::updateFromFixed);
+
+    transmitTrexMessages(messages);
+  }
+
+  void handleProxyMessage(VALUE value) {
+    if (!engine.isLeader()) {
+      LOGGER.finer(() -> engine.nodeIdentifier() + " is not leader so is dropping is has received proxied message: " + value);
+      return;
+    }
+    LOGGER.fine(() -> engine.nodeIdentifier() + " leader is has received proxied message " + value);
     try {
       UUID uuid = UUIDGenerator.generateUUID();
-      Command cmd = new Command(uuid, msg.array());
-
-      var messages = engine.nextLeaderBatchOfMessages(List.of(cmd));
-      LOGGER.fine(() -> String.format(this.engine.nodeIdentifier() + " handleProxyMessage Generated %d messages for command uuid=%s", messages.size(), uuid));
-      for (TrexMessage message : messages) {
-        final var pickled = PickleMsg.pickle(message);
-        if (message instanceof DirectMessage directMessage) {
-          trexNetwork.send(Channel.CONSENSUS, directMessage.to(), ByteBuffer.wrap(pickled));
-        } else {
-          final var membership = clusterMembershipSupplier.get();
-          for (var node : membership.otherNodes(engine.nodeIdentifier())) {
-            trexNetwork.send(Channel.CONSENSUS, node, ByteBuffer.wrap(pickled));
-          }
-        }
-      }
+      var messages = createLeaderMessages(value, uuid);
+      transmitTrexMessages(messages);
     } catch (Exception e) {
-      LOGGER.severe(this.engine.nodeIdentifier() + " handleProxyMessage " + e.getMessage());
+      LOGGER.severe(() -> engine.nodeIdentifier() + " handleProxyMessage failed: " + e.getMessage());
     }
   }
 
-  public void processCommand(VALUE value, CompletableFuture<RESULT> future) {
+  public void submitValue(VALUE value, CompletableFuture<RESULT> future) {
     final var uuid = UUIDGenerator.generateUUID();
     try {
-      pendingResponses.put(uuid, future);
-      byte[] valueBytes = cmdSerde.serialize(value);
+      responseTracker.track(uuid, future);
+
       if (engine.isLeader()) {
-        LOGGER.fine(engine.nodeIdentifier() + " processCommand as leader uuid=" + uuid + " valueBytes.length=" + valueBytes.length);
-        Command cmd = new Command(uuid, valueBytes);
-        var messages = engine.nextLeaderBatchOfMessages(List.of(cmd));
-        LOGGER.fine(() -> String.format(this.engine.nodeIdentifier() + " handleProxyMessage Generated %d messages for command uuid=%s", messages.size(), uuid));
-        for (TrexMessage message : messages) {
-          final var pickled = PickleMsg.pickle(message);
-          if (message instanceof DirectMessage directMessage) {
-            trexNetwork.send(Channel.CONSENSUS, directMessage.to(), ByteBuffer.wrap(pickled));
-          } else {
-            final var membership = clusterMembershipSupplier.get();
-            for (var node : membership.otherNodes(engine.nodeIdentifier())) {
-              trexNetwork.send(Channel.CONSENSUS, node, ByteBuffer.wrap(pickled));
-            }
-          }
-        }
+        var messages = createLeaderMessages(value, uuid);
+        LOGGER.fine(() -> engine.nodeIdentifier() + " leader is sending accept messages " + messages);
+        transmitTrexMessages(messages);
       } else {
-        if (estimatedLeader > 0) {
-          LOGGER.fine(engine.nodeIdentifier() + " processCommand will proxy with uuid=" + uuid + " valueBytes.length=" + valueBytes.length);
-          trexNetwork.send(Channel.PROXY,
-              estimatedLeader,
-              ByteBuffer.wrap(valueBytes));
-        } else {
-          LOGGER.warning(engine.nodeIdentifier() + " processCommand no estimated leader to proxy to with uuid=" + uuid + " valueBytes.length=" + valueBytes.length);
-        }
+        leaderTracker.currentLeader().ifPresentOrElse(
+            leader ->{
+              LOGGER.fine(() -> engine.nodeIdentifier() + " "+ engine.trexNode.getRole() + " is proxying cmd messages" + value);
+              networkLayer.send(Channel.PROXY, leader, value);
+            },
+            () -> {
+              var ex = new IllegalStateException("No leader available");
+              LOGGER.warning(() -> engine.nodeIdentifier() + " " + engine.trexNode.getRole() + " failed to proxy cmd messages " + value + " because: " + ex.getMessage());
+              responseTracker.fail(uuid, ex);
+              responseTracker.remove(uuid);
+            }
+        );
       }
     } catch (Exception e) {
-      LOGGER.severe(engine.nodeIdentifier() + " processCommand failed to process command: " + e.getMessage());
-      pendingResponses.remove(uuid);
-      future.completeExceptionally(e);
+      responseTracker.fail(uuid, e);
+      responseTracker.remove(uuid);
     }
   }
 
-  protected void upCall(Long slot, Command cmd) {
+  void upCall(@SuppressWarnings("unused") Long slot, Command cmd) {
     try {
-      VALUE value = cmdSerde.deserialize(cmd.operationBytes());
+      VALUE value = valuePickler.deserialize(cmd.operationBytes());
       RESULT result = serverFunction.apply(value);
-
-      // Only complete future if this was the originating node
-      pendingResponses.computeIfPresent(cmd.uuid(), (_, future) -> {
-        future.complete(result);
-        return null;
-      });
-      LOGGER.fine(() -> String.format("%d upCall processed command slot=%d uuid=%s", engine.nodeIdentifier(), slot, cmd.uuid()));
+      responseTracker.complete(cmd.uuid(), result);
     } catch (Exception e) {
-      LOGGER.warning(String.format("%d upCall error processing command slot=%d uuid=%s: %s", engine.nodeIdentifier(), slot, cmd.uuid(), e.getMessage()));
-      // Only fail future if this was the originating node
-      pendingResponses.computeIfPresent(cmd.uuid(), (_, future) -> {
-        future.completeExceptionally(e);
-        return null;
-      });
+      responseTracker.fail(cmd.uuid(), e);
     }
   }
 
-  public List<TrexMessage> paxosThenUpCall(List<TrexMessage> messages) {
+  List<TrexMessage> paxosThenUpCall(List<TrexMessage> messages) {
+    LOGGER.fine(() -> engine.nodeIdentifier() + " paxosThenUpCall input: " + messages);
     var result = engine.paxos(messages);
     if (!result.commands().isEmpty()) {
+      LOGGER.fine(() -> engine.nodeIdentifier() + " fixed " + result.commands());
       result.commands().entrySet().stream()
           .filter(entry -> entry.getValue() instanceof Command)
           .forEach(entry -> upCall(entry.getKey(), (Command) entry.getValue()));
     }
-    return result.messages();
+    final var response = result.messages();
+    LOGGER.fine(() -> engine.nodeIdentifier() + " paxosThenUpCall output: " + response);
+    return response;
   }
 
-  void stop() {
-    trexNetwork.stop();
+  private void transmitTrexMessages(List<TrexMessage> messages) {
+    messages.forEach(message -> {
+      if (message instanceof DirectMessage directMessage) {
+        LOGGER.finer(() -> engine.nodeIdentifier() + " sending direct message " + directMessage);
+        networkLayer.send(Channel.CONSENSUS, directMessage.to(), message);
+      } else {
+        var others = clusterMembershipSupplier.get().otherNodes(engine.nodeIdentifier());
+        LOGGER.finer(() -> engine.nodeIdentifier() + " broadcasting message " + message + " to " + others);
+        networkLayer.broadcast(Channel.CONSENSUS, message, others);
+      }
+    });
+  }
+
+  public void stop() {
+    networkLayer.stop();
+    engine.close();
   }
 }

@@ -1,9 +1,6 @@
 package com.github.trex_paxos.network;
 
-import com.github.trex_paxos.AbstractCommand;
-import com.github.trex_paxos.BallotNumber;
-import com.github.trex_paxos.Command;
-import com.github.trex_paxos.NoOperation;
+import com.github.trex_paxos.*;
 import com.github.trex_paxos.msg.*;
 
 import java.nio.ByteBuffer;
@@ -13,7 +10,10 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
-public class PickleMsg {
+public class PickleMsg implements Pickler<TrexMessage> {
+  public static PickleMsg instance = new PickleMsg();
+  protected PickleMsg() {
+  }
   private static final int HEADER_SIZE = 5; // fromNode(2) + toNode(2) + type(1)
   private static final int BALLOT_NUMBER_SIZE = Integer.BYTES + 2; // counter(4) + nodeId(2)
 
@@ -298,5 +298,15 @@ public class PickleMsg {
 
   private static BallotNumber readBallotNumber(ByteBuffer buffer) {
     return new BallotNumber(buffer.getInt(), buffer.getShort());
+  }
+
+  @Override
+  public byte[] serialize(TrexMessage cmd) {
+    return pickle(cmd);
+  }
+
+  @Override
+  public TrexMessage deserialize(byte[] bytes) {
+    return unpickle(ByteBuffer.wrap(bytes));
   }
 }

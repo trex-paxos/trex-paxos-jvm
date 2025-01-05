@@ -1,9 +1,6 @@
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.network.Channel;
-import com.github.trex_paxos.network.ClusterMembership;
-import com.github.trex_paxos.network.NetworkAddress;
-import com.github.trex_paxos.network.TrexNetwork;
+import com.github.trex_paxos.network.*;
 import org.jetbrains.annotations.NotNull;
 
 import java.nio.ByteBuffer;
@@ -27,14 +24,22 @@ public class StackClusterImpl implements StackService {
     ConsoleHandler handler = new ConsoleHandler();
     handler.setLevel(level);
     root.addHandler(handler);
+    // TrexApp logger setup
+    Logger trexLogger = Logger.getLogger(TrexApp.class.getName());
+    trexLogger.setLevel(level);
+    // NetworkLayer logger setup
+    Logger networkLayerLogger = Logger.getLogger(NetworkLayer.class.getName());
+    networkLayerLogger.setLevel(level);
+  }
+
+  record ChannelAndSubscriber(Channel channel, TrexNetwork.NamedSubscriber subscriber) {
   }
 
   private static class InMemoryNetwork implements TrexNetwork {
-    private final Map<Channel, Consumer<ByteBuffer>> handlers = new HashMap<>();
+    private final List<ChannelAndSubscriber> handlers = new ArrayList<>();
     private final LinkedBlockingQueue<NetworkMessage> messageQueue = new LinkedBlockingQueue<>();
     private volatile boolean running = true;
     private final String networkId;
-    private long messageCount = 0;
 
     public InMemoryNetwork(String networkId) {
       this.networkId = networkId;
@@ -47,34 +52,30 @@ public class StackClusterImpl implements StackService {
     @Override
     public void send(Channel channel, short nodeId, ByteBuffer data) {
       if (running) {
-        messageCount++;
-        LOGGER.fine(() -> networkId + " sending message #" + messageCount + " on channel " + channel);
         messageQueue.add(new NetworkMessage(nodeId, channel, data));
       }
     }
 
     @Override
-    public void subscribe(Channel channel, Consumer<ByteBuffer> handler) {
-      LOGGER.fine(() -> networkId + " subscribing to channel " + channel);
-      handlers.put(channel, handler);
-      LOGGER.fine(() -> networkId + " has " + handlers.size() + " channel handlers");
+    public void subscribe(Channel channel, NamedSubscriber handler) {
+      ChannelAndSubscriber channelAndSubscriber = new ChannelAndSubscriber(channel, handler);
+      handlers.add(channelAndSubscriber);
     }
 
     @Override
     public void start() {
-      LOGGER.fine(() -> networkId + " network starting");
       Thread.ofVirtual().name("network-" + networkId).start(() -> {
         while (running) {
           try {
             NetworkMessage msg = messageQueue.poll(100, TimeUnit.MILLISECONDS);
 
             if (msg != null) {
-              if (handlers.containsKey(msg.channel)) {
-                LOGGER.fine(() -> networkId + " delivering message #" + messageCount + " on channel " + msg.channel + " to " + handlers.size() + " handlers");
-                handlers.get(msg.channel).accept(msg.data);
-              } else {
-                LOGGER.warning(() -> networkId + " has no handler for channel " + msg.channel);
-              }
+              handlers.forEach(h -> {
+                if (h.channel().equals(msg.channel)) {
+                  LOGGER.fine(() -> networkId + " received message on channel " + msg.channel + " from " + msg.nodeId + " delivering to " + h.subscriber().name());
+                  h.subscriber().accept(msg.data);
+                }
+              });
             }
           } catch (InterruptedException e) {
             if (running) {
@@ -83,6 +84,7 @@ public class StackClusterImpl implements StackService {
           }
         }
       });
+      LOGGER.info(() -> networkId + " network started with subscribers " + handlers);
     }
 
     @Override
@@ -106,11 +108,12 @@ public class StackClusterImpl implements StackService {
       Supplier<ClusterMembership> members = () -> new ClusterMembership(
           Map.of((short) 1, new NetworkAddress.HostName("localhost", 5000),
               (short) 2, new NetworkAddress.HostName("localhost", 5001)));
+      NetworkLayer networkLayer = new NetworkLayer(sharedNetwork, Map.of(Channel.CONSENSUS, PickleMsg.instance));
       var app = new TrexApp<>(
           members,
           engine,
+          networkLayer,
           valuePickler,
-          sharedNetwork,
           cmd -> {
             LOGGER.fine(() -> "Node " + index + " processing command: " + cmd.getClass().getSimpleName());
             synchronized (stack) {
@@ -173,7 +176,7 @@ public class StackClusterImpl implements StackService {
   public Response push(String item) {
     LOGGER.fine(() -> "Push method invoked with: " + item);
     var future = new CompletableFuture<Response>();
-    nodes.getFirst().processCommand(new Push(item), future);
+    nodes.getFirst().submitValue(new Push(item), future);
     try {
       LOGGER.fine(() -> "Waiting for push response");
       var response = future.get(1, TimeUnit.HOURS);
@@ -189,7 +192,7 @@ public class StackClusterImpl implements StackService {
   public Response pop() {
     LOGGER.fine("Pop method invoked");
     var future = new CompletableFuture<Response>();
-    nodes.getFirst().processCommand(new Pop(), future);
+    nodes.getFirst().submitValue(new Pop(), future);
     try {
       LOGGER.fine("Waiting for pop response");
       var response = future.get(1, TimeUnit.SECONDS);
@@ -205,7 +208,7 @@ public class StackClusterImpl implements StackService {
   public Response peek() {
     LOGGER.fine("Peek method invoked");
     var future = new CompletableFuture<Response>();
-    nodes.getFirst().processCommand(new Peek(), future);
+    nodes.getFirst().submitValue(new Peek(), future);
     try {
       LOGGER.fine("Waiting for peek response");
       var response = future.get(1, TimeUnit.SECONDS);
@@ -230,7 +233,7 @@ public class StackClusterImpl implements StackService {
   }
 
   public static void main(String[] args) {
-    setLogLevel(Level.FINE);
+    setLogLevel(Level.FINEST);
     StackClusterImpl cluster = new StackClusterImpl();
     try {
       cluster.push("hello");

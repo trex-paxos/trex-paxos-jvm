@@ -70,7 +70,7 @@ You can paste all of that as:
 ```java
 // @formatter:off
 import com.github.trex_paxos.*;
-StackClusterImpl.setLogLevel(java.util.logging.Level.FINEST);
+StackClusterImpl.setLogLevel(java.util.logging.Level.WARNING);
 var stack = new StackClusterImpl();
 void push(String x){ stack.push(x); }
 void peek(){ System.out.println(stack.peek().value().get()); }
