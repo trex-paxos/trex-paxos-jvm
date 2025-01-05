@@ -20,7 +20,6 @@ import com.github.trex_paxos.msg.*;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
-import java.util.function.Consumer;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
 
@@ -56,8 +55,7 @@ public abstract class TrexEngine implements AutoCloseable {
     this.hostManagedTransactions = false;
   }
 
-  /// Create a new TrexEngine which wraps a TrexNode. If `hostManagedTransactions=false` it behaves as described
-  /// in the other constructor {@link #TrexEngine(TrexNode, Consumer)}. If `hostManagedTransactions=true` the
+  /// Create a new TrexEngine which wraps a TrexNode. If `hostManagedTransactions=true` the
   /// {@link Journal#sync()} will never be called. You must ensure that you managed the journal transactions such that
   /// you are satisfied that the data is crash durable before any messages returned by {@link #paxos(List)} are sent out
   /// to the network.
@@ -108,6 +106,10 @@ public abstract class TrexEngine implements AutoCloseable {
   /// Create the next leader batch of messages for the given set of commands. This should be called by the host application
   /// when {@link #isLeader()} is true.
   public List<TrexMessage> nextLeaderBatchOfMessages(List<Command> command) {
+    if (trexNode().isFollow()) {
+      LOGGER.fine(() -> "node " + nodeIdentifier() + " is ignoring nextLeaderBatchOfMessages as we are not the leader");
+      return List.of();
+    }
     // toList is immutable so we concat streams first.
     return Stream.concat(
         command.stream().map(this::command),

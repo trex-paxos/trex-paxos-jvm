@@ -69,7 +69,7 @@ public class PaxeNetwork implements AutoCloseable {
         .start(this::processSendQueue);
 
     // Initiate handshakes with other nodes
-    membership.get().otherNodes(localNode)
+    membership.get().otherNodes(localNode.id())
         .forEach(node -> keyManager.initiateHandshake(node)
             .ifPresent(keyMsg -> sendHandshake(node, keyMsg)));
   }

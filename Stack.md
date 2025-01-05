@@ -75,5 +75,12 @@ var stack = new StackClusterImpl();
 void push(String x){ stack.push(x); }
 void peek(){ System.out.println(stack.peek().value().get()); }
 void pop(){ System.out.println(stack.pop().value().get()); }
+// then do
+push("hello");
+push("world");
+peek();
+peek();
+pop();
+pop();
 // @formatter:on
 ```

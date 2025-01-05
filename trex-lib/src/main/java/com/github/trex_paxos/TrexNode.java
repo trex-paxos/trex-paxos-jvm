@@ -357,7 +357,7 @@ public class TrexNode {
         // values are fixed so it does not matter if we have a higher promise as it
         // a majority of the nodes have accepted the that message.
         catchup.stream()
-            .dropWhile(a->fixedSlot(a.slot()))
+            .dropWhile(a -> fixedSlot(a.slot()))
             .takeWhile(accept -> accept.slot() <= highestContiguous)
             .forEach(accept -> {
               journal.writeAccept(accept);
@@ -374,7 +374,7 @@ public class TrexNode {
         LOGGER.severe("Unknown message type: " + input);
         throw new IllegalArgumentException("Unknown message type: " + input);
       }
-    
+
     }
   }
 
@@ -796,6 +796,10 @@ public class TrexNode {
   @TestOnly
   public Progress progress() {
     return progress;
+  }
+
+  public boolean isFollow() {
+    return role == FOLLOW;
   }
 
   /**
