@@ -72,7 +72,7 @@ public class PickleMsg implements Pickler<TrexMessage> {
       case 5 -> readFixed(buffer, fromNode);
       case 6 -> readCatchup(buffer, fromNode, toNode);
       case 7 -> readCatchupResponse(buffer, fromNode, toNode);
-      default -> throw new IllegalStateException("Unknown type: " + type);
+      default -> throw new IllegalArgumentException("Unknown type: " + type);
     };
   }
 

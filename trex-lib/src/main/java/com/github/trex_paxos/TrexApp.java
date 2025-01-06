@@ -5,6 +5,7 @@ import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
 import com.github.trex_paxos.network.Channel;
 import com.github.trex_paxos.network.ClusterMembership;
+import com.github.trex_paxos.network.NodeId;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -12,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public class TrexApp<VALUE, RESULT> {
   private static final Logger LOGGER = Logger.getLogger(TrexApp.class.getName());
@@ -68,6 +70,7 @@ public class TrexApp<VALUE, RESULT> {
   private final LeaderTracker leaderTracker = new LeaderTracker();
   private final ResponseTracker<RESULT> responseTracker = new ResponseTracker<>();
   private final Pickler<VALUE> valuePickler;
+  public final NodeId nodeId;
 
   public TrexApp(
       Supplier<ClusterMembership> clusterMembershipSupplier,
@@ -80,6 +83,7 @@ public class TrexApp<VALUE, RESULT> {
     this.serverFunction = serverFunction;
     this.clusterMembershipSupplier = clusterMembershipSupplier;
     this.valuePickler = valuePickler;
+    this.nodeId = new NodeId(engine.nodeIdentifier());
   }
 
   public void start() {
@@ -189,7 +193,7 @@ public class TrexApp<VALUE, RESULT> {
         LOGGER.finer(() -> engine.nodeIdentifier() + " sending direct message " + directMessage);
         networkLayer.send(Channel.CONSENSUS, directMessage.to(), message);
       } else {
-        var others = clusterMembershipSupplier.get().otherNodes(engine.nodeIdentifier());
+        var others = clusterMembershipSupplier.get().otherNodes(nodeId).stream().map(NodeId::id).collect(Collectors.toSet());
         LOGGER.finer(() -> engine.nodeIdentifier() + " broadcasting message " + message + " to " + others);
         networkLayer.broadcast(Channel.CONSENSUS, message, others);
       }
@@ -197,7 +201,14 @@ public class TrexApp<VALUE, RESULT> {
   }
 
   public void stop() {
-    networkLayer.stop();
-    engine.close();
+    try {
+      networkLayer.stop();
+    }
+    catch (Exception e) {
+      // ignore
+    }
+    finally {
+      engine.close();
+    }
   }
 }

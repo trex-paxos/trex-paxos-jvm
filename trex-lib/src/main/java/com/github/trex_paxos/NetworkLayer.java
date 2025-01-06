@@ -47,8 +47,8 @@ public class NetworkLayer {
     network.start();
   }
 
-  public void stop() {
-    network.stop();
+  public void stop() throws Exception {
+    network.close();
   }
 }
 

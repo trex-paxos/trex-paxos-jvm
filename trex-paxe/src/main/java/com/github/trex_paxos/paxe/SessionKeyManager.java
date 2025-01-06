@@ -197,7 +197,7 @@ class PickleHandshake {
         return switch (type) {
             case 1 -> new KeyMessage.KeyHandshakeRequest(from, publicKey);
             case 2 -> new KeyMessage.KeyHandshakeResponse(from, publicKey);
-            default -> throw new IllegalStateException("Unknown type: " + type);
+            default -> throw new IllegalArgumentException("Unknown type: " + type);
         };
     }
 

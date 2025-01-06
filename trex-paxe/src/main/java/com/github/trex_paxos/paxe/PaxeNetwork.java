@@ -1,15 +1,13 @@
 package com.github.trex_paxos.paxe;
 
-import com.github.trex_paxos.network.Channel;
-import com.github.trex_paxos.network.ClusterMembership;
-import com.github.trex_paxos.network.NetworkAddress;
-import com.github.trex_paxos.network.NodeId;
+import com.github.trex_paxos.network.*;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
@@ -19,7 +17,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 
-public class PaxeNetwork implements AutoCloseable {
+public class PaxeNetwork implements TrexNetwork, AutoCloseable {
   private static final Logger LOGGER = Logger.getLogger(PaxeNetwork.class.getName());
 
   // Buffer of one entry of any messages that would not be sent due to not yet
@@ -29,14 +27,14 @@ public class PaxeNetwork implements AutoCloseable {
   /// Key manager for session key management which must have access to SRP verifiers.
   final SessionKeyManager keyManager;
 
-  private final DatagramSocket socket;
+  final DatagramSocket socket;
   final NodeId localNode;
   private final Map<Channel, BlockingQueue<EncryptedPaxeMessage>> channelQueues;
 
   private final BlockingQueue<PaxePacket> outboundQueue;
-  private Thread sender;
-  private Thread receiver;
-  private volatile boolean running = false;
+  Thread sender;
+  Thread receiver;
+  volatile boolean running = false;
 
   final Supplier<ClusterMembership> membership;
 
@@ -51,6 +49,16 @@ public class PaxeNetwork implements AutoCloseable {
     this.membership = membership;
     this.channelQueues = new ConcurrentHashMap<>();
     this.outboundQueue = new LinkedBlockingQueue<>();
+  }
+
+  @Override
+  public void send(Channel channel, short to, ByteBuffer data) {
+
+  }
+
+  @Override
+  public void subscribe(Channel channel, NamedSubscriber handler) {
+
   }
 
   public void start() {
@@ -69,7 +77,7 @@ public class PaxeNetwork implements AutoCloseable {
         .start(this::processSendQueue);
 
     // Initiate handshakes with other nodes
-    membership.get().otherNodes(localNode.id())
+    membership.get().otherNodes(localNode)
         .forEach(node -> keyManager.initiateHandshake(node)
             .ifPresent(keyMsg -> sendHandshake(node, keyMsg)));
   }
@@ -161,6 +169,9 @@ public class PaxeNetwork implements AutoCloseable {
   }
 
   public void encryptAndSend(PaxeMessage message) throws Exception {
+    if( !running ) {
+      throw new IllegalStateException("Network is not running");
+    }
     final var key = keyManager.sessionKeys.get(message.to());
     if (key == null) {
       pendingMessages.put(message.to(), message);
@@ -191,7 +202,6 @@ public class PaxeNetwork implements AutoCloseable {
           localNode,
           to,
           Channel.KEY_EXCHANGE,
-          (byte) 0,
           new byte[PaxePacket.NONCE_SIZE],
           new byte[PaxePacket.AUTH_TAG_SIZE],
           payload);

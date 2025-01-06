@@ -8,7 +8,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
@@ -88,7 +88,7 @@ public class StackClusterImpl implements StackService {
     }
 
     @Override
-    public void stop() {
+    public void close() {
       LOGGER.fine(() -> networkId + " network stopping");
       running = false;
     }
@@ -106,9 +106,10 @@ public class StackClusterImpl implements StackService {
       var engine = getTrexEngine(index);
       Pickler<Value> valuePickler = PermitsRecordsPickler.createPickler(Value.class);
       Supplier<ClusterMembership> members = () -> new ClusterMembership(
-          Map.of((short) 1, new NetworkAddress.HostName("localhost", 5000),
-              (short) 2, new NetworkAddress.HostName("localhost", 5001)));
+          Map.of(new NodeId((short) 1), new NetworkAddress.HostName("localhost", 5000),
+              new NodeId((short) 2), new NetworkAddress.HostName("localhost", 5001)));
       NetworkLayer networkLayer = new NetworkLayer(sharedNetwork, Map.of(Channel.CONSENSUS, PickleMsg.instance));
+
       var app = new TrexApp<>(
           members,
           engine,
@@ -172,11 +173,17 @@ public class StackClusterImpl implements StackService {
     };
   }
 
+  public AtomicInteger nodeToggle = new AtomicInteger(0);
+
+  public void toggleNode() {
+    nodeToggle.getAndIncrement();
+  }
+
   @Override
   public Response push(String item) {
     LOGGER.fine(() -> "Push method invoked with: " + item);
     var future = new CompletableFuture<Response>();
-    nodes.getFirst().submitValue(new Push(item), future);
+    nodes.get(nodeToggle.get()%nodes.size()).submitValue(new Push(item), future);
     try {
       LOGGER.fine(() -> "Waiting for push response");
       var response = future.get(1, TimeUnit.HOURS);
@@ -192,7 +199,7 @@ public class StackClusterImpl implements StackService {
   public Response pop() {
     LOGGER.fine("Pop method invoked");
     var future = new CompletableFuture<Response>();
-    nodes.getFirst().submitValue(new Pop(), future);
+    nodes.get(nodeToggle.get()%nodes.size()).submitValue(new Pop(), future);
     try {
       LOGGER.fine("Waiting for pop response");
       var response = future.get(1, TimeUnit.SECONDS);
@@ -208,7 +215,7 @@ public class StackClusterImpl implements StackService {
   public Response peek() {
     LOGGER.fine("Peek method invoked");
     var future = new CompletableFuture<Response>();
-    nodes.getFirst().submitValue(new Peek(), future);
+    nodes.get(nodeToggle.get()%nodes.size()).submitValue(new Peek(), future);
     try {
       LOGGER.fine("Waiting for peek response");
       var response = future.get(1, TimeUnit.SECONDS);
@@ -235,13 +242,14 @@ public class StackClusterImpl implements StackService {
   public static void main(String[] args) {
     setLogLevel(Level.FINEST);
     StackClusterImpl cluster = new StackClusterImpl();
+    cluster.toggleNode();
     try {
       cluster.push("hello");
       cluster.push("world");
-      cluster.peek();
-      cluster.peek();
-      cluster.pop();
-      cluster.pop();
+      System.out.println(cluster.peek().value().orElseThrow());
+      System.out.println(cluster.peek().value().orElseThrow());
+      System.out.println(cluster.pop().value().orElseThrow());
+      System.out.println(cluster.pop().value().orElseThrow());
     } finally {
       cluster.shutdown();
     }

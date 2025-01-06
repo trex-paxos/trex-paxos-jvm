@@ -44,6 +44,6 @@ class PickleHandshakeTest {
     @Test
     void shouldFailOnInvalidType() {
         byte[] invalid = new byte[] { 99, 0, 1, 0, 0, 0, 1, 0 }; // Invalid type 99
-        assertThrows(IllegalStateException.class, () -> PickleHandshake.unpickle(invalid));
+        assertThrows(IllegalArgumentException.class, () -> PickleHandshake.unpickle(invalid));
     }
 }

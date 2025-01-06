@@ -3,7 +3,7 @@ package com.github.trex_paxos.network;
 import java.nio.ByteBuffer;
 import java.util.function.Consumer;
 
-public interface TrexNetwork {
+public interface TrexNetwork extends AutoCloseable {
   record NamedSubscriber(Consumer<ByteBuffer> handler, String name) {
     public void accept(ByteBuffer data) {
       handler.accept(data);
@@ -17,6 +17,4 @@ public interface TrexNetwork {
 
   // Lifecycle management
   void start();
-
-  void stop();
 }

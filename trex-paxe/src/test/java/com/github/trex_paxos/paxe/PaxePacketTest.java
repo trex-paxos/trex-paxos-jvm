@@ -108,7 +108,7 @@ class PaxePacketTest {
 
         byte[] authenticatedData = packet.authenticatedData();
 
-        assertEquals(PaxePacket.AUTHENCIATED_DATA_SIZE, authenticatedData.length);
+        assertEquals(PaxePacket.AUTHENTICATED_DATA_SIZE, authenticatedData.length);
         assertEquals((byte) (from.id() >> 8), authenticatedData[0]);
         assertEquals((byte) from.id(), authenticatedData[1]);
         assertEquals((byte) (to.id() >> 8), authenticatedData[2]);
