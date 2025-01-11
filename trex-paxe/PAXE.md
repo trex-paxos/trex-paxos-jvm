@@ -10,13 +10,7 @@ PAXE is a lightweight encrypted protocol for Paxos clusters supporting multiplex
 [PAXE Header - 4 bytes]
   From Node ID:    2 byte
   To Node ID:      2 byte  
-  Channel ID:      2 byte  
-  Flags:           1 byte
-    bit 7: Auth Required     (0x80)
-    bit 6: Is Fragmented    (0x40)
-    bit 5: Fragment Start   (0x20)
-    bit 4: Fragment End     (0x10)
-    bits 3-0: Reserved
+  Channel ID:      2 byte
 [Encryption Header - 28 bytes] 
   Nonce:           12 bytes 
   Auth Tag:        16 bytes
@@ -28,30 +22,6 @@ PAXE is a lightweight encrypted protocol for Paxos clusters supporting multiplex
 
 ## Channels
 - Channel 0: Reserved for PAXE consensus messages
-
-## Fragmentation
-Any message on any channel may be fragmented if it exceeds the MTU size:
-
-1. Fragmentation is indicated by the Is Fragmented flag (0x40)
-2. Fragment markers in flags:
-   - First fragment: Fragment Start = 1
-   - Middle fragments: Start = 0, End = 0  
-   - Last fragment: Fragment End = 1
-
-3. Fragment Header (in encrypted payload when Is Fragmented is set):
-   ```
-   Message ID:      16 bytes (UUID)
-   Fragment Number: 4 bytes
-   Fragment Size:   4 bytes
-   Data:           variable
-   ```
-
-4. Fragment Acknowledgment Messages:
-   ```
-   Type:           1 byte (ACK)
-   Message ID:     16 bytes
-   Fragment Number: 4 bytes
-   ```
 
 ## Session Keys
 - Derived from SRP exchange between node pairs
