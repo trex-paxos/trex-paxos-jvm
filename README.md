@@ -121,6 +121,7 @@ This is achieved by encoding the node identifier in each `N`s lower bits.
 This library uses a record with a signature similar to this:
 
 ```java
+/// This is `N`
 public record BallotNumber(int counter, short nodeIdentifier) implements Comparable<BallotNumber> {
 }
 ```
@@ -155,18 +156,22 @@ our leader can stream `accept` messages continuously without awaiting a response
 This library uses code similar to the following as the `accept` message and its acknowledgement:
 
 ```java
+/// This is `V`
 public record Command(String uuid,
                       byte[] operationBytes) {
 }
 
+/// This is `N` that is unique per Node
 public record BallotNumber(int counter, short nodeIdentifier) {
 }
 
+/// This is `accept(S,N,V)`
 public record Accept(long logIndex,
                      BallotNumber number,
                      Command command) {
 }
 
+/// This is whether another node accepts and simultaneously promises else rejects 
 public record AcceptResponse(
     long logIndex,
     BallotNumber number,
