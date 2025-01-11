@@ -305,7 +305,7 @@ public record Progress(BallotNumber highestPromised,
 }
 ```
 
-The progress of each node is its highest promised `N` and its highest fixed slot `S`. This is only thirteen bytes of
+The progress of each node is its highest promised `N` and its highest fixed slot `S`. This is only fourteen bytes of
 data.
 
 You must also provide an implementation of the journal interface, which is similar to this definition:
