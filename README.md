@@ -371,9 +371,9 @@ test all permutations as a `TrexNode`:
 * The outcome of any majority vote can only be WIN, LOSE, or WAIT.
 * The node can be in one of three TrexStates: `FOLLOW`, `RECOVER`, or `LEAD`.
 
-In addition to exhaustive property-based tests, the tests run simulations of randomised network partitions that step through
-hundreds of in-memory message exchanges between a three-node cluster. These simulation tests check that the journal at all three
-nodes matches and the list of fixed commands is the same across all three nodes.
+In addition to exhaustive property-based tests, the tests run simulations of randomised rolling network partitions that step through
+hundreds of in-memory message exchanges between a three-node cluster. These randomised simulation tests are run a thousand times and 
+check that the journal at all three nodes matches and the list of fixed commands is the same across all three nodes.
 
 ### Seventh, Leader Duels
 
