@@ -339,9 +339,11 @@ public interface Journal {
 ```
 
 Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync()` is intended to flush any
-commands into their slots and only then flush the `progress`. The general idea here is that your application 
-already has a database; it is almost trivial to implement this interface in our database. You can specify that
-your host code will manage transactions then the `sync()` method will not be called. 
+commands into their slots and only then flush the `progress`. The idea is that your application 
+already has a database; it is almost trivial to implement this interface in our main application database. 
+You can specify that your application code will manage transactions. When you configure this library to 
+say that you will handle the transactions in your command value up-call callback then the `sync()` method 
+will not be invoked. 
 
 See the Java doc on the `Journal` interface for more details.
 
