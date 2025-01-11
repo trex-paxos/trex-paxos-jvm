@@ -354,26 +354,25 @@ This implementation enforces the following invariants at each node:
 1. The fixed index increases sequentially.
 2. The promise number only increases (yet it may jump forward).
 3. The promised ballot number can only change when processing a `prepare` or `accept` message.
-4. The fixed index can only change when a leader sees a majority `AcceptReponse` message, a follower node sees a `Fixed`
-   message or any node learns about a fixed message due to a `CatchupResponse` message.
+4. The fixed index can only change when a leader sees a majority `AcceptReponse` message, a 
+follower node sees a `Fixed`message, or any node learns about a fixed messages due to a 
+`CatchupResponse` message.
 
-The core of this implementation that ensures safety is written as inequalities comparing integer types.
-We may test the `TrexNode` class:
+The core of the algorithm is written as inequalities comparing integer types. We can exhaustively 
+test all permutations as a `TrexNode`: 
 
-* It can only see messages that are less than, greater than, or equal to its promise.
-* It can only see messages from another node with a node identifier that is less than, greater than, or equal to its
+* Can only see messages that are less than, greater than, or equal to its promise.
+* Can only see messages from another node with a node identifier that is less than, greater than, or equal to its
   own.
-* It can only see messages with a fixed slot index that are less than, greater than, or equal to its own.
+* Can only see messages with a fixed slot index that are less than, greater than, or equal to its own.
 * The journal at any slot can have only no value, the no-operation value, or a client command value.
 * The journal can either be continuous, have gaps, or not have reached a specific index when that index is learnt to be
   fixed.
 * The outcome of any majority vote can only be WIN, LOSE, or WAIT.
 * The node can be in one of three TrexStates: `FOLLOW`, `RECOVER`, or `LEAD`.
 
-This list gives 3^8=2187 test scenarios. We can realistically brute-force test many more variables. 
-
-In addition to exhaustive property-based tests, we run simulations of randomised network partitions that step through
-hundreds of in-memory message exchanges between a three-node cluster. These tests check that the journal at all three
+In addition to exhaustive property-based tests, the tests run simulations of randomised network partitions that step through
+hundreds of in-memory message exchanges between a three-node cluster. These simulation tests check that the journal at all three
 nodes matches and the list of fixed commands is the same across all three nodes.
 
 ### Seventh, Leader Duels
