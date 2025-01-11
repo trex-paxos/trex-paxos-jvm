@@ -316,19 +316,24 @@ public interface Journal {
   // this is only called at startup so you could trade write speed for read speed. 
   Progress loadProgress();
 
-  // this is called on every message to persist a small amount of data so you would want to optimise this for write speed.
+  // this is called on every message to persist a small amount of data so you would 
+  // want to optimise this for write speed.
   void writeProgress(Progress progress);
 
-  // this is called to write data to disk. when there are no crashes or isolated leaders each slot is write once yet can be rewritten using a fresh value during crash recovery.
+  // this is called to write data to disk. when there are no crashes or isolated 
+  // leaders each slot is write once yet can be rewritten using a fresh value during 
+  // leader over.
   void writeAccept(long logIndex, Accept accept);
 
-  // this is called during crash recovery or help other nodes catch up on lost messages. We can expect sequential access patterns. 
+  // this is called during leader failover or help other nodes catch up on lost messages. 
+  // We can expect sequential access patterns. 
   Optional<Accept> readAccept(long logIndex);
 
-  // if the host application is not explicitly managing database transactions this will be called to make all the writes durable. 
+  // if the host application is not explicitly managing database transactions this will 
+  // be called to make all the crash durable. 
   void sync();
 
-  // this is used during startup
+  // this is used during startup to recover the previous progress
   long highestAcceptedSlot();
 }
 ```
