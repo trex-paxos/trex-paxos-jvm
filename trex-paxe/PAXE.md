@@ -9,7 +9,7 @@ PAXE is a lightweight encrypted protocol for Paxos clusters supporting multiplex
 [UDP Header]
 [PAXE Header - 4 bytes]
   From Node ID:    2 byte
-  To Node ID:      3 byte  
+  To Node ID:      2 byte  
   Channel ID:      2 byte  
   Flags:           1 byte
     bit 7: Auth Required     (0x80)
