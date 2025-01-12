@@ -123,10 +123,8 @@ public class CatchupPropertyTests {
       // a higher promise. That node will request catchup and so the leader will learn that the node
       // cannot accept any values. The leader will increase its term so that on the next accept message
       // that itself receives it will make a promise and the other node will accept the message.
-      if (testCase.role == ArbitraryValues.RoleState.LEAD &&
-          thisPromise.lessThan(otherNumber)) {
-        assert node.term.greaterThan(otherNumber);
-      }
+      assert testCase.role != ArbitraryValues.RoleState.LEAD ||
+          !thisPromise.lessThan(otherNumber) || node.term.greaterThan(otherNumber);
     }
   }
 

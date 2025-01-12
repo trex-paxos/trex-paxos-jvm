@@ -62,7 +62,7 @@ public class AcceptResponsePropertyTests {
 
     final var slotAtomic = new AtomicLong(thisFixed + 1);
 
-    // Setup node with role and the rigged acceptVotes that will trigger either a win or a lose
+    // Setup node with role and the rigged acceptVotes that will trigger either a win or a loose
     final var node = new TrexNode(Level.INFO, thisNodeId, threeNodeQuorum, journal) {
       {
         role = switch (testCase.role) {
@@ -111,27 +111,27 @@ public class AcceptResponsePropertyTests {
       }
     };
 
-    ///  if the election is rigged top `WIN` or `LOSE` we need a vote
-    ///  if we want to rig for a `WAIT` then our vote is opposite to the self vote
+    //  if the election is rigged top `WIN` or `LOSE` we need a vote
+    //  if we want to rig for a `WAIT` then our vote is opposite to the self vote
     final var otherVote = switch (testCase.voteOutcome) {
       case WIN -> true;
       case LOSE, WAIT -> false;
     };
 
-    /// Create accept response for the next slot
+    // Create accept response for the next slot
     final var slot = slotAtomic.get();
     final var vote = new AcceptResponse.Vote(otherNodeId, thisNodeId, slot, otherVote);
     final var acceptResponse = new AcceptResponse(otherNodeId, thisNodeId, vote,
         slot);
 
-    /// now that we have set up based on our role, the other nodeIdentifier relation, the vote outcome
-    /// we can run the algorithm to see if we issue the fixed message or not
+    // now that we have set up based on our role, the other nodeIdentifier relation, the vote outcome
+    // we can run the algorithm to see if we issue the fixed message or not
     final var result = node.paxos(acceptResponse);
 
     if (result instanceof TrexResult(final var messages, final var commands)) {
-      /// both followers and revolvers will process accept responses yet followers ignore them
-      /// nodes ignore responses not sent to them
-      ///  ignore responses sent to ourself
+      // both followers and revolvers will process accept responses yet followers ignore them
+      // nodes ignore responses not sent to them
+      //  ignore responses sent to ourself
       if (testCase.role == ArbitraryValues.RoleState.FOLLOW
           || acceptResponse.to() != thisNodeId
           || testCase.nodeIdentifierRelation == ArbitraryValues.NodeIdentifierRelation.EQUAL

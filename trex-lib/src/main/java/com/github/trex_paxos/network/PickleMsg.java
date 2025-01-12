@@ -30,7 +30,7 @@ public class PickleMsg implements Pickler<TrexMessage> {
       case Prepare _ -> Long.BYTES + BALLOT_NUMBER_SIZE;
       case PrepareResponse p -> calculatePrepareResponseSize(p);
       case Accept a -> calculateAcceptSize(a);
-      case AcceptResponse a -> calculateAcceptResponseSize(a);
+      case AcceptResponse _ -> calculateAcceptResponseSize();
       case Fixed _, Catchup _ -> Long.BYTES + BALLOT_NUMBER_SIZE;
       case CatchupResponse c -> calculateCatchupResponseSize(c);
     };
@@ -98,7 +98,7 @@ public class PickleMsg implements Pickler<TrexMessage> {
 
   private static int calculatePrepareResponseSize(PrepareResponse m) {
     int size = Long.BYTES + 1; // highestAcceptedIndex + isPresent flag
-    size += calculateVotePrepareSize(m.vote());
+    size += calculateVotePrepareSize();
     if (m.journaledAccept().isPresent()) {
       size += calculateAcceptInnerSize(m.journaledAccept().get());
     }
@@ -144,8 +144,8 @@ public class PickleMsg implements Pickler<TrexMessage> {
     buffer.putLong(m.highestFixedIndex());
   }
 
-  private static int calculateAcceptResponseSize(AcceptResponse m) {
-    return calculateVoteAcceptSize(m.vote()) + Long.BYTES;
+  private static int calculateAcceptResponseSize() {
+    return calculateVoteAcceptSize() + Long.BYTES;
   }
 
   public static AcceptResponse readAcceptResponse(ByteBuffer buffer, short from, short to) {
@@ -162,7 +162,7 @@ public class PickleMsg implements Pickler<TrexMessage> {
     return new AcceptResponse.Vote(from, to, logIndex, vote);
   }
 
-  private static int calculateVoteAcceptSize(AcceptResponse.Vote vote) {
+  private static int calculateVoteAcceptSize() {
     return Short.BYTES + Short.BYTES + Long.BYTES + 1; // from + to + logIndex + vote
   }
 
@@ -180,7 +180,7 @@ public class PickleMsg implements Pickler<TrexMessage> {
     return new PrepareResponse.Vote(from, to, logIndex, vote, number);
   }
 
-  private static int calculateVotePrepareSize(PrepareResponse.Vote vote) {
+  private static int calculateVotePrepareSize() {
     return Long.BYTES + 1 + BALLOT_NUMBER_SIZE; // logIndex + vote + ballotNumber
   }
 

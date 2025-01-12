@@ -21,7 +21,6 @@ import com.github.trex_paxos.msg.TrexMessage;
 
 import java.util.*;
 import java.util.function.BiFunction;
-import java.util.logging.Logger;
 import java.util.random.RandomGenerator;
 import java.util.random.RandomGeneratorFactory;
 import java.util.stream.Collectors;
@@ -169,7 +168,7 @@ class Simulation {
       }
       engines.values().forEach(
           engine -> engine.journal.fakeJournal.forEach((k, v) -> {
-            if (v.slot() != k) {
+            if (!v.slot().equals(k)) {
               throw new AssertionError("Journaled accept.logIndex not equal to slot index");
             }
           })

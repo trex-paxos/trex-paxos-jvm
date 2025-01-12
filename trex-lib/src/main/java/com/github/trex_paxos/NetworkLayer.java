@@ -4,7 +4,6 @@ import com.github.trex_paxos.network.Channel;
 import com.github.trex_paxos.network.TrexNetwork;
 
 import java.nio.ByteBuffer;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;

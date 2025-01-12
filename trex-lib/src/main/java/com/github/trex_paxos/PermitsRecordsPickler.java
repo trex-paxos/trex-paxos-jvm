@@ -58,7 +58,7 @@ public class PermitsRecordsPickler {
       nextTypeId++;
     }
 
-    return new Pickler<T>() {
+    return new Pickler<>() {
       @Override
       public byte[] serialize(T value) {
         if (value == null) return new byte[0];

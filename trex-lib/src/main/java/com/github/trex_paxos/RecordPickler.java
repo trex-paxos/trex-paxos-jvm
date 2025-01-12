@@ -23,7 +23,7 @@ public class RecordPickler {
     @SuppressWarnings("unchecked")
     Constructor<T> constructor = (Constructor<T>) recordClass.getDeclaredConstructors()[0];
 
-    return new Pickler<T>() {
+    return new Pickler<>() {
       @Override
       public byte[] serialize(T record) {
         if (record == null) return new byte[0];

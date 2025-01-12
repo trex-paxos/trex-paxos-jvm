@@ -104,9 +104,7 @@ public class FixedPropertyTests {
         assert journaledProgress.get().highestFixedIndex() == otherIndex;
 
         // Non-followers should back down
-        if (testCase.role != ArbitraryValues.RoleState.FOLLOW) {
-          assert node.getRole() == TrexNode.TrexRole.FOLLOW;
-        }
+        assert testCase.role == ArbitraryValues.RoleState.FOLLOW || node.getRole() == TrexNode.TrexRole.FOLLOW;
       } else if (otherIndex > thisFixed) {
         // Should request catchup for higher slots
         assert messages.size() == 1;

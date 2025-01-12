@@ -136,36 +136,36 @@ public class TrexNode {
   /// need rebooting. See {@link #isCrashed()}.
   TrexResult paxos(TrexMessage input) {
     if (crashed) {
-      /// We are in an undefined or corrupted state. See {@link #isCrashed()}
+      // We are in an undefined or corrupted state. See {@link #isCrashed()}
       LOGGER.severe(CRASHED);
-      /// Just in case the host application has not setup JUL logging property we log to stderr as a last resort.
+      // Just in case the host application has not setup JUL logging property we log to stderr as a last resort.
       System.err.println(CRASHED);
       throw new IllegalStateException(CRASHED);
     }
-    /// This will hold any outbound message that must only be sent after the journal has been flushed to durable storage.
+    // This will hold any outbound message that must only be sent after the journal has been flushed to durable storage.
     List<TrexMessage> messages = new ArrayList<>();
-    /// This will hold any fixed commands. These may be written to the data store under the same translation as the journal.stat.
+    // This will hold any fixed commands. These may be written to the data store under the same translation as the journal.stat.
     TreeMap<Long, AbstractCommand> commands = new TreeMap<>();
-    /// This tracks what our old state was so that we can crash if we change the state for the wrong message types.
+    // This tracks what our old state was so that we can crash if we change the state for the wrong message types.
     final var priorProgress = progress;
     try {
-      /// Run the actual algorithm. This method is void as we the command and message are out parameters.
+      // Run the actual algorithm. This method is void as we the command and message are out parameters.
       algorithm(input, messages, commands);
     } catch (Throwable e) {
-      /// The most probable reason to throw is an IOError from the journal else it returned corrupt data we cannot process. .
+      // The most probable reason to throw is an IOError from the journal else it returned corrupt data we cannot process. .
       crashed = true;
-      /// Log that we are crashing and log the reason.
+      // Log that we are crashing and log the reason.
       LOGGER.log(Level.SEVERE, CRASHING + e, e);
-      /// In case the application developer has not correctly configured logging JUL logging we log to stderr.
+      // In case the application developer has not correctly configured logging JUL logging we log to stderr.
       System.err.println(CRASHING + e);
       //noinspection CallToPrintStackTrace
       e.printStackTrace();
-      /// We throw yet the finally block will also run and may also log errors about invariants being violated before
-      /// the thrown issue is sent up to the host application.
+      // We throw yet the finally block will also run and may also log errors about invariants being violated before
+      // the thrown issue is sent up to the host application.
       throw e;
     } finally {
       if (!crashed) {
-        /// Here we always check the invariants in finally block see {@link #isCrashed()}
+        // Here we always check the invariants in finally block see {@link #isCrashed()}
         if (priorProgress != progress && !priorProgress.equals(progress)) {
           // The general advice is not to throw. In this case the general advice is wrong.
           // We must throw as we have violated the protocol and that should be seen as fatal.
@@ -322,11 +322,11 @@ public class TrexNode {
           messages.add(new CatchupResponse(nodeIdentifier, replyTo, missingAccepts));
         }
 
-        /// If the other node has seen a higher promise then we must increase our term
-        /// to be higher. We do not update our promise as we would be doing that in a learning
-        /// message which is not part of the protocol. Instead, we bump or term. Next time we
-        /// produce an `accept` we will use our term and do a self accept to that which will
-        /// bump pur promise. We do not want to alter the promise when not an `accept` or `prepare` message.
+        // If the other node has seen a higher promise then we must increase our term
+        // to be higher. We do not update our promise as we would be doing that in a learning
+        // message which is not part of the protocol. Instead, we bump or term. Next time we
+        // produce an `accept` we will use our term and do a self accept to that which will
+        // bump pur promise. We do not want to alter the promise when not an `accept` or `prepare` message.
         if (otherHighestPromised.greaterThan(progress.highestPromised())) {
           if (role == TrexRole.LEAD) {
             assert this.term != null;
@@ -370,7 +370,7 @@ public class TrexNode {
         }
       }
       default -> {
-        // this is unreachable but on refactor to SHORT the compiler complaines FIXME
+        // this is unreachable but on refactor to SHORT the compiler complains TODO
         LOGGER.severe("Unknown message type: " + input);
         throw new IllegalArgumentException("Unknown message type: " + input);
       }

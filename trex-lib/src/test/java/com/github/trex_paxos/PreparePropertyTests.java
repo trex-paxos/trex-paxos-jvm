@@ -144,11 +144,9 @@ public class PreparePropertyTests {
       }
 
       // Verify role changes
-      if (node.getRole() != TrexNode.TrexRole.valueOf(testCase.role.name())
-          && prepare.slot() > thisFixed
-          && otherNumber.greaterThan(thisPromise)) {
-        assert node.getRole() == TrexNode.TrexRole.FOLLOW;
-      }
+      assert node.getRole() == TrexNode.TrexRole.valueOf(testCase.role.name())
+          || prepare.slot() <= thisFixed
+          || !otherNumber.greaterThan(thisPromise) || node.getRole() == TrexNode.TrexRole.FOLLOW;
     }
   }
 

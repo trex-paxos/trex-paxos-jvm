@@ -15,9 +15,6 @@ class RecordPicklerTest {
   ) {
   }
 
-  record EmptyRecord() {
-  }
-
   record StringRecord(String value) {
   }
 

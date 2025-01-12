@@ -7,6 +7,7 @@ import java.util.stream.IntStream;
 public class Timeouts {
   final static SecureRandom random = new SecureRandom();
 
+  @SuppressWarnings("unused")
   public static void main(String[] args) {
     final var iterations = 1000;
     final var max = 10;

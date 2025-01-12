@@ -94,7 +94,7 @@ public interface Journal {
   ///
   /// > According to the standard specification (e.g., POSIX.1-2001),
   ///        `sync()` schedules the writes, but may return before the actual
-  ///        writing is done.  However Linux waits for I/O completions.
+  ///        writing is done.  However, Linux waits for I/O completions.
   ///
   /// It is not the case that POSIX.1-2001 does not have a hard sync it just that it calls it `fsync`. It is that sort
   /// of ambiguity that leads to data loss.

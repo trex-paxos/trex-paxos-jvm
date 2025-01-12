@@ -163,18 +163,18 @@ public class SimulationTests {
   public void testClientWorkLossyNetwork1000() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(56734);
 
-    final var maxOfMins = new AtomicInteger(0);
+    final var maxOfMinimum = new AtomicInteger(0);
 
     IntStream.range(0, 1000).forEach(i -> {
           LOGGER.info("\n ================= \nstarting iteration: " + i);
       final var minLogLength = testWorkLossyNetwork(rng);
-      if (minLogLength > maxOfMins.get()) {
-        maxOfMins.set(minLogLength);
+      if (minLogLength > maxOfMinimum.get()) {
+        maxOfMinimum.set(minLogLength);
       }
         }
     );
 
-    assertThat(maxOfMins.get()).isGreaterThan(10);
+    assertThat(maxOfMinimum.get()).isGreaterThan(10);
   }
 
   @Test

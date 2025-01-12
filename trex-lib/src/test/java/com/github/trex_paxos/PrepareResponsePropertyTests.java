@@ -1,6 +1,5 @@
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.TrexNode.TrexRole;
 import com.github.trex_paxos.msg.*;
 import net.jqwik.api.*;
 
@@ -44,11 +43,11 @@ public class PrepareResponsePropertyTests {
     final var thisPromise = new BallotNumber(thisCounter, thisNodeId);
     final var thisFixed = 10L;
 
-    ///  slotAtomic is used to track test slot number for the prepare response
+    //  slotAtomic is used to track test slot number for the prepare response
     final var slotAtomic = new AtomicLong(thisFixed + 1);
     final var journalWritten = new AtomicBoolean(false);
 
-    ///  only on a WIN will the algorithm recurse and write to the journal to process the self-accept.
+    //  only on a WIN will the algorithm recurse and write to the journal to process the self-accept.
     final var journal = new FakeJournal(thisPromise, thisFixed) {
       @Override
       public void writeProgress(Progress progress) {
@@ -127,9 +126,7 @@ public class PrepareResponsePropertyTests {
           assert !journalWritten.get();
           assert messages.isEmpty();
           assert commands.isEmpty();
-          if (testCase.voteOutcome == ArbitraryValues.VoteOutcome.LOSE) {
-            assert node.getRole() == TrexNode.TrexRole.FOLLOW;
-          }
+          assert testCase.voteOutcome != ArbitraryValues.VoteOutcome.LOSE || node.getRole() == TrexNode.TrexRole.FOLLOW;
         }
       }
     }
