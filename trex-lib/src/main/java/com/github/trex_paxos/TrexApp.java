@@ -1,163 +1,213 @@
 package com.github.trex_paxos;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.function.Consumer;
-import java.util.UUID;
-
-import org.jetbrains.annotations.NotNull;
-
+import com.github.trex_paxos.msg.DirectMessage;
+import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
+import com.github.trex_paxos.network.Channel;
+import com.github.trex_paxos.network.ClusterMembership;
+import com.github.trex_paxos.network.NodeId;
 
-public class TrexApp<T, R> {
-    static final Logger LOGGER = Logger.getLogger("");
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import static com.github.trex_paxos.TrexLogger.LOGGER;
 
-    protected final TrexEngine engine;
-    protected final SerDe<T> serdeCmd;
-    protected final Consumer<List<? extends Message>> network;
+public class TrexApp<VALUE, RESULT> {
 
-    public TrexApp(
-            TrexEngine engine,
-            SerDe<T> serdeCmd,
-            Consumer<List<? extends Message>> network) {
-        this.engine = engine;
-        this.serdeCmd = serdeCmd;
-        this.network = network;
+  private class LeaderTracker {
+    private volatile Short estimatedLeader = -1;
+
+    void updateFromFixed(Fixed msg) {
+      var knownLeader = msg.leader();
+      if (!Objects.equals(estimatedLeader, knownLeader)) {
+        LOGGER.fine(() -> engine.trexNode.nodeIdentifier() +  " role changed from " + estimatedLeader + " to " + knownLeader);
+        estimatedLeader = knownLeader;
+      }
     }
 
-    /// We want to lazily set the server function to seperate the setup of the engien from the point where it is used.  
-    Function<T, R> serverFunction;
+    Optional<Short> currentLeader() {
+      return estimatedLeader > 0 ? Optional.of(estimatedLeader) : Optional.empty();
+    }
+  }
 
-    void setServerFunction(Function<T, R> serverFunction) {
-        this.serverFunction = serverFunction;
+  private class ResponseTracker<R> {
+    private final Map<UUID, CompletableFuture<R>> pending = new ConcurrentHashMap<>();
+
+    void track(UUID id, CompletableFuture<R> future) {
+      LOGGER.finer(() -> engine.trexNode.nodeIdentifier() +  " tracking response for " + id);
+      pending.put(id, future);
     }
 
-    private volatile boolean running = false;
-
-    public void shutdown() {
-        running = false;
+    void complete(UUID id, R result) {
+      pending.computeIfPresent(id, (_, f) -> {
+        f.complete(result);
+        LOGGER.fine(() -> engine.trexNode.nodeIdentifier() +  " complete " + id);
+        return null;
+      });
     }
 
-    private final BlockingQueue<? extends Message> messageQueue = new LinkedBlockingQueue<>();
+    void fail(UUID id, Throwable ex) {
+      pending.computeIfPresent(id, (_, f) -> {
+        f.completeExceptionally(ex);
+        LOGGER.fine(() -> engine.trexNode.nodeIdentifier() +  " fail " + id);
+        return null;
+      });
+    }
 
-    public void start() {
-        running = true;
-        engine.start();
-        // Message delivery thread
-        Thread messageProcessor = new Thread(() -> {
-            LOGGER.info("Message processor thread started");
-            while (running) {
-                try {
-                    var first = messageQueue.poll(1, TimeUnit.SECONDS);
-                    if (first != null) {
-                        // Create lists to collect the different types
-                        List<Message> messages = new ArrayList<>();
-                        messages.add(first);
-                        messageQueue.drainTo(messages); // Drain remaining messages
+    void remove(UUID id) {
+      pending.remove(id);
+    }
+  }
 
-                        // Partition the messages by type
-                        List<TrexMessage> trexMessages = new ArrayList<>();
-                        List<Value> values = new ArrayList<>();
+  private final TrexEngine engine;
+  private final NetworkLayer networkLayer;
+  private final Function<VALUE, RESULT> serverFunction;
+  private final Supplier<ClusterMembership> clusterMembershipSupplier;
+  private final LeaderTracker leaderTracker = new LeaderTracker();
+  private final ResponseTracker<RESULT> responseTracker = new ResponseTracker<>();
+  private final Pickler<VALUE> valuePickler;
+  public final NodeId nodeId;
 
-                        for (Message msg : messages) {
-                            if (msg instanceof TrexMessage trex) {
-                                trexMessages.add(trex);
-                            } else if (msg instanceof Value value) {
-                                values.add(value);
-                            }
-                        }
+  public TrexApp(
+      Supplier<ClusterMembership> clusterMembershipSupplier,
+      TrexEngine engine,
+      NetworkLayer networkLayer,
+      Pickler<VALUE> valuePickler,
+      Function<VALUE, RESULT> serverFunction) {
+    this.engine = engine;
+    this.networkLayer = networkLayer;
+    this.serverFunction = serverFunction;
+    this.clusterMembershipSupplier = clusterMembershipSupplier;
+    this.valuePickler = valuePickler;
+    this.nodeId = new NodeId(engine.nodeIdentifier());
+  }
 
-                        if (!values.isEmpty() && engine.isLeader()) {
-                            final var leaderMessages = engine.nextLeaderBatchOfMessages(values.stream().map(v -> new Command(v.uuid(), v.bytes())).toList());
-                            network.accept(messages);
-                        }
+  public void start() {
+    if (engine.isLeader()) {
+      leaderTracker.updateFromFixed(new Fixed(engine.nodeIdentifier(), 0L, BallotNumber.MIN));
+    }
+    engine.start();
+    networkLayer.subscribe(Channel.CONSENSUS, this::handleConsensusMessage, "consensus-"+ engine.nodeIdentifier());
+    networkLayer.subscribe(Channel.PROXY, this::handleProxyMessage, "proxy-"+ engine.nodeIdentifier());
+    networkLayer.start();
 
-                        // Process each type if non-empty
-                        if (!trexMessages.isEmpty()) {
-                            final var paxosMessages = paxosThenUpCall(trexMessages);
-                            network.accept(paxosMessages);
-                        }
-                    }
-                } catch (InterruptedException e) {
-                    LOGGER.warning("Message processor interrupted");
-                    Thread.currentThread().interrupt();
-                    break;
-                }
+  }
+
+  private List<TrexMessage> createLeaderMessages(VALUE value, UUID uuid) {
+    byte[] valueBytes = valuePickler.serialize(value);
+    Command cmd = new Command(uuid, valueBytes);
+    return engine.nextLeaderBatchOfMessages(List.of(cmd));
+  }
+
+  void handleConsensusMessage(TrexMessage msg) {
+    if (msg == null || msg.from() == engine.nodeIdentifier()) {
+      LOGGER.finer(() -> engine.nodeIdentifier() + " is dropping consensus message " + msg);
+      return;
+    }
+
+    var messages = paxosThenUpCall(List.of(msg));
+    LOGGER.finer(() -> engine.nodeIdentifier() + " has processed "+msg+" and is responding with " + messages);
+    messages.stream()
+        .filter(m -> m instanceof Fixed)
+        .map(m -> (Fixed) m)
+        .forEach(leaderTracker::updateFromFixed);
+
+    transmitTrexMessages(messages);
+  }
+
+  void handleProxyMessage(VALUE value) {
+    if (!engine.isLeader()) {
+      LOGGER.finer(() -> engine.nodeIdentifier() + " is not leader so is dropping is has received proxied message: " + value);
+      return;
+    }
+    LOGGER.fine(() -> engine.nodeIdentifier() + " leader is has received proxied message " + value);
+    try {
+      UUID uuid = UUIDGenerator.generateUUID();
+      var messages = createLeaderMessages(value, uuid);
+      transmitTrexMessages(messages);
+    } catch (Exception e) {
+      LOGGER.severe(() -> engine.nodeIdentifier() + " handleProxyMessage failed: " + e.getMessage());
+    }
+  }
+
+  public void submitValue(VALUE value, CompletableFuture<RESULT> future) {
+    final var uuid = UUIDGenerator.generateUUID();
+    try {
+      responseTracker.track(uuid, future);
+
+      if (engine.isLeader()) {
+        var messages = createLeaderMessages(value, uuid);
+        LOGGER.fine(() -> engine.nodeIdentifier() + " leader is sending accept messages " + messages);
+        transmitTrexMessages(messages);
+      } else {
+        leaderTracker.currentLeader().ifPresentOrElse(
+            leader ->{
+              LOGGER.fine(() -> engine.nodeIdentifier() + " "+ engine.trexNode.getRole() + " is proxying cmd messages" + value);
+              networkLayer.send(Channel.PROXY, leader, value);
+            },
+            () -> {
+              var ex = new IllegalStateException("No leader available");
+              LOGGER.warning(() -> engine.nodeIdentifier() + " " + engine.trexNode.getRole() + " failed to proxy cmd messages " + value + " because: " + ex.getMessage());
+              responseTracker.fail(uuid, ex);
+              responseTracker.remove(uuid);
             }
-            LOGGER.info("Message processor thread stopped");
-        });
-        messageProcessor.setDaemon(true);
-        messageProcessor.start();
+        );
+      }
+    } catch (Exception e) {
+      responseTracker.fail(uuid, e);
+      responseTracker.remove(uuid);
     }
+  }
 
-    /// This will run the Paxos algorithm on the inbound messages. It will return fixed commands and a list of messages
-    /// that should be sent out to the network.
-    public List<TrexMessage> paxosThenUpCall(List<@NotNull TrexMessage> dm) {
-        final var result = engine.paxos(dm);
-        if (!result.commands().isEmpty()) {
-            result
-                    .commands()
-                    .entrySet()
-                    .stream()
-                    .filter(entry -> entry.getValue() instanceof Command)
-                    .forEach(entry -> upCall(entry.getKey(), (Command) entry.getValue()));
-        }
-        return result.messages();
+  void upCall(@SuppressWarnings("unused") Long slot, Command cmd) {
+    try {
+      VALUE value = valuePickler.deserialize(cmd.operationBytes());
+      RESULT result = serverFunction.apply(value);
+      responseTracker.complete(cmd.uuid(), result);
+    } catch (Exception e) {
+      responseTracker.fail(cmd.uuid(), e);
     }
+  }
 
-    protected void upCall(Long slot, Command cmd) {
-        // unpickle host application command
-        final T t = serdeCmd.deserialize(cmd.operationBytes());
-        // Process fixed command
-        final R r = this.serverFunction.apply(t);
-
-        // do the final up call if we out wa our jvm who initiated the command
-        this.replyToClientFutures
-                .computeIfPresent(cmd.uuid(), (_, v) -> {
-                    v.complete(r);
-                    // here returning null removes the entry from the map
-                    return null;
-                });
+  List<TrexMessage> paxosThenUpCall(List<TrexMessage> messages) {
+    LOGGER.fine(() -> engine.nodeIdentifier() + " paxosThenUpCall input: " + messages);
+    var result = engine.paxos(messages);
+    if (!result.commands().isEmpty()) {
+      LOGGER.fine(() -> engine.nodeIdentifier() + " fixed " + result.commands());
+      result.commands().entrySet().stream()
+          .filter(entry -> entry.getValue() instanceof Command)
+          .forEach(entry -> upCall(entry.getKey(), (Command) entry.getValue()));
     }
+    final var response = result.messages();
+    LOGGER.fine(() -> engine.nodeIdentifier() + " paxosThenUpCall output: " + response);
+    return response;
+  }
 
-    /// We will use virtual threads process client messages and push them out to the other nodes in the Paxos cluster.
-    protected final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+  private void transmitTrexMessages(List<TrexMessage> messages) {
+    messages.forEach(message -> {
+      if (message instanceof DirectMessage directMessage) {
+        LOGGER.finer(() -> engine.nodeIdentifier() + " sending direct message " + directMessage);
+        networkLayer.send(Channel.CONSENSUS, directMessage.to(), message);
+      } else {
+        var others = clusterMembershipSupplier.get().otherNodes(nodeId).stream().map(NodeId::id).collect(Collectors.toSet());
+        LOGGER.finer(() -> engine.nodeIdentifier() + " broadcasting message " + message + " to " + others);
+        networkLayer.broadcast(Channel.CONSENSUS, message, others);
+      }
+    });
+  }
 
-    /// We will keep a map of futures that we will complete when we have run the command value against the lock store.
-    /// We actually want to store the future along with the time sent the command and order by time ascending. Then we
-    /// can check for old records to see if they have timed out and return exceptionally. We will also need a timeout thread.
-    protected final ConcurrentNavigableMap<UUID, CompletableFuture<R>> replyToClientFutures = new ConcurrentSkipListMap<>();
-
-    public void processCommand(final T value, CompletableFuture<R> future) {
-        final byte[] valueBytes = serdeCmd.serialize(value);
-        final var uuid = UUIDGenerator.generateUUID();
-        LOGGER.info(() -> "processCommand value=" + value + " uuid=" + uuid);
-        replyToClientFutures.put(uuid, future);
-        executor.submit(() -> {
-            try {
-                if (engine.isLeader()) {
-                    final var command = new Command(UUIDGenerator.generateUUID(), valueBytes);
-                    final var messages = engine.nextLeaderBatchOfMessages(List.of(command));
-                    network.accept(messages);
-                } else {
-                    // forward to the leader
-                    network.accept(List.of(new Value(engine.trexNode.nodeIdentifier, uuid, valueBytes)));
-                }
-            } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, "Exception processing command: " + e.getMessage(), e);
-                future.completeExceptionally(e);
-            }
-        });
+  public void stop() {
+    try {
+      networkLayer.stop();
     }
+    catch (Exception e) {
+      // ignore
+    }
+    finally {
+      engine.close();
+    }
+  }
 }

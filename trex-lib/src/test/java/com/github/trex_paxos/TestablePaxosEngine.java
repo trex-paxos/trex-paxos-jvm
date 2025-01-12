@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.logging.Level;
+import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 abstract class TestablePaxosEngine extends TrexEngine {
 

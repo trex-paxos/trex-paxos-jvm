@@ -28,11 +28,9 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
+import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 class Simulation {
-
-  static final Logger LOGGER = Logger.getLogger("");
-
   private final RandomGenerator rng;
   private final long longMaxTimeout;
   private final long shortMaxTimeout;
@@ -91,7 +89,7 @@ class Simulation {
                     case 2 -> trexEngine2.timeout();
                     case 3 -> trexEngine3.timeout();
                     default ->
-                        throw new IllegalStateException("Unexpected node identifier for timeout: " + timeout.nodeIdentifier);
+                        throw new IllegalArgumentException("Unexpected node identifier for timeout: " + timeout.nodeIdentifier);
                   };
                   return prepare.stream();
                 }
@@ -107,7 +105,7 @@ class Simulation {
                     case 2 -> trexEngine2.createHeartbeatMessagesAndReschedule();
                     case 3 -> trexEngine3.createHeartbeatMessagesAndReschedule();
                     default ->
-                        throw new IllegalStateException("Unexpected node identifier for heartbeat: " + heartbeat.nodeIdentifier);
+                        throw new IllegalArgumentException("Unexpected node identifier for heartbeat: " + heartbeat.nodeIdentifier);
                   };
                   return fixedWithAccepts.stream();
                 }

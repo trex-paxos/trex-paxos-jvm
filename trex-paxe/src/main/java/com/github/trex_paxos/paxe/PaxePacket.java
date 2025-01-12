@@ -23,7 +23,7 @@ public record PaxePacket(
         byte[] payload) {
 
     public static final int HEADER_SIZE = 8; // from(2) + to(2) + channel(2) + length(2)
-    public static final int AUTHENCIATED_DATA_SIZE = 6; // from(2) + to(2) + channel(2)
+    public static final int AUTHENTICATED_DATA_SIZE = 6; // from(2) + to(2) + channel(2)
     public static final int NONCE_SIZE = 12;
     public static final int AUTH_TAG_SIZE = 16;
     public static final int MAX_PACKET_LENGTH = 65535;
@@ -61,7 +61,7 @@ public record PaxePacket(
     }
 
     // Legacy constructor for compatibility
-    public PaxePacket(NodeId from, NodeId to, Channel channel, byte flags, byte[] nonce, byte[] authTag, byte[] payload) {
+    public PaxePacket(NodeId from, NodeId to, Channel channel, byte[] nonce, byte[] authTag, byte[] payload) {
         this(from, to, channel, 
             Optional.of(nonce), 
             Optional.of(authTag), 
@@ -130,7 +130,7 @@ public record PaxePacket(
     }
 
     public byte[] authenticatedData() {
-        var buffer = ByteBuffer.allocate(AUTHENCIATED_DATA_SIZE);
+        var buffer = ByteBuffer.allocate(AUTHENTICATED_DATA_SIZE);
         buffer.putShort(from.id());
         buffer.putShort(to.id());
         buffer.putShort(channel.value());
@@ -189,14 +189,15 @@ public record PaxePacket(
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof PaxePacket that)) return false;
-        return from.equals(that.from)
-                && to.equals(that.to)
-                && channel.equals(that.channel)
-                && Arrays.equals(nonce.orElse(null), that.nonce.orElse(null))
-                && Arrays.equals(authTag.orElse(null), that.authTag.orElse(null))
-                && Arrays.equals(payload, that.payload);
+      if (this == o) return true;
+      //noinspection DeconstructionCanBeUsed
+      if (!(o instanceof PaxePacket that)) return false;
+      return from.equals(that.from)
+          && to.equals(that.to)
+          && channel.equals(that.channel)
+          && Arrays.equals(nonce.orElse(null), that.nonce.orElse(null))
+          && Arrays.equals(authTag.orElse(null), that.authTag.orElse(null))
+          && Arrays.equals(payload, that.payload);
     }
 
     @Override

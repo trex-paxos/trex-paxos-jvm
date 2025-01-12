@@ -16,13 +16,13 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.*;
+import org.jetbrains.annotations.TestOnly;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
-import java.util.function.Consumer;
-import java.util.logging.Logger;
 import java.util.stream.Stream;
+import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 /// The TrexEngine manages the timeout behaviours that surround the core Paxos algorithm.
 /// It is closable to use try-with-resources to ensure that the TrexNode is closed properly on exceptions due to bad
@@ -32,8 +32,6 @@ import java.util.stream.Stream;
 /// This creates a clear separation between the core algorithm and the implementation of timeouts and shutdown logic.
 public abstract class TrexEngine implements AutoCloseable {
 
-  static final Logger LOGGER = Logger.getLogger("");
-  
   public static final String THREAD_INTERRUPTED = "TrexEngine was interrupted awaiting the mutex probably to shutdown while under load.";
 
   /// The underlying TrexNode that is the actual Part-time Parliament algorithm implementation guarded by this class.
@@ -56,8 +54,7 @@ public abstract class TrexEngine implements AutoCloseable {
     this.hostManagedTransactions = false;
   }
 
-  /// Create a new TrexEngine which wraps a TrexNode. If `hostManagedTransactions=false` it behaves as described
-  /// in the other constructor {@link #TrexEngine(TrexNode, Consumer)}. If `hostManagedTransactions=true` the
+  /// Create a new TrexEngine which wraps a TrexNode. If `hostManagedTransactions=true` the
   /// {@link Journal#sync()} will never be called. You must ensure that you managed the journal transactions such that
   /// you are satisfied that the data is crash durable before any messages returned by {@link #paxos(List)} are sent out
   /// to the network.
@@ -108,7 +105,11 @@ public abstract class TrexEngine implements AutoCloseable {
   /// Create the next leader batch of messages for the given set of commands. This should be called by the host application
   /// when {@link #isLeader()} is true.
   public List<TrexMessage> nextLeaderBatchOfMessages(List<Command> command) {
-    /// toList is immutable so we concat streams first.
+    if (trexNode().isFollow()) {
+      LOGGER.fine(() -> "node " + nodeIdentifier() + " is ignoring nextLeaderBatchOfMessages as we are not the leader");
+      return List.of();
+    }
+    // toList is immutable so we concat streams first.
     return Stream.concat(
         command.stream().map(this::command),
         Stream.of(trexNode.currentFixedMessage())
@@ -284,6 +285,11 @@ public abstract class TrexEngine implements AutoCloseable {
 
   public short nodeIdentifier() {
     return trexNode.nodeIdentifier();
+  }
+
+  @TestOnly
+  protected void setLeader() {
+    this.trexNode().setLeader();
   }
 }
 
