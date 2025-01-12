@@ -12,7 +12,6 @@ import java.util.function.Function;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -29,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
   @BeforeAll
   static void setupLogging() {
     ConsoleHandler handler = new ConsoleHandler();
-    handler.setLevel(Level.parse(System.getProperty("trex.log.level", "WARNING")));
+    handler.setLevel(Level.parse(System.getProperty("trex.log.level.paxe", "WARNING")));
 
     // Configure root logger
     Logger rootLogger = TrexLogger.LOGGER;

@@ -8,12 +8,13 @@ import java.security.SecureRandom;
 import java.security.Security;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.stream.Collectors;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 /// Using the Secure Remote Password (SRP) Protocol for TLS Authentication
-/// This directly follows RFC 5054 at https://www.ietf.org/rfc/rfc5054.txt
+/// This directly follows [RFC 5054](https://www.ietf.org/rfc/rfc5054.txt)
 /// There is a corresponding test suite in SRPUtilsTests.java that verifies using the test vectors in the RFC.
-/// This class handles large integers as Hexidenmal strings which it treats as unsigned.
+/// This class handles large integers as hexadecimal strings which it treats as unsigned.
 /// It is careful to test against the RFC test vectors to ensure that the math and the encoding is correct.
 public final class SRPUtils {
 
@@ -28,7 +29,7 @@ public final class SRPUtils {
     }
 
     /// Generate a random private key which is used to generate the public key. This is required for the SRP protocol that the 
-    /// private key is a random number between 1 and N-1 where N is the prime number used in the protocol. Due to the built in 
+    /// private key is a random number between 1 and N-1 where N is the prime number used in the protocol. Due to the built-in
     /// signed nature of BigInteger we have to loop until we get a number that is greater than zero and also less than N.
     /// @param hexN The prime number N used in the protocol as a hex string. 
     /// @return The private key as a hex string in upper case. 
@@ -42,8 +43,7 @@ public final class SRPUtils {
             SecureRandom.nextBytes(bytes);
             result = new BigInteger(1, bytes);
         }
-        final var r = result.toString(16).toUpperCase();
-        return r;
+      return result.toString(16).toUpperCase();
     }
 
     /// Protocol constants. You can use openssh to create your own safe prime and generator. 
@@ -87,17 +87,17 @@ public final class SRPUtils {
         return toHex(hashed);
     }
 
-    /// All of our generanted binary numbers are positive. 
+    /// All of our generated binary numbers are positive.
     public static BigInteger integer(byte[] bs) {
         return new BigInteger(1, bs);
     }
 
-    /// Math is doen using positive BigInteger numbers. 
+    /// Math is done using positive BigInteger numbers.
     public static BigInteger integer(String hex) {
         return new BigInteger(hex, 16);
     }
 
-    /// This is requred to hash the user identity `I` and password `P` and the seperator ":"
+    /// This is required to hash the user identity `I` and password `P` and the separator ":"
     public static byte[] bytes(String s) {
         return s.getBytes(StandardCharsets.UTF_8);
     }
@@ -105,8 +105,8 @@ public final class SRPUtils {
     /// Generate the verifier from the password and salt. It should be computed at the client and stored at the server so that
     /// the password never leaves the client.
     /// @param c The protocol constants `N` and `g`.
-    /// @param I The user identity.
-    /// @param P The user password.
+    /// @param Identity The user identity.
+    /// @param Password The user password.
     /// @param s The salt which is a random number used to salt the password to prevent dictionary attacks or leaked password lookups.
     public static BigInteger generateVerifier(Constants c, String Identity, String Password, byte[] s) {
         final var N = integer(c.N());
@@ -120,14 +120,14 @@ public final class SRPUtils {
     }
 
     /// Generate the server public key `B` from the server per session private key `b`. This is done at the server and the public key `B` is sent to the server.
-    /// The server private must not be reused and and it must not be transmitted. It is only needed long enough to generate the shared premaster secret key.
+    /// The server private must not be reused, and it must not be transmitted. It is only needed long enough to generate the shared premaster secret key.
     /// @return  B = k*v + g^b % N
     public static BigInteger B(BigInteger b, BigInteger v, BigInteger k, BigInteger g, BigInteger N) {
         return v.multiply(k).add(g.modPow(b, N)).mod(N);
     }
 
     /// Generate the client public key `A` from the server per session private key `a`. This is done at the client and the public key `A` is sent to the server.
-    /// The server private must not be reused and and it must not be transmitted. It is only needed long enough to generate the shared premaster secret key.
+    /// The server private must not be reused, and it must not be transmitted. It is only needed long enough to generate the shared premaster secret key.
     /// @return A = g^a % N
     public static BigInteger A(BigInteger a, BigInteger g, BigInteger N) {
         return g.modPow(a, N);
@@ -150,7 +150,7 @@ public final class SRPUtils {
         return toHex(hashed);
     }
 
-    /// Computes the session key `S` from client-side secret data which inclues the user password.
+    /// Computes the session key `S` from client-side secret data which includes the user password.
     /// This is tested against the RFC 5054 test vectors to ensure that the padding and the math is correct.
     /// This is the final step in the protocol where the client computes the shared secret key `S` from the server public key `B`, the client private key `a`, and the password `P`.
     /// @return S = (B - (k * g^x)) ^ (a + (u * x)) % N
@@ -206,6 +206,8 @@ public final class SRPUtils {
         return v.modPow(u, N).multiply(A).modPow(b, N).toString(16);
     }
 
+    final static int AES_256_KEY_SIZE = 32;
+
     public static byte[] hashedSecret(String N, String premaster) {
         byte[] nBytes = fromHex(N);
         byte[] aBytes = fromHex(premaster);
@@ -214,11 +216,21 @@ public final class SRPUtils {
             System.arraycopy(aBytes, 0, paddedABytes, nBytes.length - paddedABytes.length, paddedABytes.length);
             aBytes = paddedABytes;
         }
-        return SRPUtils.H(aBytes);
+        var raw = SRPUtils.H(aBytes);
+        if( raw.length < AES_256_KEY_SIZE ){
+          try {
+            // Use SimpleHKDF to derive a key of size AES_256_KEY_SIZE
+            byte[] prk = SimpleHKDF.extract(null, raw); // Step 1: Extract phase
+            raw = SimpleHKDF.expand(prk, "rfc-5054-hash".getBytes(), AES_256_KEY_SIZE); // Step 2: Expand phase
+          } catch (Exception e) {
+            throw new RuntimeException("Failed to expand key", e);
+          }
+        }
+        return raw;
     }
 
     /// The list of message digest algorithms to use in order of preference. The first one that is available on the system will be used.
-    /// This list favours 256 bit algorithms to be compatibile with AES encryption.
+    /// This list favours 256 bit algorithms to be compatible with AES encryption.
     static public final List<String> MESSAGE_DIGEST_PREFERENCES = List.of(
             "SHA3-256",
             "SHA-512/256",
@@ -227,7 +239,7 @@ public final class SRPUtils {
     /// The [java.security.MessageDigest] algorithm to use for hashing. This can be overridden by setting the system property 
     /// `com.github.trex_paxos.paxe.SRPUtils.useHash` to a string such as "SHA-1" or "SHA-256". This is primarily used for testing 
     /// where we force the use of the SHA-1 algorithm to test against the RFC test vectors that use SHA-1.
-    /// The default is the first algorithm in the [MESSAGE_DIGEST_PREFERENCES] list that is available on the system.
+    /// The default is the first algorithm in the [SRPUtils#MESSAGE_DIGEST_PREFERENCES] list that is available on the system.
     public static final String BEST_ALGORITHM = bestAlgorithm();
 
     public static MessageDigest getMessageDigest() {
@@ -235,10 +247,10 @@ public final class SRPUtils {
             final var choice = System.getProperty(SRPUtils.class.getName() + ".useHash", BEST_ALGORITHM);
             return MessageDigest.getInstance(choice);
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("Failed to initialize MessageDigest trying to get alorithm '" + BEST_ALGORITHM
+            throw new IllegalStateException("Failed to initialize MessageDigest trying to get algorithm '" + BEST_ALGORITHM
                     + "' check that there is not a system property override setting a bad value the available ones are: "
                     +
-                    Security.getAlgorithms("MessageDigest").stream().collect(Collectors.joining(",")), e);
+                String.join(",", Security.getAlgorithms("MessageDigest")), e);
         }
     }
 
@@ -257,7 +269,7 @@ public final class SRPUtils {
         if (!Security.getAlgorithms("MessageDigest").contains(defaultChoice)) {
             throw new IllegalArgumentException(
                     "The algorithm '" + defaultChoice + "' is not available on this system. The available ones are: " +
-                            (Security.getAlgorithms("MessageDigest").stream().collect(Collectors.joining(",")) +
+                            (String.join(",", Security.getAlgorithms("MessageDigest")) +
                                     " use the system property " + SRPUtils.class.getName() + ".useHash"
                                     + " to set a valid algorithm."));
         }
@@ -283,4 +295,39 @@ public final class SRPUtils {
     static String toHex(byte[] bytes) {
         return HEX_FORMAT.formatHex(bytes);
     }
+}
+
+/// In Java 24 which is not yet released we will have JEP 478: Key Derivation Function API (Preview)
+/// As that is not available, and only when using a week key logarithm, not the preferential SHA-256, we will use the
+/// following HKDF implementation.
+class SimpleHKDF {
+  public static byte[] extract(byte[] salt, byte[] ikm) throws Exception {
+    if (salt == null || salt.length == 0) {
+      salt = new byte[32]; // Default to a zero-filled array for SHA-256
+    }
+    Mac mac = Mac.getInstance("HmacSHA256");
+    mac.init(new SecretKeySpec(salt, "HmacSHA256"));
+    return mac.doFinal(ikm);
+  }
+
+  public static byte[] expand(byte[] prk, byte[] info, int length) throws Exception {
+    Mac mac = Mac.getInstance("HmacSHA256");
+    mac.init(new SecretKeySpec(prk, "HmacSHA256"));
+
+    byte[] result = new byte[length];
+    byte[] t = new byte[0];
+    int offset = 0;
+    for (int i = 1; offset < length; i++) {
+      mac.update(t);
+      if (info != null) {
+        mac.update(info);
+      }
+      mac.update((byte) i);
+      t = mac.doFinal();
+      int chunkLength = Math.min(t.length, length - offset);
+      System.arraycopy(t, 0, result, offset, chunkLength);
+      offset += chunkLength;
+    }
+    return result;
+  }
 }
