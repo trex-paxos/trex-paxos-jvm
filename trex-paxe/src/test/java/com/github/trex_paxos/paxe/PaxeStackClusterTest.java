@@ -122,6 +122,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
     StackService.Response response = future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
     assertEquals(Optional.empty(), response.value());
 
+    // Let consensus complete
+    Thread.sleep(1);
+
     // Push "world"
     future = new CompletableFuture<>();
     app1.submitValue(new StackService.Push("world"), future);
