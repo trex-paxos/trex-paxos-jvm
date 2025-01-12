@@ -83,7 +83,34 @@ public class PaxeNetwork implements TrexNetwork, AutoCloseable {
 
   @Override
   public void subscribe(Channel channel, NamedSubscriber handler) {
+    LOGGER.finest(() -> String.format(
+        "Node %d subscribing handler %s to channel %s",
+        localNode.id(), handler.name(), channel
+    ));
 
+    // Create a virtual thread to process messages from the channel queue
+    Thread.ofVirtual()
+        .name("subscriber-" + handler.name())
+        .start(() -> {
+          while (running) {
+            try {
+              // Get message from the channel
+              PaxeMessage msg = receive(channel);
+
+              // Convert to ByteBuffer and send to handler
+              ByteBuffer buffer = ByteBuffer.wrap(msg.payload());
+              handler.accept(buffer);
+
+            } catch (InterruptedException e) {
+              if (running) {
+                LOGGER.warning("Channel subscriber interrupted: " + handler.name());
+              }
+              break;
+            } catch (Exception e) {
+              LOGGER.severe("Error processing message on channel " + channel + ": " + e.getMessage());
+            }
+          }
+        });
   }
 
   public void start() {
