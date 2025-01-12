@@ -7,31 +7,25 @@ paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pd
 It aims to be rigorous in terms of safety preferring to mark a node as crashed rather than ignoring any possible safety
 violation.
 
+The library is a toolkit to help you to embed logic to replicate an ordered sequence of application commands
+over a network. You can us the full set of features or just the core algorithm code.
+
 To use this library:
 
 * You will need to implement the `Journal` interface to persist the state of the algorithm. This can be tables (or
-  documents or key-values) in the database that your application uses. That allows you to run a database transaction
-  across the
-  state of the algorithm and the state of your main application business logic.
+  documents or key-values) in your main database.
 * At this time you will need to set up the cluster membership manually. You will need to assign a unique node identifier
   to each node in the cluster.
-* This library is designed to be transport agnostic. Examples of plugging in trexNetwork transport as either QUIC, TCP
-  and
+* This library is designed to be transport agnostic. Examples of plugging in network transport as either QUIC, TCP and
   a lean UDP implementation inspired by QUIC are planned.
-
-This library aims to be a toolkit to help you to not have to write much code at all to run a cluster of nodes that
-replicate an ordered sequence of appliation commands. Yet it has a modular nature so that you can assemble your own
-custom
-solution that only uses the core protocol messages and the code algorithm logic.
 
 At this the time:
 
 1. There are exhaustive brute force tests that the algorithm is never violated.
 2. There are runtime checks that the algorithm is never violated.
 3. The library will mark itself as crashed if it spots problems.
-4. There are junit tests that simulate randomized rolling trexNetwork partitions 1,000 times and verifies nodes stay in
-   sync.
-5. There is not yet a full example of nodes communicating over trexNetwork sockets.
+4. There are junit tests that simulate randomized rolling network partitions 1,000 times.
+5. There is not yet a full example of nodes communicating over network sockets.
 
 The library is therefore at the stage where the bold and brave could try it out.
 
@@ -52,51 +46,48 @@ The ambition of this documentation is to:
 As of today, the proceeding list is aspirational. When the exhaustive tests are written, I will invite peer review and
 possibly offer a nominal bug bounty (which would be a folly I would surely come to regret instantly).
 
-### Cluster Replication With Paxos
+The description below refers to server processes as "nodes" within a cluster. This helps to disambiguate the code
+running the algorithm from the physical server or host process.
 
-To replicate the state of any service, we need to apply the same stream of commands to each server in the same order.
-The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) states (p. 8):
+## The Problem We're Solving
+
+Imagine you have multiple servers that need critical configuration to be consistent across them all.
+Configuration such as:
+
+- Which servers are currently active in the cluster
+- What data partition does each server manage
+- Which server is currently the primary for each service
+
+Even a slight inconsistency in this configuration can cause chaos—servers might fight over the same data or ignore it
+entirely. This can lead to data loss or data corruption.
+
+## How Paxos Helps
+
+Paxos solves this by turning our servers into a distributed state machine where:
+
+1. Every change is treated as a command (like "Add Server-5 to cluster" or "Assign Partition-3 to Server-2")
+2. A leader server puts these commands in a specific order
+3. All servers apply these commands in exactly the same order
+
+The [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) paper states (p. 8):
 
 > A simple way to implement a distributed system is as a collection of clients that issue commands to a central server.
 > The server can be described as a deterministic state machine that performs client commands in some sequence. The state
 > machine has a current state; it performs a step by taking as input a command and producing an output and a new state.
 
-For example, in a key-value store, commands might be `put(k,v)`, `get(k)` or `remove(k)` operations. We want to
-replicate
-the server across a set of identical nodes within a cluster with strong consistency. If commands are not accurately
-replicated
-or if they are applied in the wrong order, we will violate consistency. In reality this example is not very instructive
-as
-we can use different consistency models with a key-value store. Yet at the heart of many distributeded systems we need
-to have
-some core configuration that must be strongly consistent across all nodes in a cluster (e.g. what servers are currently
-in the
-cluster, or which workers are managing which partition of the data). The concept of an ordered stream of commands is how
-we  
-replicate the core configuration of the cluster.
-
-The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) explicitly states that Paxos has a leader (p. 6):
+It later explicitly states that Paxos has a leader (p. 6):
 
 > The algorithm chooses a leader, which plays the roles of the distinguished proposer and the distinguished learner.
 
-This means command values are forwarded to the leader, and the leader assigns the order of the command values.
-
-A common misconception is failing to recognize that Paxos is inherently Multi-Paxos.
-The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) states (p. 10):
+It also states that the leader only needs to exchange the minimum number of messages (p. 10):
 
 > A newly chosen leader executes phase 1 for infinitely many instances of the consensus algorithm. Using the same
 > proposal number for all instances, it can do this by sending a single reasonably short message to the other servers.
 
-This enables the algorithm to enter a steady state of streaming only `accept` messages until a leader crashes or becomes
-trexNetwork-isolated. Only then are `prepare` messages necessary for simultaneous leader election and crash recovery.
+This means command values are forwarded to the leader, and the leader assigns the order of the command values.
 
-The purpose of pointing out those three sections of the original paper is that there is a lot of confusion about how to
-build
-a practical algorithm from Paxos. This confusion appears to be enirely due to how the algorithm is taught.
-
-The description below refers to server processes as "nodes" within a cluster. This helps to disambiguate the code
-running the algorithm from the physical server or host process. This repository provides a core library with a node
-class `TrexNode` solely responsible for running the core Paxos algorithm.
+In a three node cluster the leader can stream commands to the other two nodes. When it gets back one response it
+knows that a given command is committed. Leader election is is also built into the algorithm which is explained below.
 
 ### The Paxos Algorithm
 
@@ -130,6 +121,7 @@ This is achieved by encoding the node identifier in each `N`s lower bits.
 This library uses a record with a signature similar to this:
 
 ```java
+/// This is `N`
 public record BallotNumber(int counter, short nodeIdentifier) implements Comparable<BallotNumber> {
 }
 ```
@@ -144,8 +136,7 @@ This avoids the need to retransmit values when fixing slots, as explained below.
 ### Second: Steady State Galloping
 
 The objective is to fix the same command value `V` into the same command log stream index `S`, known as a log slot, at
-each node in the cluster. When the trexNetwork is healthy, and servers have undertaken crash recovery, an uncontested
-leader
+each node in the cluster. When the network is healthy, and servers have undertaken crash recovery, an uncontested leader
 sends a stream of commands using `accept(S,N,V)` messages where:
 
 * `S` is a log index slot the leader assigns to the command value.
@@ -165,18 +156,22 @@ our leader can stream `accept` messages continuously without awaiting a response
 This library uses code similar to the following as the `accept` message and its acknowledgement:
 
 ```java
+/// This is `V`
 public record Command(String uuid,
                       byte[] operationBytes) {
 }
 
+/// This is `N` that is unique per Node
 public record BallotNumber(int counter, short nodeIdentifier) {
 }
 
+/// This is `accept(S,N,V)`
 public record Accept(long logIndex,
                      BallotNumber number,
                      Command command) {
 }
 
+/// This is whether another node accepts and simultaneously promises else rejects 
 public record AcceptResponse(
     long logIndex,
     BallotNumber number,
@@ -196,8 +191,7 @@ typically only support point-to-point messaging. This means that `AcceptResponse
 As the leader is the first to learn which values are fixed, Lamport calls it the “distinguished learner”.
 
 The leader can send a short `fixed(S,N)` message to inform the other nodes when a value has been fixed. This message can
-piggyback at the front of the subsequent outbound `accept` message trexNetwork packet. Due to lost messaging, a leader
-may
+piggyback at the front of the subsequent outbound `accept` message network packet. Due to lost messaging, a leader may
 learn which slots are fixed out of sequential order. In this implementation leaders only send `fixed` messages in
 sequential slot order.
 
@@ -293,12 +287,12 @@ Intuitively, we can think of the first message as a leader election. Hence, we c
 In a three-node cluster, a leader only needs to exchange one
 message to be elected.
 
-Once elected a new leader immediately issues small prepare
+Once elected, a new leader immediately issues small `prepare`
 messages for the full range of slots. Intuitively the new leader is
 asking nodes to retransmit what they know about all past `accept` messages.
 The new leader then collaborates with an old leader
 by choosing their value. The mathematics of the Paxos algorithm
-guarantees that all leaders converge on choosing the same value
+guarantees that all leaders converge on selecting the same value
 at each slot.
 
 ## Fifth, Durable State Requirements
@@ -311,10 +305,10 @@ public record Progress(BallotNumber highestPromised,
 }
 ```
 
-The progress of each node is its highest promised `N` and its highest fixed slot `S`. This is only thirteen bytes of
+The progress of each node is its highest promised `N` and its highest fixed slot `S`. This is only fourteen bytes of
 data.
 
-You must also provide an implementation of the journal interface which is similar to this definition:
+You must also provide an implementation of the journal interface, which is similar to this definition:
 
 ```java
 
@@ -322,31 +316,36 @@ public interface Journal {
   // this is only called at startup so you could trade write speed for read speed. 
   Progress loadProgress();
 
-  // this is called on every message to persist a small amount of data so you would want to optimise this for write speed.
+  // this is called on every message to persist a small amount of data so you would 
+  // want to optimise this for write speed.
   void writeProgress(Progress progress);
 
-  // this is called to write data to disk. when there are no crashes or isolated leaders each slot is write once yet can be rewritten using a fresh value during crash recovery.
+  // this is called to write data to disk. when there are no crashes or isolated 
+  // leaders each slot is write once yet can be rewritten using a fresh value during 
+  // leader over.
   void writeAccept(long logIndex, Accept accept);
 
-  // this is called during crash recovery or help other nodes catch up on lost messages. We can expect sequential access patterns. 
+  // this is called during leader failover or help other nodes catch up on lost messages. 
+  // We can expect sequential access patterns. 
   Optional<Accept> readAccept(long logIndex);
 
-  // if the host application is not explicitly managing database transactions this will be called to make all the writes durable. 
+  // if the host application is not explicitly managing database transactions this will 
+  // be called to make all the crash durable. 
   void sync();
 
-  // this is used during startup
+  // this is used during startup to recover the previous progress
   long highestAcceptedSlot();
 }
 ```
 
-Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync()` is intended must first flush any
-commands into their slots and only then flush the `progress`. The general idea here is that your application probably
-already has a database, it is almost trivial to implement this interface on top of that database. You can specify that
-your host code will be managing transactions and the `sync()` method will not be called and you so you can supply a
-no-op
-method.
+Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync()` is intended to flush any
+commands into their slots and only then flush the `progress`. The idea is that your application 
+already has a database; it is almost trivial to implement this interface in our main application database. 
+You can specify that your application code will manage transactions. When you configure this library to 
+say that you will handle the transactions in your command value up-call callback then the `sync()` method 
+will not be invoked. 
 
-See the java doc on the `Journal` interface for more details.
+See the Java doc on the `Journal` interface for more details.
 
 ## Sixth, The invariants & Testing
 
@@ -355,30 +354,26 @@ This implementation enforces the following invariants at each node:
 1. The fixed index increases sequentially.
 2. The promise number only increases (yet it may jump forward).
 3. The promised ballot number can only change when processing a `prepare` or `accept` message.
-4. The fixed index can only change when a leader sees a majority `AcceptReponse` message, a follower node sees a `Fixed`
-   message or any node learns about a fixed message due to a `CatchupResponse` message.
+4. The fixed index can only change when a leader sees a majority `AcceptReponse` message, a 
+follower node sees a `Fixed`message, or any node learns about a fixed messages due to a 
+`CatchupResponse` message.
 
-The core of this implementation that ensures safety is written as inequalities comparing integer types.
-We may test the `TrexNode` class:
+The core of the algorithm is written as inequalities comparing integer types. We can exhaustively 
+test all permutations as a `TrexNode`: 
 
-* It can only see messages that are less than, greater than, or equal to its promise.
-* It can only see messages from another node with a node identifier that is less than, greater than, or equal to its
+* Can only see messages that are less than, greater than, or equal to its promise.
+* Can only see messages from another node with a node identifier that is less than, greater than, or equal to its
   own.
-* It can only see messages with a fixed slot index that are less than, greater than, or equal to its own.
+* Can only see messages with a fixed slot index that are less than, greater than, or equal to its own.
 * The journal at any slot can have only no value, the no-operation value, or a client command value.
 * The journal can either be continuous, have gaps, or not have reached a specific index when that index is learnt to be
   fixed.
 * The outcome of any majority vote can only be WIN, LOSE, or WAIT.
 * The node can be in one of three TrexStates: `FOLLOW`, `RECOVER`, or `LEAD`.
 
-This list gives 3^8=2187 test scenarios. The observations where is that
-even if we have a few more things we can vary we can still exhaustively test the implementation.
-
-In addition to exhaustive property-based tests we also run simulations of randomize trexNetwork partitions that step
-through
-hundreds of in memory message exchanges between a three node cluster. This tests check that the journal at all three
-nodes
-matches and the list of fixed commands is the same across all three nodes.
+In addition to exhaustive property-based tests, the tests run simulations of randomised rolling network partitions that step through
+hundreds of in-memory message exchanges between a three-node cluster. These randomised simulation tests are run a thousand times and 
+check that the journal at all three nodes matches and the list of fixed commands is the same across all three nodes.
 
 ### Seventh, Leader Duels
 
@@ -388,16 +383,16 @@ The [paper](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) states (p. 
 > a sequence of proposals with increasing numbers, none of which are ever
 > chosen.
 
-One pathological scenario exists for a stable trexNetwork where nodes repeated timeout in an unlucky order such:
+One pathological scenario exists for a stable network where nodes repeated timeout in an unlucky order, such:
 
 * The first node to timeout has the lowest node identifier.
 * The second node to timeouts does so before the first node can fix a value into the next slot.
 
-Yet there is also the other scenario where the first node to timeout has the highest node identifier. Then the second
+Yet there is also the other scenario where the first node to timeout has the highest node identifier. Then, the second
 node to timeout does not interrupt. If you were to set things up so that you had a 50% probability of two nodes
-timing out within the time it takes them to complete a full slot recovery you have great odds.
+timing out within the time it takes them to complete a full slot recovery, you have great odds.
 
-Every timeout you have two chances of success; that the first node to timeout has the highest node identifier, and if
+For every timeout you have two chances of success: that the first node to timeout has the highest node identifier, and if
 not
 that the lower node is not interrupted before it can complete a full cycle. The odds of success each attempt to elect
 a leader are 75%, 94%, 99%, ...
@@ -422,10 +417,10 @@ TBD
 The list of tasks:
 
 - [x] Implement the Paxos Parliament Protocol for log replication.
-- [x] Write a test harness that injects rolling trexNetwork partitions.
-- [x] Write property based tests to exhaustively verify correctness.
-- [x] Write extensive documentation including detailed JavaDoc.
-- [ ] Write a transport for a demo. As Kwik does not support connection failover will start with my own UDP.
+- [x] Write a test harness that injects rolling network partitions.
+- [x] Write property-based tests exhaustively to verify correctness.
+- [x] Write extensive documentation, including detailed JavaDoc.
+- [ ] Write a `Network` for a demo. As Kwik does not support connection fail-over, we will start with something QUIC-like over UDP.
 - [ ] Implement distributed advisor lock service as a full demo.
 - [ ] Implement cluster membership changes as UPaxos.
 - [ ] Add optionality so that randomized timeouts can be replaced by some other leader failure detection (e.g. JGroups).
