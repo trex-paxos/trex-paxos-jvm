@@ -213,7 +213,10 @@ public final class SRPUtils {
         byte[] aBytes = fromHex(premaster);
         if (aBytes.length < nBytes.length) {
             byte[] paddedABytes = new byte[nBytes.length];
-            System.arraycopy(aBytes, 0, paddedABytes, nBytes.length - paddedABytes.length, paddedABytes.length);
+            // Copy original bytes to the end of the padded array
+            System.arraycopy(aBytes, 0, paddedABytes,
+                nBytes.length - aBytes.length,  // Destination offset uses aBytes.length
+                aBytes.length);                 // Copy only aBytes.length bytes
             aBytes = paddedABytes;
         }
         var raw = SRPUtils.H(aBytes);
