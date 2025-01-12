@@ -96,12 +96,12 @@ public class PaxeNetworkTest {
         "blahblah",
         SRPUtils.generateSalt());
 
-    final var v1 = SRPUtils.generateVerifier(constants, nodeClientSecret1.srpIdenity(),
+    final var v1 = SRPUtils.generateVerifier(constants, nodeClientSecret1.srpIdentity(),
         nodeClientSecret1.password(), nodeClientSecret1.salt());
 
-    final var nv1 = new NodeVerifier(nodeClientSecret1.srpIdenity(), v1.toString(16));
+    final var nv1 = new NodeVerifier(nodeClientSecret1.srpIdentity(), v1.toString(16));
 
-    LOGGER.info("Verifier v1: " + nv1 + " for node " + nodeClientSecret1.srpIdenity() + " with password "
+    LOGGER.info("Verifier v1: " + nv1 + " for node " + nodeClientSecret1.srpIdentity() + " with password "
         + nodeClientSecret1.password());
 
     NodeClientSecret nodeClientSecret2 = new NodeClientSecret(
@@ -110,12 +110,12 @@ public class PaxeNetworkTest {
         "moreblahblah",
         SRPUtils.generateSalt());
 
-    final var v2 = SRPUtils.generateVerifier(constants, nodeClientSecret2.srpIdenity(),
+    final var v2 = SRPUtils.generateVerifier(constants, nodeClientSecret2.srpIdentity(),
         nodeClientSecret2.password(), nodeClientSecret2.salt());
 
-    final var nv2 = new NodeVerifier(nodeClientSecret2.srpIdenity(), v2.toString(16));
+    final var nv2 = new NodeVerifier(nodeClientSecret2.srpIdentity(), v2.toString(16));
 
-    LOGGER.info("Verifier v2: " + nv2 + " for node " + nodeClientSecret2.srpIdenity() + " with password "
+    LOGGER.info("Verifier v2: " + nv2 + " for node " + nodeClientSecret2.srpIdentity() + " with password "
         + nodeClientSecret2.password());
 
     Supplier<Map<NodeId, NodeVerifier>> verifierLookup = () -> Map.of(
@@ -268,12 +268,12 @@ public class PaxeNetworkTest {
     // Generate verifier
     final var v = SRPUtils.generateVerifier(
         constants,  // Using the existing test constants
-        nodeSecret.srpIdenity(),
+        nodeSecret.srpIdentity(),
         nodeSecret.password(),
         nodeSecret.salt()
     );
 
-    final var nv = new NodeVerifier(nodeSecret.srpIdenity(), v.toString(16));
+    final var nv = new NodeVerifier(nodeSecret.srpIdentity(), v.toString(16));
 
     // Setup verifier lookup
     Supplier<Map<NodeId, NodeVerifier>> verifierLookup =

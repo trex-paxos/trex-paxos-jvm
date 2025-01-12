@@ -56,12 +56,12 @@ public class NetworkTestHarness implements AutoCloseable {
 
     final var verifier = SRPUtils.generateVerifier(
         srpConstants,
-        nodeSecret.srpIdenity(),
+        nodeSecret.srpIdentity(),
         nodeSecret.password(),
         nodeSecret.salt()
     );
 
-    final var nodeVerifier = new NodeVerifier(nodeSecret.srpIdenity(), verifier.toString(16));
+    final var nodeVerifier = new NodeVerifier(nodeSecret.srpIdentity(), verifier.toString(16));
     verifierMap.put(id, nodeVerifier);
 
     Supplier<Map<NodeId, NodeVerifier>> verifierLookup = () -> verifierMap;

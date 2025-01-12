@@ -6,12 +6,12 @@ import com.github.trex_paxos.network.ClusterId;
 import com.github.trex_paxos.network.NodeId;
 
 public record NodeClientSecret(
-  String srpIdenity,
+  String srpIdentity,
   String password,
   byte[] salt  // 16 bytes required
 ) {
   public NodeClientSecret {
-    Objects.requireNonNull(srpIdenity, "srpIdenity required");
+    Objects.requireNonNull(srpIdentity, "srpIdentity required");
     Objects.requireNonNull(password, "password required");
     Objects.requireNonNull(salt, "salt required");
     if(salt.length != 16) {

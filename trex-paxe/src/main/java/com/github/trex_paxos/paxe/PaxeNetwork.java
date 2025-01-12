@@ -21,6 +21,7 @@ public class PaxeNetwork implements TrexNetwork, AutoCloseable {
 
   // Buffer of one entry of any messages that would not be sent due to not yet
   // having a session key
+  // FIXME implement a retry mechanism
   private final Map<NodeId, PaxeMessage> pendingMessages = new ConcurrentHashMap<>();
 
   /// Key manager for session key management which must have access to SRP verifiers.
@@ -191,7 +192,7 @@ public class PaxeNetwork implements TrexNetwork, AutoCloseable {
         }
 
         if (paxePacket.channel().equals(Channel.KEY_EXCHANGE)) {
-          KeyMessage keyMsg = PickleHandshake.unpickle(paxePacket.payload());
+          SessionKeyManager.KeyMessage keyMsg = PickleHandshake.unpickle(paxePacket.payload());
           keyManager.handleMessage(keyMsg);
         } else {
           var queue = getOrCreateChannelQueue(paxePacket.channel());
@@ -241,12 +242,12 @@ public class PaxeNetwork implements TrexNetwork, AutoCloseable {
       keyManager.initiateHandshake(message.to())
           .ifPresent(keyMsg -> sendHandshake(message.to(), keyMsg));
     } else {
-      final var pexePacket = PaxePacket.encrypt(message, localNode, key);
-      outboundQueue.add(pexePacket);
+      final var paxePacket = PaxePacket.encrypt(message, localNode, key);
+      outboundQueue.add(paxePacket);
     }
   }
 
-  void sendHandshake(NodeId to, KeyMessage msg) {
+  void sendHandshake(NodeId to, SessionKeyManager.KeyMessage msg) {
     Optional<NetworkAddress> addressOpt = membership.get().addressFor(to);
 
     if (addressOpt.isEmpty()) {
