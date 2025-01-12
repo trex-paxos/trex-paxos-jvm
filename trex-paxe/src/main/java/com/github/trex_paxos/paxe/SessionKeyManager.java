@@ -6,12 +6,12 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import com.github.trex_paxos.network.NodeId;
 import com.github.trex_paxos.paxe.SRPUtils.Constants;
 
 import static com.github.trex_paxos.paxe.SRPUtils.*;
+import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
 record SRPKeyPair(String publicKey, String privateKey) {
 }
@@ -29,7 +29,6 @@ sealed interface KeyMessage {
 }
 
 public class SessionKeyManager {
-    private static final Logger LOGGER = Logger.getLogger(SessionKeyManager.class.getName());
 
     private final NodeId nodeId;
     private final NodeClientSecret localSecret;

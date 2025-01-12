@@ -15,10 +15,9 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Supplier;
-import java.util.logging.Logger;
+import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
 public class PaxeNetwork implements TrexNetwork, AutoCloseable {
-  private static final Logger LOGGER = Logger.getLogger(PaxeNetwork.class.getName());
 
   // Buffer of one entry of any messages that would not be sent due to not yet
   // having a session key
@@ -53,7 +52,33 @@ public class PaxeNetwork implements TrexNetwork, AutoCloseable {
 
   @Override
   public void send(Channel channel, short to, ByteBuffer data) {
+    LOGGER.finest(() -> String.format(
+        "Node %d sending on channel %s to %d: data length=%d",
+        localNode.id(), channel, to, data.remaining()
+    ));
+    try {
+      // Read the entire buffer if it has remaining data
+      byte[] payload;
+      if (data.hasArray()) {
+        payload = data.array();
+      } else {
+        payload = new byte[data.remaining()];
+        data.get(payload);
+      }
 
+      PaxeMessage message = new PaxeMessage(
+          localNode,
+          new NodeId(to),
+          channel,
+          payload
+      );
+
+      encryptAndSend(message);
+
+    } catch (Exception e) {
+      LOGGER.severe("Failed to send message: " + e.getMessage());
+      throw new RuntimeException("Failed to send message", e);
+    }
   }
 
   @Override
@@ -63,7 +88,7 @@ public class PaxeNetwork implements TrexNetwork, AutoCloseable {
 
   public void start() {
     if (running) {
-      LOGGER.warning("TrexNetwork already running");
+      LOGGER.finer(()->"TrexNetwork already running");
       return;
     }
     running = true;
@@ -80,6 +105,8 @@ public class PaxeNetwork implements TrexNetwork, AutoCloseable {
     membership.get().otherNodes(localNode)
         .forEach(node -> keyManager.initiateHandshake(node)
             .ifPresent(keyMsg -> sendHandshake(node, keyMsg)));
+
+    LOGGER.info("Network started for node " + localNode.id());
   }
 
   private BlockingQueue<EncryptedPaxeMessage> getOrCreateChannelQueue(Channel channel) {
@@ -158,6 +185,10 @@ public class PaxeNetwork implements TrexNetwork, AutoCloseable {
   // Called by consumers to get messages from a channel
   public PaxeMessage receive(Channel channel) throws Exception {
     var queue = getOrCreateChannelQueue(channel);
+    LOGGER.finest(() -> String.format(
+        "Node %d waiting for message on channel %s",
+        localNode.id(), channel
+    ));
     var encrypted = queue.take();
 
     var key = keyManager.sessionKeys.get(encrypted.packet().from());
@@ -165,7 +196,12 @@ public class PaxeNetwork implements TrexNetwork, AutoCloseable {
       throw new SecurityException("Unknown sender");
     }
 
-    return PaxePacket.decrypt(encrypted.packet(), key);
+    var msg = PaxePacket.decrypt(encrypted.packet(), key);
+    LOGGER.finest(() -> String.format(
+        "Node %d received on channel %s from %d: payload length=%d",
+        localNode.id(), channel, msg.from().id(), msg.payload().length
+    ));
+    return msg;
   }
 
   public void encryptAndSend(PaxeMessage message) throws Exception {

@@ -36,7 +36,7 @@ import java.util.random.RandomGenerator;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static com.github.trex_paxos.Simulation.LOGGER;
+import static com.github.trex_paxos.TrexLogger.LOGGER;
 import static com.github.trex_paxos.Simulation.inconsistentFixedIndex;
 import static org.assertj.core.api.Assertions.assertThat;
 

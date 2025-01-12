@@ -15,7 +15,6 @@
  */
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.TrexNode.TrexRole;
 import com.github.trex_paxos.msg.*;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -28,7 +27,7 @@ import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static com.github.trex_paxos.Simulation.LOGGER;
+import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 public class SpecificTests {
   @BeforeAll

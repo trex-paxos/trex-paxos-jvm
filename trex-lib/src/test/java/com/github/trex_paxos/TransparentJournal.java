@@ -6,7 +6,7 @@ import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
 
-class TransparentJournal implements Journal {
+public class TransparentJournal implements Journal {
   public TransparentJournal(short nodeIdentifier) {
     progress = new Progress(nodeIdentifier);
     fakeJournal.put(0L, new Accept(nodeIdentifier, 0, BallotNumber.MIN, NoOperation.NOOP));

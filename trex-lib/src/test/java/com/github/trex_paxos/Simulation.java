@@ -28,11 +28,9 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
+import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 class Simulation {
-
-  static final Logger LOGGER = Logger.getLogger("");
-
   private final RandomGenerator rng;
   private final long longMaxTimeout;
   private final long shortMaxTimeout;

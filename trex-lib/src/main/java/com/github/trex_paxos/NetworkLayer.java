@@ -9,10 +9,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.logging.Logger;
+import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 public class NetworkLayer {
-  private static final Logger LOGGER = Logger.getLogger(NetworkLayer.class.getName());
   private final TrexNetwork network;
   private final Map<Channel, Pickler<?>> picklers;
 

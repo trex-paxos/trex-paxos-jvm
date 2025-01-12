@@ -4,13 +4,13 @@ import com.github.trex_paxos.network.*;
 import com.github.trex_paxos.paxe.SRPUtils.Constants;
 import org.junit.jupiter.api.*;
 
-import java.io.IOException;
 import java.net.DatagramSocket;
 import java.util.Map;
 import java.util.function.Supplier;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -19,8 +19,6 @@ public class PaxeNetworkTest {
   static {
     System.setProperty(SRPUtils.class.getName() + ".useHash", "SHA3-256");
   }
-
-  private static final Logger LOGGER = Logger.getLogger(PaxeNetworkTest.class.getName());
 
   final static String hexN = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" + //
       "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" + //
@@ -52,12 +50,17 @@ public class PaxeNetworkTest {
     consoleHandler.setLevel(level);
     LOGGER.addHandler(consoleHandler);
 
+    ConsoleHandler consoleHandler1 = new ConsoleHandler();
+    consoleHandler1.setLevel(level);
+
     // Configure SessionKeyManager logger
     Logger sessionKeyManagerLogger = Logger.getLogger(SessionKeyManager.class.getName());
     sessionKeyManagerLogger.setLevel(level);
-    ConsoleHandler skmHandler = new ConsoleHandler();
-    skmHandler.setLevel(level);
-    sessionKeyManagerLogger.addHandler(skmHandler);
+    sessionKeyManagerLogger.addHandler(consoleHandler1);
+
+    Logger pnLogger = Logger.getLogger(PaxeNetwork.class.getName());
+    pnLogger.setLevel(level);
+    pnLogger.addHandler(consoleHandler1);
 
     // Optionally disable parent handlers if needed
     LOGGER.setUseParentHandlers(false);

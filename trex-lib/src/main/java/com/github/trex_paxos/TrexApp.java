@@ -12,11 +12,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 public class TrexApp<VALUE, RESULT> {
-  private static final Logger LOGGER = Logger.getLogger(TrexApp.class.getName());
 
   private class LeaderTracker {
     private volatile Short estimatedLeader = -1;
