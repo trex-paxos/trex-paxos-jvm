@@ -140,13 +140,17 @@ public final class SRPUtils {
 
         byte[] aBytes = fromHex(a);
         byte[] paddedABytes = new byte[nBytes.length];
-        System.arraycopy(aBytes, 0, paddedABytes, nBytes.length - paddedABytes.length, paddedABytes.length);
+        System.arraycopy(aBytes, 0, paddedABytes,
+            nBytes.length - aBytes.length,    // Use aBytes.length for offset
+            aBytes.length);                   // Copy only aBytes.length bytes
 
         byte[] bBytes = fromHex(b);
         byte[] paddedBBytes = new byte[nBytes.length];
-        System.arraycopy(bBytes, 0, paddedBBytes, nBytes.length - paddedBBytes.length, paddedBBytes.length);
+        System.arraycopy(bBytes, 0, paddedBBytes,
+            nBytes.length - bBytes.length,    // Use bBytes.length for offset
+            bBytes.length);                   // Copy only bBytes.length bytes
 
-        byte[] hashed = SRPUtils.H(aBytes, bBytes);
+        byte[] hashed = SRPUtils.H(paddedABytes, paddedBBytes);
         return toHex(hashed);
     }
 
