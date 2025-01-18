@@ -26,7 +26,6 @@ import java.nio.charset.StandardCharsets;
 
 public class PickleTests {
 
-
   @Test
   public void testPickleProgress() throws Exception {
     Progress progress = new Progress((short) 1, new BallotNumber(2, (short) 3), 4L);

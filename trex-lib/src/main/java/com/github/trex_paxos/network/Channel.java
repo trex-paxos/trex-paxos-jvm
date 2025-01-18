@@ -1,9 +1,11 @@
 package com.github.trex_paxos.network;
 
 public record Channel(short id) {
+
   public enum SystemChannel {
     CONSENSUS((short) 1),       // Core paxos consensus
-    PROXY((short) 2);          // Forward commands to leader
+    PROXY((short) 2),          // Forward commands to leader
+    KEY_EXCHANGE((short) 3);   // Key exchange for secure communication
 
     private final short id;
 
@@ -33,6 +35,7 @@ public record Channel(short id) {
 
   public static final Channel CONSENSUS = SystemChannel.CONSENSUS.asChannel();
   public static final Channel PROXY = SystemChannel.PROXY.asChannel();
+  public static final Channel KEY_EXCHANGE = SystemChannel.KEY_EXCHANGE.asChannel();
 
   // Application channels start from 100 to avoid collisions
   @SuppressWarnings("unused")

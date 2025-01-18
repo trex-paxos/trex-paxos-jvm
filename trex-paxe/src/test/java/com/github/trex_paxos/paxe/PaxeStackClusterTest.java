@@ -1,7 +1,6 @@
 package com.github.trex_paxos.paxe;
 
 import com.github.trex_paxos.*;
-import com.github.trex_paxos.network.*;
 import org.junit.jupiter.api.*;
 
 import java.time.Duration;
@@ -66,10 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
       PaxeNetwork network,
       boolean isLeader) {
 
-    NetworkLayer networkLayer = new NetworkLayer(
-        network,
-        Map.of(Channel.CONSENSUS, PickleMsg.instance)
-    );
+    PaxeNetwork networkLayer = null;
 
     TrexNode node = createNode(network.localNode.id());
     TrexEngine engine = createEngine(node, isLeader);
@@ -151,7 +147,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
   }
 
   @AfterEach
-  void teardown() {
+  void stopAll() {
     if (app1 != null) app1.stop();
     if (app2 != null) app2.stop();
     if (harness != null) harness.close();

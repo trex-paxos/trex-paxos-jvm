@@ -1,7 +1,7 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.network.Channel;
-import com.github.trex_paxos.network.TrexNetwork;
+import com.github.trex_paxos.network.NamedSubscriber;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -9,8 +9,7 @@ import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-class InMemoryNetwork implements TrexNetwork {
-  // Existing InMemoryNetwork implementation remains unchanged
+class InMemoryNetwork {
   private final List<StackClusterImpl.ChannelAndSubscriber> handlers = new ArrayList<>();
   private final LinkedBlockingQueue<NetworkMessage> messageQueue = new LinkedBlockingQueue<>();
   private volatile boolean running = true;
@@ -24,20 +23,17 @@ class InMemoryNetwork implements TrexNetwork {
   private record NetworkMessage(short nodeId, Channel channel, ByteBuffer data) {
   }
 
-  @Override
   public void send(Channel channel, short nodeId, ByteBuffer data) {
     if (running) {
       messageQueue.add(new NetworkMessage(nodeId, channel, data));
     }
   }
 
-  @Override
   public void subscribe(Channel channel, NamedSubscriber handler) {
     StackClusterImpl.ChannelAndSubscriber channelAndSubscriber = new StackClusterImpl.ChannelAndSubscriber(channel, handler);
     handlers.add(channelAndSubscriber);
   }
 
-  @Override
   public void start() {
     Thread.ofVirtual().name("network-" + networkId).start(() -> {
       while (running) {
@@ -62,7 +58,6 @@ class InMemoryNetwork implements TrexNetwork {
     StackClusterImpl.LOGGER.info(() -> networkId + " network started with subscribers " + handlers);
   }
 
-  @Override
   public void close() {
     StackClusterImpl.LOGGER.fine(() -> networkId + " network stopping");
     running = false;

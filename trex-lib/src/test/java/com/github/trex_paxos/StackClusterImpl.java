@@ -204,7 +204,7 @@ public class StackClusterImpl implements StackService {
     };
   }
 
-  record ChannelAndSubscriber(Channel channel, TrexNetwork.NamedSubscriber subscriber) {
+  record ChannelAndSubscriber(Channel channel, NamedSubscriber subscriber) {
   }
 
   public static void main(String[] args) {

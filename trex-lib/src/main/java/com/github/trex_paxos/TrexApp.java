@@ -20,18 +20,18 @@ import static com.github.trex_paxos.TrexLogger.LOGGER;
 public class TrexApp<VALUE, RESULT> {
 
   private class LeaderTracker {
-    volatile Short estimatedLeader = -1;
+    volatile NodeId estimatedLeader = null;
 
     void updateFromFixed(Fixed msg) {
-      var knownLeader = msg.leader();
+      var knownLeader = new NodeId(msg.leader());
       if (!Objects.equals(estimatedLeader, knownLeader)) {
         LOGGER.fine(() -> engine.trexNode.nodeIdentifier() +  " role changed from " + estimatedLeader + " to " + knownLeader);
         estimatedLeader = knownLeader;
       }
     }
 
-    Optional<Short> currentLeader() {
-      return estimatedLeader > 0 ? Optional.of(estimatedLeader) : Optional.empty();
+    Optional<NodeId> currentLeader() {
+      return Optional.ofNullable(estimatedLeader);
     }
   }
 
@@ -95,7 +95,6 @@ public class TrexApp<VALUE, RESULT> {
     networkLayer.subscribe(Channel.CONSENSUS, this::handleConsensusMessage, "consensus-"+ engine.nodeIdentifier());
     networkLayer.subscribe(Channel.PROXY, this::handleProxyMessage, "proxy-"+ engine.nodeIdentifier());
     networkLayer.start();
-
   }
 
   private List<TrexMessage> createLeaderMessages(Command cmd) {
@@ -198,7 +197,7 @@ public class TrexApp<VALUE, RESULT> {
     messages.forEach(message -> {
       if (message instanceof DirectMessage directMessage) {
         LOGGER.finer(() -> engine.nodeIdentifier() + " sending direct message " + directMessage);
-        networkLayer.send(Channel.CONSENSUS, directMessage.to(), message);
+        networkLayer.send(Channel.CONSENSUS, new NodeId(directMessage.to()), message);
       } else {
         LOGGER.finer(() -> engine.nodeIdentifier() + " broadcasting message " + message);
         networkLayer.broadcast(clusterMembershipSupplier, Channel.CONSENSUS, message);
@@ -208,7 +207,7 @@ public class TrexApp<VALUE, RESULT> {
 
   public void stop() {
     try {
-      networkLayer.stop();
+      networkLayer.close();
     }
     catch (Exception e) {
       // ignore
@@ -224,6 +223,6 @@ public class TrexApp<VALUE, RESULT> {
     if( i == engine.nodeIdentifier()) {
       engine.setLeader();
     }
-    leaderTracker.estimatedLeader = i;
+    leaderTracker.estimatedLeader = new NodeId(i);
   }
 }
