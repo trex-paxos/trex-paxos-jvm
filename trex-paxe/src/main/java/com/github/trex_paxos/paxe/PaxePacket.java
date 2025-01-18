@@ -90,7 +90,7 @@ public record PaxePacket(
         var buffer = ByteBuffer.allocate(size);
         buffer.putShort(from.id());
         buffer.putShort(to.id());
-        buffer.putShort(channel.value());
+        buffer.putShort(channel.id());
         putLength(buffer, payload.length);
         
         nonce.ifPresent(buffer::put);
@@ -133,7 +133,7 @@ public record PaxePacket(
         var buffer = ByteBuffer.allocate(AUTHENTICATED_DATA_SIZE);
         buffer.putShort(from.id());
         buffer.putShort(to.id());
-        buffer.putShort(channel.value());
+        buffer.putShort(channel.id());
         return buffer.array();
     }
 

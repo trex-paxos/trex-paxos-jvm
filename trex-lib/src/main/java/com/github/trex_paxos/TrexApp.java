@@ -5,20 +5,22 @@ import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
 import com.github.trex_paxos.network.Channel;
 import com.github.trex_paxos.network.ClusterMembership;
+import com.github.trex_paxos.network.NetworkLayer;
 import com.github.trex_paxos.network.NodeId;
+import org.jetbrains.annotations.TestOnly;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
+
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 public class TrexApp<VALUE, RESULT> {
 
   private class LeaderTracker {
-    private volatile Short estimatedLeader = -1;
+    volatile Short estimatedLeader = -1;
 
     void updateFromFixed(Fixed msg) {
       var knownLeader = msg.leader();
@@ -192,9 +194,8 @@ public class TrexApp<VALUE, RESULT> {
         LOGGER.finer(() -> engine.nodeIdentifier() + " sending direct message " + directMessage);
         networkLayer.send(Channel.CONSENSUS, directMessage.to(), message);
       } else {
-        var others = clusterMembershipSupplier.get().otherNodes(nodeId).stream().map(NodeId::id).collect(Collectors.toSet());
-        LOGGER.finer(() -> engine.nodeIdentifier() + " broadcasting message " + message + " to " + others);
-        networkLayer.broadcast(Channel.CONSENSUS, message, others);
+        LOGGER.finer(() -> engine.nodeIdentifier() + " broadcasting message " + message);
+        networkLayer.broadcast(clusterMembershipSupplier, Channel.CONSENSUS, message);
       }
     });
   }
@@ -209,5 +210,13 @@ public class TrexApp<VALUE, RESULT> {
     finally {
       engine.close();
     }
+  }
+
+  @TestOnly
+  void setLeader(short i) {
+    if( i == engine.nodeIdentifier()) {
+      engine.setLeader();
+    }
+    leaderTracker.estimatedLeader = i;
   }
 }

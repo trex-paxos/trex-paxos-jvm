@@ -1,40 +1,37 @@
 package com.github.trex_paxos.network;
 
-public record Channel(short value) {
+public record Channel(short id) {
   public enum SystemChannel {
-    CONSENSUS((short) 0),       // Core paxos consensus
-    KEY_EXCHANGE((short) 1),    // Initial key exchange/auth
+    CONSENSUS((short) 1),       // Core paxos consensus
     PROXY((short) 2);          // Forward commands to leader
 
-    private final short value;
+    private final short id;
 
-    SystemChannel(short value) {
-      this.value = value;
+    SystemChannel(short id) {
+      this.id = id;
     }
 
     public Channel asChannel() {
-      return new Channel(value);
+      return new Channel(id);
     }
 
   }
 
-  public static String getSystemChannelName(short value) {
+  public static String getSystemChannelName(short id) {
     for (SystemChannel channel : SystemChannel.values()) {
-      if (channel.value == value) {
+      if (channel.id == id) {
         return channel.name();
       }
     }
-    return "Channel(" + value + ")";
+    return "Channel(" + id + ")";
   }
 
   @Override
   public String toString() {
-    return getSystemChannelName(value);
+    return getSystemChannelName(id);
   }
 
   public static final Channel CONSENSUS = SystemChannel.CONSENSUS.asChannel();
-  @SuppressWarnings("unused")
-  public static final Channel KEY_EXCHANGE = SystemChannel.KEY_EXCHANGE.asChannel();
   public static final Channel PROXY = SystemChannel.PROXY.asChannel();
 
   // Application channels start from 100 to avoid collisions

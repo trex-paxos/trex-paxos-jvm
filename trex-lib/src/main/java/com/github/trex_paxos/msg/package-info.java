@@ -11,7 +11,7 @@
 /// - `AcceptResponse`: Response to Accept message, includes voting status and highest fixed index.
 /// - `Catchup`: Request from replica to leader for retransmission of lost `Accept` messages.
 /// - `CatchupResponse`: Leader's response containing sequential fixed `Accept` messages above requested slot.
-/// - `Value`: A value that may be chosen by a leader to fix in a slot.
+/// - `Value`: A id that may be chosen by a leader to fix in a slot.
 ///
 /// For the purposes of validating the invariants the following two interfaces are used:
 /// - PaxosMessage types are the only messages that can alter the promise of a node.

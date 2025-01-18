@@ -1,22 +1,25 @@
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.network.Channel;
-import com.github.trex_paxos.network.TrexNetwork;
+import com.github.trex_paxos.network.*;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 
-public class NetworkLayer {
+public class TestNetworkLayer implements NetworkLayer {
   private final TrexNetwork network;
   private final Map<Channel, Pickler<?>> picklers;
+  private final NodeId nodeId;
 
-  public NetworkLayer(TrexNetwork network, Map<Channel, Pickler<?>> picklers) {
+  public TestNetworkLayer(NodeId nodeId, TrexNetwork network, Map<Channel, Pickler<?>> picklers) {
     this.network = Objects.requireNonNull(network, "network cannot be null");
     this.picklers = Map.copyOf(picklers);
+    this.nodeId = nodeId;
   }
 
   public <T> void subscribe(Channel channel, Consumer<T> handler, String name){
@@ -37,8 +40,11 @@ public class NetworkLayer {
     network.send(channel, to, ByteBuffer.wrap(data));
   }
 
-  public <T> void broadcast(Channel channel, T msg, Set<Short> targets) {
-    targets.forEach(target -> send(channel, target, msg));
+  @Override
+  public <T> void broadcast(Supplier<ClusterMembership> membershipSupplier, Channel channel, T msg) {
+    ClusterMembership membership = membershipSupplier.get();
+    var others = membership.otherNodes(nodeId).stream().map(NodeId::id).collect(Collectors.toSet());
+    others.forEach(nodeId -> send(channel, nodeId, msg));
   }
 
   public void start() {
@@ -48,5 +54,9 @@ public class NetworkLayer {
   public void stop() throws Exception {
     network.close();
   }
-}
 
+  @Override
+  public void close() throws Exception {
+    stop();
+  }
+}

@@ -56,7 +56,7 @@ public record TrexResult(List<TrexMessage> messages, TreeMap<Long, AbstractComma
             TreeMap::new // Use TreeMap as the map supplier
         ));
 
-    // Check that the size of unique key-value pairs of the inputs matches the size of allCommands
+    // Check that the size of unique key-id pairs of the inputs matches the size of allCommands
     // If this is not the case then we manged to fix different commands at the same slot.
     assert allCommands.size() == results.stream()
         .flatMap(r -> r.commands().entrySet().stream())

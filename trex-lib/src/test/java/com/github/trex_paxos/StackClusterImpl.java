@@ -102,13 +102,15 @@ public class StackClusterImpl implements StackService {
     InMemoryNetwork sharedNetwork = new InMemoryNetwork("sharedNetwork");
 
     for (short i = 1; i <= 2; i++) {
-      final var index = i;
-      var engine = getTrexEngine(index);
+      final var engine = getTrexEngine(i);
+      final NodeId nodeId = engine.nodeId();
       Pickler<Value> valuePickler = PermitsRecordsPickler.createPickler(Value.class);
       Supplier<ClusterMembership> members = () -> new ClusterMembership(
           Map.of(new NodeId((short) 1), new NetworkAddress.HostName("localhost", 5000),
               new NodeId((short) 2), new NetworkAddress.HostName("localhost", 5001)));
-      NetworkLayer networkLayer = new NetworkLayer(sharedNetwork, Map.of(Channel.CONSENSUS, PickleMsg.instance));
+      NetworkLayer networkLayer = new TestNetworkLayer(nodeId, sharedNetwork,
+          Map.of(Channel.CONSENSUS, PickleMsg.instance, Channel.PROXY, valuePickler)
+      );
 
       var app = new TrexApp<>(
           members,
@@ -116,47 +118,45 @@ public class StackClusterImpl implements StackService {
           networkLayer,
           valuePickler,
           cmd -> {
-            LOGGER.fine(() -> "Node " + index + " processing command: " + cmd.getClass().getSimpleName());
+            LOGGER.fine(() -> "Node " + nodeId + " processing command: " + cmd.getClass().getSimpleName());
             synchronized (stack) {
               try {
                 return switch (cmd) {
                   case Push p -> {
-                    LOGGER.fine(() -> "Node " + index + " pushing: " + p.item());
+                    LOGGER.fine(() -> "Node " + nodeId + " pushing: " + p.item());
                     stack.push(p.item());
                     yield new Response(Optional.empty());
                   }
                   case Pop _ -> {
                     var item = stack.pop();
-                    LOGGER.fine(() -> "Node " + index + " popped: " + item);
+                    LOGGER.fine(() -> "Node " + nodeId + " popped: " + item);
                     yield new Response(Optional.of(item));
                   }
                   case Peek _ -> {
                     var item = stack.peek();
-                    LOGGER.fine(() -> "Node " + index + " peeked: " + item);
+                    LOGGER.fine(() -> "Node " + nodeId + " peeked: " + item);
                     yield new Response(Optional.of(item));
                   }
                 };
               } catch (EmptyStackException e) {
-                LOGGER.warning("Node " + index + " attempted operation on empty stack");
+                LOGGER.warning("Node " + nodeId + " attempted operation on empty stack");
                 return new Response(Optional.of("Stack is empty"));
               }
             }
           }
       );
       nodes.add(app);
+      app.setLeader((short)1);
       app.start();
-      LOGGER.fine(() -> "Node " + index + " started successfully");
+      LOGGER.fine(() -> "Node " + nodeId + " started successfully");
     }
   }
 
-  private static @NotNull TrexEngine getTrexEngine(short i) {
-    var journal = new TransparentJournal(i);
+  private static @NotNull TrexEngine getTrexEngine(short nodeId) {
+    var journal = new TransparentJournal(nodeId);
     QuorumStrategy quorum = new SimpleMajority(2);
-    var node = new TrexNode(Level.INFO, i, quorum, journal);
-    LOGGER.fine(() -> "Creating TrexEngine for node " + i + (i == 1 ? " (leader)" : ""));
-    if (i == 1) {
-      node.setLeader();
-    }
+    var node = new TrexNode(Level.INFO, nodeId, quorum, journal);
+    LOGGER.fine(() -> "Creating TrexEngine for node " + nodeId + (nodeId == 1 ? " (leader)" : ""));
 
     return new TrexEngine(node) {
       @Override

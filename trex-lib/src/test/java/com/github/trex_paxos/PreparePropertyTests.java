@@ -56,7 +56,7 @@ public class PreparePropertyTests {
       case GREATER -> thisFixed + 1;
     };
 
-    // Setup command value
+    // Setup command id
     final var cmd = switch (testCase.value) {
       case NULL -> null;
       case NOOP -> NoOperation.NOOP;
@@ -125,7 +125,7 @@ public class PreparePropertyTests {
           assert vote.logIndex() == otherIndex;
           assert vote.number().equals(otherNumber);
 
-          // Verify that highest accepted value is returned
+          // Verify that highest accepted id is returned
           if (cmd != null) {
             assert response.journaledAccept().isPresent();
             var accept = response.journaledAccept().get();

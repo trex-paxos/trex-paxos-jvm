@@ -16,6 +16,7 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.*;
+import com.github.trex_paxos.network.NodeId;
 import org.jetbrains.annotations.TestOnly;
 
 import java.util.List;
@@ -37,6 +38,8 @@ public abstract class TrexEngine implements AutoCloseable {
   /// The underlying TrexNode that is the actual Part-time Parliament algorithm implementation guarded by this class.
   final TrexNode trexNode;
 
+  final NodeId nodeId;
+
   /// This is the single most dangerous setting in the entire system. It defines if the host application is managing
   /// transactions. In which case you must catch any exceptions and call {@link #crash()}. You must also not forget
   /// to actually commit the journal before sending out any messages. You need to be aware that a SQL commit is not
@@ -52,6 +55,7 @@ public abstract class TrexEngine implements AutoCloseable {
   public TrexEngine(TrexNode trexNode) {
     this.trexNode = trexNode;
     this.hostManagedTransactions = false;
+    this.nodeId = new NodeId(trexNode.nodeIdentifier());
   }
 
   /// Create a new TrexEngine which wraps a TrexNode. If `hostManagedTransactions=true` the
@@ -65,6 +69,7 @@ public abstract class TrexEngine implements AutoCloseable {
   public TrexEngine(TrexNode trexNode,
                     boolean hostManagedTransactions) {
     this.trexNode = trexNode;
+    this.nodeId = new NodeId(trexNode.nodeIdentifier());
     this.hostManagedTransactions = hostManagedTransactions;
     final var clusterSize = trexNode.clusterSize();
     if (clusterSize < 5 && hostManagedTransactions) {
@@ -76,7 +81,7 @@ public abstract class TrexEngine implements AutoCloseable {
 
   /// This method must schedule a call to the timeout method at some point in the future.
   /// It should first clear any existing timeout by calling clearTimeout.
-  /// The timeout should be a random value between a high and low value that is specific to your message latency.
+  /// The timeout should be a random id between a high and low id that is specific to your message latency.
   protected abstract void setRandomTimeout();
 
   /// Reset the timeout for the current node to call calling the timeout method.
@@ -84,7 +89,7 @@ public abstract class TrexEngine implements AutoCloseable {
   protected abstract void clearTimeout();
 
   /// This method must schedule a call to the heartbeat method at some point in the future.
-  /// The heartbeat should be a fixed period which is less than the minimum of the random timeout minimal value.
+  /// The heartbeat should be a fixed period which is less than the minimum of the random timeout minimal id.
   protected abstract void setNextHeartbeat();
 
   /// Create the next accept message for the next selected given command.
@@ -290,6 +295,10 @@ public abstract class TrexEngine implements AutoCloseable {
   @TestOnly
   protected void setLeader() {
     this.trexNode().setLeader();
+  }
+
+  public NodeId nodeId() {
+    return nodeId;
   }
 }
 
