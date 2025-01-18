@@ -98,9 +98,7 @@ public class TrexApp<VALUE, RESULT> {
 
   }
 
-  private List<TrexMessage> createLeaderMessages(VALUE value, UUID uuid) {
-    byte[] valueBytes = valuePickler.serialize(value);
-    Command cmd = new Command(uuid, valueBytes);
+  private List<TrexMessage> createLeaderMessages(Command cmd) {
     return engine.nextLeaderBatchOfMessages(List.of(cmd));
   }
 
@@ -120,15 +118,14 @@ public class TrexApp<VALUE, RESULT> {
     transmitTrexMessages(messages);
   }
 
-  void handleProxyMessage(VALUE value) {
+  void handleProxyMessage(Command cmd) {
     if (!engine.isLeader()) {
-      LOGGER.finer(() -> engine.nodeIdentifier() + " is not leader so is dropping is has received proxied message: " + value);
+      LOGGER.finest(() -> String.format("[Node %d] Not leader, dropping proxy: %s", nodeId.id(), cmd.uuid()));
       return;
     }
-    LOGGER.fine(() -> engine.nodeIdentifier() + " leader is has received proxied message " + value);
+    LOGGER.fine(() -> engine.nodeIdentifier() + " leader is has received proxied message " + cmd.uuid());
     try {
-      UUID uuid = UUIDGenerator.generateUUID();
-      var messages = createLeaderMessages(value, uuid);
+      var messages = createLeaderMessages(cmd);
       transmitTrexMessages(messages);
     } catch (Exception e) {
       LOGGER.severe(() -> engine.nodeIdentifier() + " handleProxyMessage failed: " + e.getMessage());
@@ -141,14 +138,18 @@ public class TrexApp<VALUE, RESULT> {
       responseTracker.track(uuid, future);
 
       if (engine.isLeader()) {
-        var messages = createLeaderMessages(value, uuid);
+        byte[] valueBytes = valuePickler.serialize(value);
+        final var cmd = new Command(uuid, valueBytes);
+        final var messages = createLeaderMessages(cmd);
         LOGGER.fine(() -> engine.nodeIdentifier() + " leader is sending accept messages " + messages);
         transmitTrexMessages(messages);
       } else {
         leaderTracker.currentLeader().ifPresentOrElse(
             leader ->{
               LOGGER.fine(() -> engine.nodeIdentifier() + " "+ engine.trexNode.getRole() + " is proxying cmd messages" + value);
-              networkLayer.send(Channel.PROXY, leader, value);
+              byte[] valueBytes = valuePickler.serialize(value);
+              Command cmd = new Command(uuid, valueBytes);
+              networkLayer.send(Channel.PROXY, leader, cmd);
             },
             () -> {
               var ex = new IllegalStateException("No leader available");
@@ -164,18 +165,23 @@ public class TrexApp<VALUE, RESULT> {
     }
   }
 
-  void upCall(@SuppressWarnings("unused") Long slot, Command cmd) {
+  void upCall(Long slot, Command cmd) {
     try {
       VALUE value = valuePickler.deserialize(cmd.operationBytes());
       RESULT result = serverFunction.apply(value);
+      LOGGER.fine(() -> String.format("[Node %d] upCall for UUID: %s, value: %s, result: %s",
+          nodeId.id(), cmd.uuid(), value, result));
       responseTracker.complete(cmd.uuid(), result);
     } catch (Exception e) {
+      LOGGER.warning(() -> "Failed to process command at slot "+slot+" due to : " + e.getMessage());
       responseTracker.fail(cmd.uuid(), e);
+    } finally {
+      responseTracker.remove(cmd.uuid());
     }
   }
 
   List<TrexMessage> paxosThenUpCall(List<TrexMessage> messages) {
-    LOGGER.fine(() -> engine.nodeIdentifier() + " paxosThenUpCall input: " + messages);
+    LOGGER.finer(() -> engine.nodeIdentifier() + " paxosThenUpCall input: " + messages);
     var result = engine.paxos(messages);
     if (!result.commands().isEmpty()) {
       LOGGER.fine(() -> engine.nodeIdentifier() + " fixed " + result.commands());
@@ -184,7 +190,7 @@ public class TrexApp<VALUE, RESULT> {
           .forEach(entry -> upCall(entry.getKey(), (Command) entry.getValue()));
     }
     final var response = result.messages();
-    LOGGER.fine(() -> engine.nodeIdentifier() + " paxosThenUpCall output: " + response);
+    LOGGER.finer(() -> engine.nodeIdentifier() + " paxosThenUpCall output: " + response);
     return response;
   }
 
@@ -212,6 +218,7 @@ public class TrexApp<VALUE, RESULT> {
     }
   }
 
+  @SuppressWarnings("SameParameterValue")
   @TestOnly
   void setLeader(short i) {
     if( i == engine.nodeIdentifier()) {
