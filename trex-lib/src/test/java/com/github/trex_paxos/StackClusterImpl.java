@@ -1,24 +1,21 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.network.*;
-import org.jetbrains.annotations.NotNull;
 
-import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
 public class StackClusterImpl implements StackService {
-  private static final Logger LOGGER = Logger.getLogger(StackClusterImpl.class.getName());
+  static final Logger LOGGER = Logger.getLogger(StackClusterImpl.class.getName());
 
   private final List<TrexApp<Value, Response>> nodes = new ArrayList<>();
   private final Stack<String> stack = new Stack<>();
-  private volatile boolean running = true;
 
   public static void setLogLevel(Level level) {
     // Configure root logger and handler
@@ -44,9 +41,11 @@ public class StackClusterImpl implements StackService {
   }
 
   public StackClusterImpl() {
-    LOGGER.fine("Initializing StackClusterImpl");
-    InMemoryNetwork sharedNetwork = new InMemoryNetwork("sharedNetwork");
+    this(new InMemoryNetwork("sharedNetwork"));
+  }
 
+  StackClusterImpl(InMemoryNetwork sharedNetwork) {
+    LOGGER.fine("Initializing StackClusterImpl");
     for (short i = 1; i <= 2; i++) {
       final var index = i;
       LOGGER.fine(() -> "Creating node " + index);
@@ -80,7 +79,7 @@ public class StackClusterImpl implements StackService {
                   }
                   case Pop _ -> {
                     if (stack.isEmpty()) {
-                      LOGGER.warning(() -> "Node " + index + " attempted pop on empty stack");
+                      LOGGER.fine(() -> "Node " + index + " attempted pop on empty stack");
                       yield new Response(Optional.of("Stack is empty"));
                     }
                     var item = stack.pop();
@@ -170,7 +169,6 @@ public class StackClusterImpl implements StackService {
 
   public void shutdown() {
     LOGGER.fine("Initiating StackClusterImpl shutdown");
-    running = false;
     nodes.forEach(n -> {
       try {
         n.stop();
@@ -209,68 +207,8 @@ public class StackClusterImpl implements StackService {
   record ChannelAndSubscriber(Channel channel, TrexNetwork.NamedSubscriber subscriber) {
   }
 
-  private static class InMemoryNetwork implements TrexNetwork {
-    // Existing InMemoryNetwork implementation remains unchanged
-    private final List<ChannelAndSubscriber> handlers = new ArrayList<>();
-    private final LinkedBlockingQueue<NetworkMessage> messageQueue = new LinkedBlockingQueue<>();
-    private volatile boolean running = true;
-    private final String networkId;
-
-    public InMemoryNetwork(String networkId) {
-      this.networkId = networkId;
-      LOGGER.fine(() -> "Created InMemoryNetwork: " + networkId);
-    }
-
-    private record NetworkMessage(short nodeId, Channel channel, ByteBuffer data) {
-    }
-
-    @Override
-    public void send(Channel channel, short nodeId, ByteBuffer data) {
-      if (running) {
-        messageQueue.add(new NetworkMessage(nodeId, channel, data));
-      }
-    }
-
-    @Override
-    public void subscribe(Channel channel, NamedSubscriber handler) {
-      ChannelAndSubscriber channelAndSubscriber = new ChannelAndSubscriber(channel, handler);
-      handlers.add(channelAndSubscriber);
-    }
-
-    @Override
-    public void start() {
-      Thread.ofVirtual().name("network-" + networkId).start(() -> {
-        while (running) {
-          try {
-            NetworkMessage msg = messageQueue.poll(100, TimeUnit.MILLISECONDS);
-
-            if (msg != null) {
-              handlers.forEach(h -> {
-                if (h.channel().equals(msg.channel)) {
-                  LOGGER.fine(() -> networkId + " received message on channel " + msg.channel + " from " + msg.nodeId + " delivering to " + h.subscriber().name());
-                  h.subscriber().accept(msg.data);
-                }
-              });
-            }
-          } catch (InterruptedException e) {
-            if (running) {
-              LOGGER.warning(networkId + " message processor interrupted: " + e.getMessage());
-            }
-          }
-        }
-      });
-      LOGGER.info(() -> networkId + " network started with subscribers " + handlers);
-    }
-
-    @Override
-    public void close() {
-      LOGGER.fine(() -> networkId + " network stopping");
-      running = false;
-    }
-  }
-
   public static void main(String[] args) {
-    setLogLevel(Level.FINEST);
+    setLogLevel(Level.INFO);
     StackClusterImpl cluster = new StackClusterImpl();
     cluster.toggleNode();
     try {
