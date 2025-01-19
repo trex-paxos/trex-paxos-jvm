@@ -68,6 +68,7 @@ public class PaxeStackClusterTest {
       PaxeNetwork network,
       boolean isLeader) {
 
+    // FIXME and enable test
     PaxeNetwork networkLayer = null;
 
     TrexNode node = createNode(network.localNode.id());

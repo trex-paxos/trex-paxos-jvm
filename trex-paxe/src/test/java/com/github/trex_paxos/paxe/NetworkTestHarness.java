@@ -31,6 +31,7 @@ public class NetworkTestHarness implements AutoCloseable {
   private volatile boolean closed;
 
   public NetworkTestHarness() {
+    //noinspection SpellCheckingInspection
     this(new ClusterId("test.cluster"), new SRPUtils.Constants(
         "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" +
             "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" +
@@ -60,8 +61,8 @@ public class NetworkTestHarness implements AutoCloseable {
     LOGGER.fine(() -> String.format("Allocated port %d for node %d", port, nodeId));
 
     NodeId id = new NodeId(nodeId);
-    NetworkAddress addr = new NetworkAddress.InetAddress("127.0.0.1", port);
-    addressMap.put(id, addr);
+    NetworkAddress address = new NetworkAddress.InetAddress("127.0.0.1", port);
+    addressMap.put(id, address);
 
     NodeClientSecret nodeSecret = new NodeClientSecret(
         clusterId,
@@ -165,6 +166,7 @@ public class NetworkTestHarness implements AutoCloseable {
       }
 
       try {
+        //noinspection BusyWait
         Thread.sleep(CHANNEL_SELECT_TIMEOUT.toMillis());
       } catch (InterruptedException e) {
         LOGGER.warning(() -> String.format("Key exchange wait interrupted for node %d",
@@ -175,7 +177,7 @@ public class NetworkTestHarness implements AutoCloseable {
     }
 
     LOGGER.warning(() -> String.format("Key exchange timed out for node %d after %d attempts",
-        network.localNode.id(), attempts));
+        network.localNode.id(), attempts.get()));
     throw new IllegalStateException("Key exchange timed out for node: " + network.localNode);
   }
 
