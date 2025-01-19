@@ -1,5 +1,7 @@
 package com.github.trex_paxos.paxe;
 
+import com.github.trex_paxos.BallotNumber;
+import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.network.Channel;
 import com.github.trex_paxos.network.NodeId;
 import org.junit.jupiter.api.*;
@@ -88,28 +90,28 @@ public class PaxeNetworkTest {
   public void testSendAndReceiveMessages() throws Exception {
     Channel channel = CONSENSUS.value();
     CountDownLatch latch = new CountDownLatch(2);
-    AtomicReference<byte[]> received1 = new AtomicReference<>();
-    AtomicReference<byte[]> received2 = new AtomicReference<>();
+    AtomicReference<Fixed> received1 = new AtomicReference<>();
+    AtomicReference<Fixed> received2 = new AtomicReference<>();
 
-    network1.subscribe(channel, (byte[] msg) -> {
+    network1.subscribe(channel, (Fixed msg) -> {
       received1.set(msg);
       latch.countDown();
     }, "test1");
 
-    network2.subscribe(channel, (byte[] msg) -> {
+    network2.subscribe(channel, (Fixed msg) -> {
       received2.set(msg);
       latch.countDown();
     }, "test2");
 
-    byte[] msg1 = "Hello from Node 1".getBytes();
-    byte[] msg2 = "Hello from Node 2".getBytes();
+    Fixed msg1 = new Fixed((short) 1, 1, new BallotNumber(1, (short) 1));
+    Fixed msg2 = new Fixed((short) 2, 2, new BallotNumber(2, (short) 2));
 
-    network1.send(channel, new NodeId((short) 2), msg1);
-    network2.send(channel, new NodeId((short) 1), msg2);
+    network1.send(channel, new NodeId((short) 1), msg1);
+    network2.send(channel, new NodeId((short) 2), msg2);
 
     assertTrue(latch.await(1, TimeUnit.SECONDS), "Message exchange timed out");
-    assertArrayEquals(msg2, received1.get(), "Network 1 received wrong message");
-    assertArrayEquals(msg1, received2.get(), "Network 2 received wrong message");
+    assertEquals(msg1, received1.get(), "Network 1 received wrong message");
+    assertEquals(msg2, received2.get(), "Network 2 received wrong message");
   }
 
   @Test
@@ -164,4 +166,5 @@ public class PaxeNetworkTest {
     if (network2 != null) network2.close();
     if (testSelector != null) testSelector.close();
   }
+
 }

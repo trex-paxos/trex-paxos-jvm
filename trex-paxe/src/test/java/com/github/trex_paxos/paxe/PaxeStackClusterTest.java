@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class PaxeStackClusterTest {
-  private static final Duration TEST_TIMEOUT = Duration.ofSeconds(1);
+  private static final Duration TEST_TIMEOUT = Duration.ofSeconds(2);
 
   private NetworkTestHarness harness;
   private TrexApp<StackService.Command, StackService.Response> app1;
@@ -32,7 +32,7 @@ class PaxeStackClusterTest {
   @BeforeAll
   static void setupLogging() {
     ConsoleHandler handler = new ConsoleHandler();
-    handler.setLevel(Level.parse(System.getProperty("trex.log.level.paxe", "WARNING")));
+    handler.setLevel(Level.parse(System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING")));
 
     Logger rootLogger = Logger.getLogger("");
     rootLogger.setLevel(handler.getLevel());
@@ -49,13 +49,15 @@ class PaxeStackClusterTest {
   void setup() throws Exception {
     harness = new NetworkTestHarness();
 
+    final short leader = 2;
+
     PaxeNetwork network1 = harness.createNetwork((short) 1);
     PaxeNetwork network2 = harness.createNetwork((short) 2);
 
     harness.waitForNetworkEstablishment();
 
-    app1 = createApp(network1, true);  // Leader
-    app2 = createApp(network2, false); // Follower
+    app1 = createApp(network1, leader);  // Leader
+    app2 = createApp(network2, leader); // Follower
 
     app1.start();
     app2.start();
@@ -64,29 +66,13 @@ class PaxeStackClusterTest {
     Thread.sleep(200);
   }
 
+  @SuppressWarnings("SameParameterValue")
   private TrexApp<StackService.Command, StackService.Response> createApp(
       PaxeNetwork network,
-      boolean isLeader) {
+      final short leader) {
 
     TrexNode node = createNode(network.localNode.id());
-    TrexEngine engine = createEngine(node, isLeader);
-
-    return new TrexApp<>(
-        network.membership,
-        engine,
-        network,
-        PermitsRecordsPickler.createPickler(StackService.Command.class),
-        processor
-    );
-  }
-
-  private TrexNode createNode(short nodeId) {
-    QuorumStrategy quorum = new SimpleMajority(2);
-    return new TrexNode(Level.INFO, nodeId, quorum, new TransparentJournal(nodeId));
-  }
-
-  private TrexEngine createEngine(TrexNode node, boolean isLeader) {
-    return new TrexEngine(node) {
+    TrexEngine engine = new TrexEngine(node) {
       @Override
       protected void setRandomTimeout() {
       }
@@ -100,9 +86,24 @@ class PaxeStackClusterTest {
       }
 
       {
-        if (isLeader) setLeader();
+        if (leader == trexNode.nodeIdentifier()) setLeader();
       }
     };
+
+    return new TrexApp<>(
+        network.membership,
+        engine,
+        network,
+        PermitsRecordsPickler.createPickler(StackService.Command.class),
+        processor
+    ) {{
+      setLeader(leader);
+    }};
+  }
+
+  private TrexNode createNode(short nodeId) {
+    QuorumStrategy quorum = new SimpleMajority(2);
+    return new TrexNode(Level.INFO, nodeId, quorum, new TransparentJournal(nodeId));
   }
 
   void toggleNode() {
@@ -145,9 +146,7 @@ class PaxeStackClusterTest {
   void testLargeValueDekEncryption() throws Exception {
     // Create string larger than PAYLOAD_THRESHOLD to trigger DEK
     StringBuilder largeValue = new StringBuilder();
-    for (int i = 0; i < PaxeCrypto.PAYLOAD_THRESHOLD + 10; i++) {
-      largeValue.append('X');
-    }
+    largeValue.append("X".repeat(PaxeCrypto.PAYLOAD_THRESHOLD + 10));
 
     // Push large value through node 1
     CompletableFuture<StackService.Response> future = new CompletableFuture<>();

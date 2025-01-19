@@ -20,7 +20,7 @@ import java.util.function.Supplier;
 import static com.github.trex_paxos.network.SystemChannel.KEY_EXCHANGE;
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
-public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
+public class PaxeNetwork implements NetworkLayer, AutoCloseable {
   private static final int MAX_PACKET_SIZE = 65507; // UDP max size
   private static final int HEADER_SIZE = 8; // from(2) + to(2) + channel(2) + length(2)
 
@@ -171,72 +171,78 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
 
   @Override
   public <T> void broadcast(Supplier<ClusterMembership> membershipSupplier, Channel channel, T msg) {
-    byte[] payload = serializeMessage(channel, msg);
     Collection<NodeId> recipients = membershipSupplier.get().otherNodes(localNode);
-
-    ByteBuffer buffer = broadcastBuffer.get();
-    buffer.clear();
-
-    // Write header template
-    int headerStart = buffer.position();
-    buffer.putShort(localNode.id())    // from
-        .putShort((short) 0)          // to placeholder
-        .putShort(channel.id());     // channel
-
-    int lengthPos = buffer.position();
-    buffer.putShort((short) 0);         // length placeholder
-    int contentStart = buffer.position();
-
-    // Initial encryption
-    byte[] sessionKey = keyManager.sessionKeys.get(recipients.iterator().next());
-    byte[] encrypted = PaxeCrypto.encrypt(payload, sessionKey);
-    buffer.put(encrypted);
-
-    int messageLength = buffer.position() - contentStart;
-    buffer.putShort(lengthPos, (short) messageLength);
-    int totalLength = buffer.position();
-
-// Send to each recipient
+    SessionKeyManager manager = keyManager;
+    NodeId currentNode = localNode;
     for (NodeId recipient : recipients) {
       try {
-        // Update recipient id
-        buffer.putShort(headerStart + 2, recipient.id());
-
-        // If using DEK, encrypt DEK section
-        if (encrypted[0] == PaxeCrypto.Mode.WITH_DEK.flag) {
-          byte[] recipientKey = keyManager.sessionKeys.get(recipient);
-          encryptDekSection(buffer, contentStart, recipientKey);
+        byte[] payload = serializeMessage(channel, msg);
+        byte[] sessionKey = manager.sessionKeys.get(recipient);
+        if (sessionKey == null) {
+          throw new IllegalStateException("No session key for " + recipient);
         }
 
-        // Send
-        buffer.position(0).limit(totalLength);
+        // First encrypt with DEK - this is done once per broadcast
+        byte[] baseEncrypted = PaxeCrypto.encrypt(payload, sessionKey);
+        ByteBuffer buffer = ByteBuffer.allocate(HEADER_SIZE + baseEncrypted.length);
+
+        // Write header
+        buffer.putShort(currentNode.id())
+            .putShort(recipient.id())
+            .putShort(channel.id())
+            .putShort((short) baseEncrypted.length)
+            .put(baseEncrypted);
+
+        // Position after header
+        buffer.position(HEADER_SIZE);
+
+        // Encrypt DEK section for this recipient
+        encryptDekSection(buffer, HEADER_SIZE, recipient);
+
+        buffer.flip();
         SocketAddress address = resolveAddress(recipient);
         while (buffer.hasRemaining()) {
           this.channel.send(buffer, address);
         }
-
       } catch (IOException e) {
-        LOGGER.warning("Failed to send to " + recipient + ": " + e.getMessage());
+        LOGGER.warning(() -> String.format("Failed to send to %s: %s",
+            recipient, e.getMessage()));
       }
     }
   }
 
-  private void encryptDekSection(ByteBuffer buffer, int contentStart, byte[] newKey) {
-    // Skip flags byte
+  /**
+   * Encrypts DEK with recipient's session key. The message payload remains encrypted with original DEK,
+   * only the DEK encryption changes per recipient.
+   * Protocol structure:
+   * [flags:1][encrypted_dek:44][encrypted_payload]
+   *
+   * @param buffer       Message buffer containing DEK and payload
+   * @param contentStart Start of encrypted content
+   * @param toNodeId    Recipient node ID for session key lookup
+   */
+  private void encryptDekSection(ByteBuffer buffer, int contentStart, NodeId toNodeId) {
+    // Skip mode flag byte
     int dekStart = contentStart + 1;
 
-    // Extract current DEK section
-    byte[] encryptedSection = new byte[PaxeCrypto.DEK_SECTION_SIZE];
+    // Get session key for recipient
+    byte[] sessionKey = keyManager.sessionKeys.get(toNodeId);
+    if (sessionKey == null) {
+      throw new IllegalStateException("No session key for node: " + toNodeId);
+    }
+
+    // Extract DEK section
+    byte[] dek = new byte[PaxeCrypto.DEK_SIZE];
     int savedPosition = buffer.position();
     buffer.position(dekStart);
-    buffer.get(encryptedSection);
+    buffer.get(dek);
 
-    // encrypt with new session key
-    byte[] encrypted = PaxeCrypto.reencryptDek(encryptedSection, null, newKey);
+    // Encrypt DEK with recipient's session key
+    byte[] encryptedDek = PaxeCrypto.encrypt(dek, sessionKey);
 
-    // Write back
+    // Write encrypted DEK back to buffer
     buffer.position(dekStart);
-    buffer.put(encrypted, 0, PaxeCrypto.DEK_SECTION_SIZE);
+    buffer.put(encryptedDek, 0, PaxeCrypto.DEK_SECTION_SIZE);
     buffer.position(savedPosition);
   }
 
