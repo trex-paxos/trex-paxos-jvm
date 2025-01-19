@@ -1,7 +1,6 @@
 package com.github.trex_paxos.paxe;
 
 import com.github.trex_paxos.network.*;
-import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -12,8 +11,11 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+
+import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
 public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
   private static final int MAX_PACKET_SIZE = 65507; // UDP max size
@@ -30,8 +32,11 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
   volatile boolean running;
   private Thread receiver;
 
-  record DirectBuffer(ByteBuffer sendBuffer, ByteBuffer receiveBuffer) {}
-  record PendingMessage(Channel channel, byte[] serializedData) {}
+  record DirectBuffer(ByteBuffer sendBuffer, ByteBuffer receiveBuffer) {
+  }
+
+  record PendingMessage(Channel channel, byte[] serializedData) {
+  }
 
   private final Map<NodeId, Queue<PendingMessage>> pendingMessages = new ConcurrentHashMap<>();
   private static final int MAX_BUFFERED_BYTES = 65000;
@@ -82,29 +87,29 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
       LOGGER.finest(() -> String.format("Encrypting message for %d, key %s", to.id(),
           finalKey != null ? "present" : "missing"));
       if (key == null) {
-        // Get handshake message
+        // Buffer message
+        byte[] serialized = serializeMessage(msg);
+        Queue<PendingMessage> queue = pendingMessages.computeIfAbsent(to, k -> new ConcurrentLinkedQueue<>());
+        int queueBytes = queue.stream().mapToInt(m -> m.serializedData().length).sum();
+
+        LOGGER.finest(() -> String.format("Buffering %d bytes for %s (total %d)", serialized.length, to, queueBytes));
+
+        if (queueBytes + serialized.length > MAX_BUFFERED_BYTES) {
+          throw new IllegalStateException("Message buffer full for " + to);
+        }
+        queue.add(new PendingMessage(channel, serialized));
+
+        // Initiate handshake
         var handshake = keyManager.initiateHandshake(to);
         if (handshake.isPresent()) {
-          // Send handshake on KEY_EXCHANGE channel
           send(Channel.KEY_EXCHANGE, to, handshake.get());
         }
-        // Wait briefly for key establishment
-        try {
-          // FIXME should not do this as node may be down
-          Thread.sleep(10);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-        }
-        // Retry getting key
-        key = keyManager.sessionKeys.get(to);
-        if (key == null) {
-          throw new IllegalStateException("Failed to establish session key with " + to);
-        }
+        return;
       }
       payload = PaxeCrypto.encrypt(serializeMessage(msg), key);
     }
 
-    buffer.putShort((short)payload.length);
+    buffer.putShort((short) payload.length);
     buffer.put(payload);
     buffer.flip();
 
@@ -171,6 +176,7 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
       SocketAddress sender = channel.receive(buffer);
       if (sender == null) continue;
 
+
       buffer.flip();
       if (buffer.remaining() < HEADER_SIZE) {
         LOGGER.finest(() -> String.format("Received undersized packet from %s: %d bytes", sender, buffer.remaining()));
@@ -192,6 +198,8 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
       }
 
       Channel msgChannel = new Channel(channelId);
+
+      LOGGER.finest(() -> String.format("Processing message from %d on channel %s", fromId, msgChannel));
 
       // Extract payload
       byte[] payload = new byte[length];
@@ -238,7 +246,7 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
   }
 
   private byte[] serializeMessage(Object msg) {
-    return ((byte[])msg);
+    return ((byte[]) msg);
   }
 
   private SocketAddress resolveAddress(NodeId to) {
