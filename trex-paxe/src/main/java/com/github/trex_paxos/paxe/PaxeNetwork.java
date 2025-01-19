@@ -1,121 +1,105 @@
 package com.github.trex_paxos.paxe;
 
-import com.github.trex_paxos.Pickle;
-import com.github.trex_paxos.Pickler;
 import com.github.trex_paxos.network.*;
+import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
-import javax.crypto.Cipher;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.nio.ByteBuffer;
-import java.security.GeneralSecurityException;
-import java.util.Map;
+import java.nio.channels.DatagramChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
+public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
+  private static final int MAX_PACKET_SIZE = 65507; // UDP max size
+  private static final int HEADER_SIZE = 8; // from(2) + to(2) + channel(2) + length(2)
 
-public final class PaxeNetwork implements NetworkLayer {
   final SessionKeyManager keyManager;
   final NodeId localNode;
-  private final DatagramSocket socket;
-  private final ByteBuffer receiveBuffer;
-  private final Map<Integer, ChannelHandler<?>> handlers;
+  final DatagramChannel channel;
+  final Selector selector;
+  private final Map<Channel, List<Consumer<byte[]>>> subscribers;
+  private final Map<Channel, DirectBuffer> channelBuffers;
   final Supplier<ClusterMembership> membership;
 
   volatile boolean running;
   private Thread receiver;
 
-  private record ChannelHandler<T>(Channel channel, Consumer<T> handler) {}
+  private record DirectBuffer(ByteBuffer sendBuffer, ByteBuffer receiveBuffer) {}
 
-  private final Map<Channel,Pickler<?>> picklerMap = Map.of(
-      Channel.CONSENSUS, PickleMsg.instance,
-      Channel.PROXY, Pickle.instance,
-      Channel.KEY_EXCHANGE, Pickle.instance);
-
-  public PaxeNetwork(SessionKeyManager keyManager, int port, NodeId local, Supplier<ClusterMembership> membership) throws IOException {
+  public PaxeNetwork(SessionKeyManager keyManager, int port, NodeId local,
+                     Supplier<ClusterMembership> membership) throws IOException {
     this.keyManager = keyManager;
     this.localNode = local;
-    this.socket = new DatagramSocket(port);
-    this.receiveBuffer = ByteBuffer.allocateDirect(65535);
-    this.handlers = new ConcurrentHashMap<>();
     this.membership = membership;
-  }
+    this.subscribers = new ConcurrentHashMap<>();
+    this.channelBuffers = new HashMap<>();
 
-  public <T> void subscribe(Channel channel, Consumer<T> handler) {
-    handlers.put((int)channel.id(), new ChannelHandler<>(channel, handler));
+    // Initialize NIO components
+    this.channel = DatagramChannel.open();
+    this.channel.configureBlocking(false);
+    this.channel.socket().bind(new InetSocketAddress(port));
+    this.selector = Selector.open();
+    this.channel.register(selector, SelectionKey.OP_READ);
+
+    // Pre-allocate direct buffers for each channel type
+    for (Channel c : Arrays.asList(Channel.CONSENSUS, Channel.PROXY, Channel.KEY_EXCHANGE)) {
+      channelBuffers.put(c, new DirectBuffer(
+          ByteBuffer.allocateDirect(MAX_PACKET_SIZE),
+          ByteBuffer.allocateDirect(MAX_PACKET_SIZE)
+      ));
+    }
   }
 
   @Override
   public <T> void send(Channel channel, NodeId to, T msg) {
+    DirectBuffer buffers = channelBuffers.get(channel);
+    ByteBuffer buffer = buffers.sendBuffer();
+    buffer.clear();
 
-    Pickler<T> pickler = (Pickler<T>) picklerMap.get(channel);
-    byte[] payload = pickler.serialize(msg);
-    NetworkAddress address = membership.get().addressFor(to).orElseThrow();
-    byte[] header = PaxeHeader.toBytes(localNode.id(), to.id(), channel.id(), payload.length);
+    // Write header
+    buffer.putShort(localNode.id());
+    buffer.putShort(to.id());
+    buffer.putShort(channel.id());
 
+    byte[] payload;
     if (channel == Channel.KEY_EXCHANGE) {
-      try {
-        sendDatagram(address, header, payload);
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
+      payload = serializeKeyExchange(msg);
     } else {
-      byte[] key = keyManager.sessionKeys.get(to);
-      if (key == null) {
-        keyManager.initiateHandshake(to);
-        return;
-      }
-      byte[] encrypted = null;
-      try {
-        encrypted = encrypt(key, payload);
-      } catch (GeneralSecurityException e) {
-        throw new RuntimeException(e);
-      }
-      try {
-        sendDatagram(address, header, encrypted);
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
+      payload = serializeAndEncrypt(msg, to);
     }
-  }
 
-  public <T> void broadcast(Channel channel, T msg) throws IOException, GeneralSecurityException {
-    for (NodeId node : membership.get().otherNodes(localNode)) {
-      send(channel, node, msg);
+    buffer.putShort((short)payload.length);
+    buffer.put(payload);
+    buffer.flip();
+
+    try {
+      SocketAddress address = resolveAddress(to);
+      while (buffer.hasRemaining()) {
+        this.channel.send(buffer, address);
+      }
+    } catch (IOException e) {
+      LOGGER.warning("Failed to send message: " + e.getMessage());
     }
-  }
-
-  private void sendDatagram(NetworkAddress address, byte[] header, byte[] payload) throws IOException {
-    byte[] combined = new byte[header.length + payload.length];
-    System.arraycopy(header, 0, combined, 0, header.length);
-    System.arraycopy(payload, 0, combined, header.length, payload.length);
-
-    DatagramPacket packet = new DatagramPacket(
-        combined, combined.length,
-        InetAddress.getByName(address.hostString()),
-        address.port()
-    );
-    socket.send(packet);
   }
 
   @Override
   public <T> void subscribe(Channel channel, Consumer<T> handler, String name) {
-
+    subscribers.computeIfAbsent(channel, k -> new ArrayList<>())
+        .add((Consumer<byte[]>) handler);
   }
 
   @Override
   public <T> void broadcast(Supplier<ClusterMembership> membershipSupplier, Channel channel, T msg) {
-
+    membershipSupplier.get().otherNodes(localNode).forEach(node -> send(channel, node, msg));
   }
 
+  @Override
   public void start() {
     if (running) return;
     running = true;
@@ -125,29 +109,20 @@ public final class PaxeNetwork implements NetworkLayer {
   }
 
   private void receiveLoop() {
-    int[] headerValues = new int[4];
-    DatagramPacket packet = new DatagramPacket(receiveBuffer.array(), receiveBuffer.capacity());
-
     while (running) {
       try {
-        socket.receive(packet);
-        if (packet.getLength() < 8) continue;
+        if (selector.select() > 0) {
+          Iterator<SelectionKey> selectedKeys = selector.selectedKeys().iterator();
+          while (selectedKeys.hasNext()) {
+            SelectionKey key = selectedKeys.next();
+            selectedKeys.remove();
 
-        byte[] data = packet.getData();
-        PaxeHeader.unpack(data, headerValues);
-        int fromNode = headerValues[0];
-        int toNode = headerValues[1];
-        int channelId = headerValues[2];
-        int length = headerValues[3];
-
-        if (toNode != localNode.id()) continue;
-
-        ChannelHandler<?> handler = handlers.get(channelId);
-        if (handler == null) continue;
-
-        processMessage(handler, data, fromNode, length);
-
-      } catch (Exception e) {
+            if (key.isReadable()) {
+              readFromChannel();
+            }
+          }
+        }
+      } catch (IOException e) {
         if (running) {
           LOGGER.warning("Error in receive loop: " + e.getMessage());
         }
@@ -155,60 +130,109 @@ public final class PaxeNetwork implements NetworkLayer {
     }
   }
 
-  @SuppressWarnings("unchecked")
-  private <T> void processMessage(ChannelHandler<T> handler, byte[] data, int fromNode, int length)
-      throws GeneralSecurityException {
-    byte[] payload = new byte[length];
-    System.arraycopy(data, 8, payload, 0, length);
+  private void readFromChannel() throws IOException {
+    // Rotate through receive buffers for each channel
+    for (Map.Entry<Channel, DirectBuffer> entry : channelBuffers.entrySet()) {
+      ByteBuffer buffer = entry.getValue().receiveBuffer();
+      buffer.clear();
 
-    if (handler.channel() != Channel.KEY_EXCHANGE) {
-      byte[] key = keyManager.sessionKeys.get(new NodeId((short) fromNode));
-      if (key == null) return;
-      payload = decrypt(key, payload);
+      SocketAddress sender = channel.receive(buffer);
+      if (sender == null) continue;
+
+      buffer.flip();
+      if (buffer.remaining() < HEADER_SIZE) continue;
+
+      // Read header
+      short fromId = buffer.getShort();
+      short toId = buffer.getShort();
+      short channelId = buffer.getShort();
+      short length = buffer.getShort();
+
+      if (toId != localNode.id()) continue;
+
+      Channel msgChannel = new Channel(channelId);
+
+      // Extract payload
+      byte[] payload = new byte[length];
+      buffer.get(payload);
+
+      if (msgChannel == Channel.KEY_EXCHANGE) {
+        handleKeyExchange(fromId, payload);
+      } else {
+        // Decrypt and dispatch to subscribers
+        byte[] decrypted = decrypt(payload, new NodeId(fromId));
+        dispatchToSubscribers(msgChannel, decrypted);
+      }
     }
+  }
 
-    Pickler<T> pickler = (Pickler<T>) picklerMap.get(handler.channel());
-    T msg = pickler.deserialize(payload);
-    handler.handler().accept(msg);
+  private void dispatchToSubscribers(Channel channel, byte[] msg) {
+    List<Consumer<byte[]>> handlers = subscribers.get(channel);
+    if (handlers != null) {
+      for (Consumer<byte[]> handler : handlers) {
+        handler.accept(msg);
+      }
+    }
+  }
+
+  private byte[] serializeAndEncrypt(Object msg, NodeId to) {
+    // Get session key and encrypt
+    byte[] key = keyManager.sessionKeys.get(to);
+    if (key == null) {
+      keyManager.initiateHandshake(to);
+      throw new IllegalStateException("No session key available for " + to);
+    }
+    return PaxeCrypto.encrypt(serializeMessage(msg), key);
+  }
+
+  private byte[] decrypt(byte[] data, NodeId from) {
+    byte[] key = keyManager.sessionKeys.get(from);
+    if (key == null) {
+      throw new IllegalStateException("No session key available from " + from);
+    }
+    return PaxeCrypto.decrypt(data, key);
+  }
+
+  private void handleKeyExchange(short fromId, byte[] payload) {
+    SessionKeyManager.KeyMessage msg = PickleHandshake.unpickle(payload);
+    keyManager.handleMessage(msg);
+  }
+
+  private byte[] serializeKeyExchange(Object msg) {
+    return PickleHandshake.pickle((SessionKeyManager.KeyMessage)msg);
+  }
+
+  private byte[] serializeMessage(Object msg) {
+    return ((byte[])msg);
+  }
+
+  private SocketAddress resolveAddress(NodeId to) {
+    NetworkAddress addr = membership.get().addressFor(to)
+        .orElseThrow(() -> new IllegalStateException("No address for " + to));
+    return new InetSocketAddress(addr.hostString(), addr.port());
   }
 
   @Override
   public void close() {
     running = false;
+    if (selector != null) {
+      selector.wakeup();
+      try {
+        selector.close();
+      } catch (IOException e) {
+        LOGGER.warning("Error closing selector: " + e.getMessage());
+      }
+    }
+    if (channel != null) {
+      try {
+        channel.close();
+      } catch (IOException e) {
+        LOGGER.warning("Error closing channel: " + e.getMessage());
+      }
+    }
     if (receiver != null) {
       receiver.interrupt();
       receiver = null;
     }
-    socket.close();
-  }
-
-  private byte[] encrypt(byte[] key, byte[] data) throws GeneralSecurityException {
-    var nonce = new byte[12];
-    ThreadLocalRandom.current().nextBytes(nonce);
-
-    var cipher = Cipher.getInstance("AES/GCM/NoPadding");
-    var gcmSpec = new GCMParameterSpec(128, nonce);
-    cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), gcmSpec);
-
-    var ciphertext = cipher.doFinal(data);
-    var result = new byte[nonce.length + ciphertext.length];
-    System.arraycopy(nonce, 0, result, 0, nonce.length);
-    System.arraycopy(ciphertext, 0, result, nonce.length, ciphertext.length);
-
-    return result;
-  }
-
-  private byte[] decrypt(byte[] key, byte[] data) throws GeneralSecurityException {
-    var nonce = new byte[12];
-    System.arraycopy(data, 0, nonce, 0, nonce.length);
-
-    var cipher = Cipher.getInstance("AES/GCM/NoPadding");
-    var gcmSpec = new GCMParameterSpec(128, nonce);
-    cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), gcmSpec);
-
-    var ciphertext = new byte[data.length - nonce.length];
-    System.arraycopy(data, nonce.length, ciphertext, 0, ciphertext.length);
-
-    return cipher.doFinal(ciphertext);
   }
 }
