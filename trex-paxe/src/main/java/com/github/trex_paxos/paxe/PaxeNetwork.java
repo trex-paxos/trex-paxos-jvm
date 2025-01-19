@@ -1,5 +1,7 @@
 package com.github.trex_paxos.paxe;
 
+import com.github.trex_paxos.Pickle;
+import com.github.trex_paxos.Pickler;
 import com.github.trex_paxos.network.*;
 
 import java.io.IOException;
@@ -26,9 +28,10 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
   final NodeId localNode;
   final DatagramChannel channel;
   final Selector selector;
-  private final Map<Channel, List<Consumer<byte[]>>> subscribers;
+  private final Map<Channel, List<Consumer<?>>> subscribers;
   private final Map<Channel, DirectBuffer> channelBuffers;
   final Supplier<ClusterMembership> membership;
+  private final Map<Channel, Pickler<?>> picklers;
 
   volatile boolean running;
   private Thread receiver;
@@ -40,13 +43,47 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
   }
 
   private final Map<NodeId, Queue<PendingMessage>> pendingMessages = new ConcurrentHashMap<>();
-  private static final int MAX_BUFFERED_BYTES = 65000;
+  private static final int MAX_BUFFERED_BYTES = 64240; // 44 * 1460 which is IPv6 MTU
 
-  public PaxeNetwork(SessionKeyManager keyManager, int port, NodeId local,
-                     Supplier<ClusterMembership> membership) throws IOException {
+  public static class Builder {
+    private final Map<Channel, Pickler<?>> picklers = new HashMap<>();
+    private final SessionKeyManager keyManager;
+    private final int port;
+    private final NodeId local;
+    private final Supplier<ClusterMembership> membership;
+
+    public <T> Builder addChannel(Channel channel, Pickler<T> pickler) {
+      Objects.requireNonNull(channel, "Channel cannot be null");
+      Objects.requireNonNull(pickler, "Pickler cannot be null");
+      picklers.put(channel, pickler);
+      return this;
+    }
+
+    public Builder(SessionKeyManager keyManager, int port, NodeId local,
+                   Supplier<ClusterMembership> membership) {
+      Objects.requireNonNull(keyManager, "Key manager cannot be null");
+      Objects.requireNonNull(local, "Local node ID cannot be null");
+      Objects.requireNonNull(membership, "Membership supplier cannot be null");
+      this.keyManager = keyManager;
+      this.port = port;
+      this.local = local;
+      this.membership = membership;
+      picklers.put(SystemChannel.CONSENSUS.value(), PickleMsg.instance);
+      picklers.put(SystemChannel.PROXY.value(), Pickle.instance);
+    }
+
+    public PaxeNetwork build() throws IOException {
+      return new PaxeNetwork(keyManager, port, local, membership, picklers);
+    }
+  }
+
+  PaxeNetwork(SessionKeyManager keyManager, int port, NodeId local,
+              Supplier<ClusterMembership> membership,
+              Map<Channel, Pickler<?>> picklers) throws IOException {
     this.keyManager = keyManager;
     this.localNode = local;
     this.membership = membership;
+    this.picklers = Map.copyOf(picklers);
     this.subscribers = new ConcurrentHashMap<>();
     this.channelBuffers = new HashMap<>();
 
@@ -88,7 +125,7 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
           key != null ? "present" : "missing"));
       if (key == null) {
         // Buffer message
-        byte[] serialized = serializeMessage(msg);
+        byte[] serialized = serializeMessage(channel, msg);
         Queue<PendingMessage> queue = pendingMessages.computeIfAbsent(to, _ -> new ConcurrentLinkedQueue<>());
         int queueBytes = queue.stream().mapToInt(m -> m.serializedData().length).sum();
 
@@ -104,7 +141,7 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
         handshake.ifPresent(keyMessage -> send(KEY_EXCHANGE.value(), to, keyMessage));
         return;
       }
-      payload = PaxeCrypto.encrypt(serializeMessage(msg), key);
+      payload = PaxeCrypto.encrypt(serializeMessage(channel, msg), key);
     }
 
     buffer.putShort((short) payload.length);
@@ -123,16 +160,84 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
     }
   }
 
-  @SuppressWarnings("unchecked")
   @Override
   public <T> void subscribe(Channel channel, Consumer<T> handler, String name) {
     subscribers.computeIfAbsent(channel, _ -> new ArrayList<>())
-        .add((Consumer<byte[]>) handler);
+        .add(handler);
   }
+
+  private final ThreadLocal<ByteBuffer> broadcastBuffer = ThreadLocal.withInitial(() ->
+      ByteBuffer.allocateDirect(MAX_PACKET_SIZE));
 
   @Override
   public <T> void broadcast(Supplier<ClusterMembership> membershipSupplier, Channel channel, T msg) {
-    membershipSupplier.get().otherNodes(localNode).forEach(node -> send(channel, node, msg));
+    byte[] payload = serializeMessage(channel, msg);
+    Collection<NodeId> recipients = membershipSupplier.get().otherNodes(localNode);
+
+    ByteBuffer buffer = broadcastBuffer.get();
+    buffer.clear();
+
+    // Write header template
+    int headerStart = buffer.position();
+    buffer.putShort(localNode.id())    // from
+        .putShort((short) 0)          // to placeholder
+        .putShort(channel.id());     // channel
+
+    int lengthPos = buffer.position();
+    buffer.putShort((short) 0);         // length placeholder
+    int contentStart = buffer.position();
+
+    // Initial encryption
+    byte[] sessionKey = keyManager.sessionKeys.get(recipients.iterator().next());
+    byte[] encrypted = PaxeCrypto.encrypt(payload, sessionKey);
+    buffer.put(encrypted);
+
+    int messageLength = buffer.position() - contentStart;
+    buffer.putShort(lengthPos, (short) messageLength);
+    int totalLength = buffer.position();
+
+// Send to each recipient
+    for (NodeId recipient : recipients) {
+      try {
+        // Update recipient id
+        buffer.putShort(headerStart + 2, recipient.id());
+
+        // If using DEK, encrypt DEK section
+        if (encrypted[0] == PaxeCrypto.Mode.WITH_DEK.flag) {
+          byte[] recipientKey = keyManager.sessionKeys.get(recipient);
+          encryptDekSection(buffer, contentStart, recipientKey);
+        }
+
+        // Send
+        buffer.position(0).limit(totalLength);
+        SocketAddress address = resolveAddress(recipient);
+        while (buffer.hasRemaining()) {
+          this.channel.send(buffer, address);
+        }
+
+      } catch (IOException e) {
+        LOGGER.warning("Failed to send to " + recipient + ": " + e.getMessage());
+      }
+    }
+  }
+
+  private void encryptDekSection(ByteBuffer buffer, int contentStart, byte[] newKey) {
+    // Skip flags byte
+    int dekStart = contentStart + 1;
+
+    // Extract current DEK section
+    byte[] encryptedSection = new byte[PaxeCrypto.DEK_SECTION_SIZE];
+    int savedPosition = buffer.position();
+    buffer.position(dekStart);
+    buffer.get(encryptedSection);
+
+    // encrypt with new session key
+    byte[] encrypted = PaxeCrypto.reencryptDek(encryptedSection, null, newKey);
+
+    // Write back
+    buffer.position(dekStart);
+    buffer.put(encrypted, 0, PaxeCrypto.DEK_SECTION_SIZE);
+    buffer.position(savedPosition);
   }
 
   @Override
@@ -166,6 +271,7 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
     }
   }
 
+  // FIXME this should be biased towards processing messages on the key exchange channel, then the consensus channel
   private void readFromChannel() throws IOException {
     // Rotate through receive buffers for each channel
     for (Map.Entry<Channel, DirectBuffer> entry : channelBuffers.entrySet()) {
@@ -219,11 +325,18 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
     }
   }
 
-  private void dispatchToSubscribers(Channel channel, byte[] msg) {
-    List<Consumer<byte[]>> handlers = subscribers.get(channel);
+  private void dispatchToSubscribers(Channel channel, byte[] bytes) {
+    Pickler<?> pickler = picklers.get(channel);
+    if (pickler == null) {
+      LOGGER.warning(() -> "No pickler for channel: " + channel);
+      return;
+    }
+    final var msg = pickler.deserialize(bytes);
+    List<Consumer<?>> handlers = subscribers.get(channel);
     if (handlers != null) {
-      for (Consumer<byte[]> handler : handlers) {
-        handler.accept(msg);
+      for (Consumer<?> handler : handlers) {
+        //noinspection unchecked
+        ((Consumer<Object>) handler).accept(msg);
       }
     }
   }
@@ -243,8 +356,13 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
     keyManager.handleMessage(msg);
   }
 
-  private byte[] serializeMessage(Object msg) {
-    return ((byte[]) msg);
+  private byte[] serializeMessage(Channel channel, Object msg) {
+    LOGGER.finest(() -> String.format("Serializing message of type: %s", msg.getClass().getName()));
+    Pickler<?> pickler = picklers.get(channel);
+    if (pickler == null) {
+      throw new IllegalStateException("No pickler for channel: " + channel);
+    }
+    return ((Pickler<Object>) pickler).serialize(msg);
   }
 
   private SocketAddress resolveAddress(NodeId to) {
