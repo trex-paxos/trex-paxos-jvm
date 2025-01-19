@@ -30,7 +30,11 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
   volatile boolean running;
   private Thread receiver;
 
-  private record DirectBuffer(ByteBuffer sendBuffer, ByteBuffer receiveBuffer) {}
+  record DirectBuffer(ByteBuffer sendBuffer, ByteBuffer receiveBuffer) {}
+  record PendingMessage(Channel channel, byte[] serializedData) {}
+
+  private final Map<NodeId, Queue<PendingMessage>> pendingMessages = new ConcurrentHashMap<>();
+  private static final int MAX_BUFFERED_BYTES = 65000;
 
   public PaxeNetwork(SessionKeyManager keyManager, int port, NodeId local,
                      Supplier<ClusterMembership> membership) throws IOException {
@@ -58,6 +62,7 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
 
   @Override
   public <T> void send(Channel channel, NodeId to, T msg) {
+    LOGGER.finest(() -> String.format("Sending message on channel %s to %s", channel, to));
     DirectBuffer buffers = channelBuffers.get(channel);
     ByteBuffer buffer = buffers.sendBuffer();
     buffer.clear();
@@ -69,9 +74,34 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
 
     byte[] payload;
     if (channel == Channel.KEY_EXCHANGE) {
-      payload = serializeKeyExchange(msg);
+      LOGGER.finest(() -> "Processing key exchange message");
+      payload = PickleHandshake.pickle((SessionKeyManager.KeyMessage) msg);
     } else {
-      payload = serializeAndEncrypt(msg, to);
+      byte[] key = keyManager.sessionKeys.get(to);
+      byte[] finalKey = key;
+      LOGGER.finest(() -> String.format("Encrypting message for %d, key %s", to.id(),
+          finalKey != null ? "present" : "missing"));
+      if (key == null) {
+        // Get handshake message
+        var handshake = keyManager.initiateHandshake(to);
+        if (handshake.isPresent()) {
+          // Send handshake on KEY_EXCHANGE channel
+          send(Channel.KEY_EXCHANGE, to, handshake.get());
+        }
+        // Wait briefly for key establishment
+        try {
+          // FIXME should not do this as node may be down
+          Thread.sleep(10);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+        // Retry getting key
+        key = keyManager.sessionKeys.get(to);
+        if (key == null) {
+          throw new IllegalStateException("Failed to establish session key with " + to);
+        }
+      }
+      payload = PaxeCrypto.encrypt(serializeMessage(msg), key);
     }
 
     buffer.putShort((short)payload.length);
@@ -81,10 +111,12 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
     try {
       SocketAddress address = resolveAddress(to);
       while (buffer.hasRemaining()) {
-        this.channel.send(buffer, address);
+        int sent = this.channel.send(buffer, address);
+        LOGGER.finest(() -> String.format("Sent %d bytes to %s", sent, address));
       }
     } catch (IOException e) {
-      LOGGER.warning("Failed to send message: " + e.getMessage());
+      LOGGER.warning(() -> String.format("Failed to send message to %s: %s", to, e.getMessage()));
+      throw new RuntimeException(e);
     }
   }
 
@@ -140,7 +172,10 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
       if (sender == null) continue;
 
       buffer.flip();
-      if (buffer.remaining() < HEADER_SIZE) continue;
+      if (buffer.remaining() < HEADER_SIZE) {
+        LOGGER.finest(() -> String.format("Received undersized packet from %s: %d bytes", sender, buffer.remaining()));
+        continue;
+      }
 
       // Read header
       short fromId = buffer.getShort();
@@ -148,7 +183,13 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
       short channelId = buffer.getShort();
       short length = buffer.getShort();
 
-      if (toId != localNode.id()) continue;
+      LOGGER.finest(() -> String.format("Read packet: from=%d, to=%d, channel=%s, len=%d",
+          fromId, toId, Channel.getSystemChannelName(channelId), length));
+
+      if (toId != localNode.id()) {
+        LOGGER.finest(() -> "Packet not for us, dropping");
+        continue;
+      }
 
       Channel msgChannel = new Channel(channelId);
 
@@ -157,11 +198,17 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
       buffer.get(payload);
 
       if (msgChannel == Channel.KEY_EXCHANGE) {
+        LOGGER.finest(() -> String.format("Processing key exchange from %d", fromId));
         handleKeyExchange(fromId, payload);
       } else {
-        // Decrypt and dispatch to subscribers
-        byte[] decrypted = decrypt(payload, new NodeId(fromId));
-        dispatchToSubscribers(msgChannel, decrypted);
+        try {
+          byte[] decrypted = decrypt(payload, new NodeId(fromId));
+          LOGGER.finest(() -> String.format("Dispatching %d byte message from %d on channel %s",
+              decrypted.length, fromId, msgChannel));
+          dispatchToSubscribers(msgChannel, decrypted);
+        } catch (Exception e) {
+          LOGGER.warning(() -> String.format("Failed to process message from %d: %s", fromId, e.getMessage()));
+        }
       }
     }
   }
@@ -175,16 +222,6 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
     }
   }
 
-  private byte[] serializeAndEncrypt(Object msg, NodeId to) {
-    // Get session key and encrypt
-    byte[] key = keyManager.sessionKeys.get(to);
-    if (key == null) {
-      keyManager.initiateHandshake(to);
-      throw new IllegalStateException("No session key available for " + to);
-    }
-    return PaxeCrypto.encrypt(serializeMessage(msg), key);
-  }
-
   private byte[] decrypt(byte[] data, NodeId from) {
     byte[] key = keyManager.sessionKeys.get(from);
     if (key == null) {
@@ -193,13 +230,11 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
     return PaxeCrypto.decrypt(data, key);
   }
 
-  private void handleKeyExchange(short fromId, byte[] payload) {
+  /// For key exchange, deserialize without encryption
+  void handleKeyExchange(short fromId, byte[] payload) {
+    LOGGER.finest(() -> String.format("Processing key exchange message from %d", fromId));
     SessionKeyManager.KeyMessage msg = PickleHandshake.unpickle(payload);
     keyManager.handleMessage(msg);
-  }
-
-  private byte[] serializeKeyExchange(Object msg) {
-    return PickleHandshake.pickle((SessionKeyManager.KeyMessage)msg);
   }
 
   private byte[] serializeMessage(Object msg) {

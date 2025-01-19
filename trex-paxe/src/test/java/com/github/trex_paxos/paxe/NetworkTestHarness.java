@@ -10,13 +10,14 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
 public class NetworkTestHarness implements AutoCloseable {
-  private static final Duration KEY_EXCHANGE_TIMEOUT = Duration.ofSeconds(5);
-  private static final Duration CHANNEL_SELECT_TIMEOUT = Duration.ofMillis(250);
+  private static final Duration KEY_EXCHANGE_TIMEOUT = Duration.ofSeconds(1);
+  private static final Duration CHANNEL_SELECT_TIMEOUT = Duration.ofMillis(100);
 
   private final List<PaxeNetwork> networks = new ArrayList<>();
   private final ClusterId clusterId;
@@ -42,28 +43,33 @@ public class NetworkTestHarness implements AutoCloseable {
   }
 
   public PaxeNetwork createNetwork(short nodeId) throws Exception {
-    if (closed) throw new IllegalStateException("Harness is closed");
+    if (closed) {
+      LOGGER.warning("Attempt to create network after harness closed");
+      throw new IllegalStateException("Harness is closed");
+    }
 
-    // Get ephemeral port from channel
+    LOGGER.fine(() -> String.format("Creating network node %d", nodeId));
     DatagramChannel tempChannel = DatagramChannel.open();
     tempChannel.socket().bind(new InetSocketAddress(0));
     int port = tempChannel.socket().getLocalPort();
     tempChannel.close();
+    LOGGER.fine(() -> String.format("Allocated port %d for node %d", port, nodeId));
 
     NodeId id = new NodeId(nodeId);
     NetworkAddress addr = new NetworkAddress.InetAddress("127.0.0.1", port);
     addressMap.put(id, addr);
 
-    // Setup SRP authentication
     NodeClientSecret nodeSecret = new NodeClientSecret(
         clusterId,
         id,
         "password" + nodeId,
         SRPUtils.generateSalt()
     );
+    LOGGER.finest(() -> String.format("Created node secret for %d: %s", nodeId, nodeSecret.srpIdentity()));
 
     NodeVerifier verifier = createVerifier(nodeSecret);
     verifierMap.put(id, verifier);
+    LOGGER.finest(() -> String.format("Generated verifier for %d", nodeId));
 
     Supplier<Map<NodeId, NodeVerifier>> verifierLookup = () -> verifierMap;
     Supplier<ClusterMembership> membershipSupplier = () ->
@@ -78,18 +84,23 @@ public class NetworkTestHarness implements AutoCloseable {
 
     PaxeNetwork network = new PaxeNetwork(keyManager, port, id, membershipSupplier);
     networks.add(network);
+    LOGGER.fine(() -> String.format("Network node %d created successfully", nodeId));
     return network;
   }
 
   public void waitForNetworkEstablishment() throws Exception {
+    LOGGER.fine("Starting network establishment wait");
     List<CompletableFuture<Void>> startupFutures = new ArrayList<>();
 
     for (PaxeNetwork network : networks) {
       CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
         try {
+          LOGGER.fine(() -> String.format("Starting network node %d", network.localNode.id()));
           network.start();
           waitForKeyExchange(network);
         } catch (Exception e) {
+          LOGGER.warning(() -> String.format("Network node %d startup failed: %s",
+              network.localNode.id(), e.getMessage()));
           throw new RuntimeException(e);
         }
       });
@@ -99,7 +110,9 @@ public class NetworkTestHarness implements AutoCloseable {
     try {
       CompletableFuture.allOf(startupFutures.toArray(new CompletableFuture[0]))
           .get(KEY_EXCHANGE_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+      LOGGER.fine("Network establishment completed successfully");
     } catch (Exception e) {
+      LOGGER.warning("Network establishment failed, closing networks: " + e);
       networks.forEach(PaxeNetwork::close);
       throw e;
     }
@@ -116,34 +129,60 @@ public class NetworkTestHarness implements AutoCloseable {
   }
 
   private void waitForKeyExchange(PaxeNetwork network) {
+    LOGGER.fine(() -> String.format("Waiting for key exchange on node %d", network.localNode.id()));
     long deadline = System.currentTimeMillis() + KEY_EXCHANGE_TIMEOUT.toMillis();
-    try (Selector selector = Selector.open()) {
-      network.channel.register(selector, SelectionKey.OP_READ);
+    // Trigger key exchange with all other nodes
+    networks.stream()
+        .filter(n -> !n.equals(network))
+        .forEach(peer -> {
+          LOGGER.finest(() -> String.format("Node %d initiating key exchange with %d",
+              network.localNode.id(), peer.localNode.id()));
+          var msg = network.keyManager.initiateHandshake(peer.localNode);
+          msg.ifPresent(keyMessage -> network.send(Channel.KEY_EXCHANGE, peer.localNode, keyMessage));
+        });
+    AtomicInteger attempts = new AtomicInteger();
+    while (System.currentTimeMillis() < deadline) {
+      LOGGER.finest(() -> String.format("Key exchange check attempt %d for node %d",
+          attempts.getAndIncrement(), network.localNode.id()));
 
-      while (System.currentTimeMillis() < deadline) {
-        if (selector.select(CHANNEL_SELECT_TIMEOUT.toMillis()) > 0) {
-          selector.selectedKeys().clear();
-        }
+      boolean exchangeComplete = networks.stream()
+          .filter(n -> !n.equals(network))
+          .allMatch(other -> {
+            boolean hasKey = network.keyManager.sessionKeys.containsKey(other.localNode);
+            LOGGER.finest(() -> String.format("Node %d has%s key for %d",
+                network.localNode.id(), hasKey ? "" : " no", other.localNode.id()));
+            return hasKey;
+          });
 
-        // Check if key exchange complete with all peers
-        if (networks.stream()
-            .filter(n -> !n.equals(network))
-            .allMatch(other -> network.keyManager.sessionKeys.containsKey(other.localNode))) {
-          return;
-        }
+      if (exchangeComplete) {
+        LOGGER.fine(() -> String.format("Key exchange completed for node %d after %d attempts",
+            network.localNode.id(), attempts.getAndIncrement()));
+        return;
       }
-      throw new IllegalStateException("Key exchange timed out for node: " + network.localNode);
-    } catch (IOException e) {
-      throw new RuntimeException("Selector error during key exchange", e);
+
+      try {
+        Thread.sleep(CHANNEL_SELECT_TIMEOUT.toMillis());
+      } catch (InterruptedException e) {
+        LOGGER.warning(() -> String.format("Key exchange wait interrupted for node %d",
+            network.localNode.id()));
+        Thread.currentThread().interrupt();
+        throw new RuntimeException(e);
+      }
     }
+
+    LOGGER.warning(() -> String.format("Key exchange timed out for node %d after %d attempts",
+        network.localNode.id(), attempts));
+    throw new IllegalStateException("Key exchange timed out for node: " + network.localNode);
   }
 
   @Override
   public void close() {
+    LOGGER.fine("Closing test harness");
     closed = true;
     networks.forEach(PaxeNetwork::close);
     networks.clear();
     addressMap.clear();
     verifierMap.clear();
+    LOGGER.fine("Test harness closed");
   }
 }
