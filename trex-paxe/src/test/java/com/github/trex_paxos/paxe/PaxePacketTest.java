@@ -73,7 +73,7 @@ class PaxePacketTest {
                 bytes.length);
         assertEquals(from.id(), (short) ((bytes[0] << 8) | (bytes[1] & 0xFF)));
         assertEquals(to.id(), (short) ((bytes[2] << 8) | (bytes[3] & 0xFF)));
-        assertEquals(channel.value(), (short) ((bytes[4] << 8) | (bytes[5] & 0xFF)));
+        assertEquals(channel.id(), (short) ((bytes[4] << 8) | (bytes[5] & 0xFF)));
         assertEquals(payload.length, ((bytes[6] & 0xFF) << 8) | (bytes[7] & 0xFF));
         assertArrayEquals(nonce, Arrays.copyOfRange(bytes, 8, 8 + PaxePacket.NONCE_SIZE));
         assertArrayEquals(authTag, Arrays.copyOfRange(bytes, 8 + PaxePacket.NONCE_SIZE,
@@ -113,8 +113,8 @@ class PaxePacketTest {
         assertEquals((byte) from.id(), authenticatedData[1]);
         assertEquals((byte) (to.id() >> 8), authenticatedData[2]);
         assertEquals((byte) to.id(), authenticatedData[3]);
-        assertEquals((byte) (channel.value() >> 8), authenticatedData[4]);
-        assertEquals((byte) channel.value(), authenticatedData[5]);
+        assertEquals((byte) (channel.id() >> 8), authenticatedData[4]);
+        assertEquals((byte) channel.id(), authenticatedData[5]);
     }
 
     @Test

@@ -146,13 +146,13 @@ public class AcceptResponsePropertyTests {
         assert messages.isEmpty();
       } else if (testCase.voteOutcome == ArbitraryValues.VoteOutcome.WIN &&
           testCase.outOfOrder == ArbitraryValues.OutOfOrder.FALSE) {
-        // Should fix value and send Fixed message for contiguous slots
+        // Should fix id and send Fixed message for contiguous slots
         assert !messages.isEmpty();
         assert messages.getFirst() instanceof Fixed;
         assert !commands.isEmpty();
       } else if (testCase.voteOutcome == ArbitraryValues.VoteOutcome.WIN &&
           testCase.outOfOrder == ArbitraryValues.OutOfOrder.TRUE) {
-        // Should not fix value or send Fixed message when gaps exist
+        // Should not fix id or send Fixed message when gaps exist
         assert messages.isEmpty();
         assert commands.isEmpty();
       } else {

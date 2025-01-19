@@ -77,7 +77,7 @@ public final class SRPUtils {
     /// This is the `k` function in the protocol. This method is tested against the RFC 5054 test vectors as it pads `g` correctly. 
     /// @param N The prime number N used in the protocol as a hex string.
     /// @param g The generator g used in the protocol as a hex string.
-    /// @return The `k` value as a hex string.
+    /// @return The `k` id as a hex string.
     public static String k(String N, String g) {
         byte[] nBytes = fromHex(N);
         byte[] getBytes = fromHex(g);
@@ -255,7 +255,7 @@ public final class SRPUtils {
             return MessageDigest.getInstance(choice);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("Failed to initialize MessageDigest trying to get algorithm '" + BEST_ALGORITHM
-                    + "' check that there is not a system property override setting a bad value the available ones are: "
+                    + "' check that there is not a system property override setting a bad id the available ones are: "
                     +
                 String.join(",", Security.getAlgorithms("MessageDigest")), e);
         }

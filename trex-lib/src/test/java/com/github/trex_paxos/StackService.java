@@ -3,7 +3,7 @@ package com.github.trex_paxos;
 import java.util.Optional;
 
 // @formatter:off
-public interface StackService {
+@SuppressWarnings("UnusedReturnValue") public interface StackService {
   sealed interface Value permits Push, Pop, Peek {}
   record Push(String item) implements Value {}
   record Pop() implements Value {}

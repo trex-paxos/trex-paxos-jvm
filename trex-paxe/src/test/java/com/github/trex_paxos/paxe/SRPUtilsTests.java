@@ -46,7 +46,7 @@ class SRPUtilsTests {
     byte[] nBytes = fromHex(hexN);
     String hexPrimaActual = toHex(nBytes);
 
-    assertEquals(hexN, hexPrimaActual, "N value does not match RFC 5054 Appendix B");
+    assertEquals(hexN, hexPrimaActual, "N id does not match RFC 5054 Appendix B");
   }
 
   @Test
@@ -77,7 +77,7 @@ class SRPUtilsTests {
 
     // Test verifier generation
     BigInteger actualV = SRPUtils.generateVerifier(c, I, P, s);
-    assertEquals(expectedV, actualV, "'v' value does not match RFC 5054 Appendix B");
+    assertEquals(expectedV, actualV, "'v' id does not match RFC 5054 Appendix B");
   }
 
   @Test
@@ -95,7 +95,7 @@ class SRPUtilsTests {
 
     String hex = SRPUtils.k(hexN, hexG);
 
-    assertEquals(expectedK, hex, "'k' value does not match RFC 5054 Appendix B");
+    assertEquals(expectedK, hex, "'k' id does not match RFC 5054 Appendix B");
   }
 
   @Test
@@ -133,7 +133,7 @@ class SRPUtilsTests {
         integer(hexG),
         integer(hexN));
 
-    assertEquals(integer(serverPublicKey), B, "'B' value does not match RFC 5054 Appendix B");
+    assertEquals(integer(serverPublicKey), B, "'B' id does not match RFC 5054 Appendix B");
 
   }
 
@@ -156,7 +156,7 @@ class SRPUtilsTests {
         "B349EF5D76988A3672FAC47B0769447B";
 
     final var A = SRPUtils.A(integer(clientPrivateKey), integer(hexG), integer(hexN));
-    assertEquals(integer(clientPublicKey), A, "'A' value does not match RFC 5054 Appendix B");
+    assertEquals(integer(clientPublicKey), A, "'A' id does not match RFC 5054 Appendix B");
   }
 
   @Test
@@ -179,7 +179,7 @@ class SRPUtilsTests {
         "EB4012B7D7665238A8E3FB004B117B58";
     final var expectedU = "CE38B9593487DA98554ED47D70A7AE5F462EF019";
     final var actualU = SRPUtils.u(hexN, A, B);
-    assertEquals(expectedU, actualU, "'u' value does not match RFC 5054 Appendix B");
+    assertEquals(expectedU, actualU, "'u' id does not match RFC 5054 Appendix B");
   }
 
   @Test

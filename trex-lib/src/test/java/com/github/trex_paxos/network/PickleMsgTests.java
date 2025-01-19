@@ -15,11 +15,13 @@
  */
 package com.github.trex_paxos.network;
 
+import com.github.trex_paxos.BallotNumber;
+import com.github.trex_paxos.Command;
+import com.github.trex_paxos.NoOperation;
+import com.github.trex_paxos.Progress;
 import com.github.trex_paxos.msg.*;
-import com.github.trex_paxos.*;
 import org.junit.jupiter.api.Test;
 
-import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Optional;

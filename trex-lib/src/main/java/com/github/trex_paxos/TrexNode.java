@@ -113,7 +113,7 @@ public class TrexNode {
   /// When leading we will track the responses to a stream of accept messages.
   final NavigableMap<Long, AcceptVotes> acceptVotesByLogIndex = new TreeMap<>();
 
-  /// The term of a node is the value that it will use with either the next `prepare` or `accept` message.
+  /// The term of a node is the id that it will use with either the next `prepare` or `accept` message.
   /// It is only used by the leader and recoverer. It will be null for a follower.
   BallotNumber term = null;
 

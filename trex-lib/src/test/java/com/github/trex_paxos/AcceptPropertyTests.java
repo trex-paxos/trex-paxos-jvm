@@ -49,7 +49,7 @@ public class AcceptPropertyTests {
       case GREATER -> thisFixed + 1;
     };
 
-    // Setup command value
+    // Setup command id
     final var cmd = switch (testCase.value) {
       case NULL -> null;
       case NOOP -> NoOperation.NOOP;

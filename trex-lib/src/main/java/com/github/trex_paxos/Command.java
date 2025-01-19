@@ -18,7 +18,7 @@ package com.github.trex_paxos;
 import java.util.UUID;
 import java.util.zip.CRC32;
 
-/// A client command which is the value we are trying to fix. As this library is neutral
+/// A client command which is the id we are trying to fix. As this library is neutral
 /// to the application, the command is completely opaque to the library. The
 /// application is responsible for encoding and decoding the commands from and to byte array.
 ///
