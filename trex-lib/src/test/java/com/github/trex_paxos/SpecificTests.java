@@ -60,12 +60,12 @@ public class SpecificTests {
   /// The current leader can fix values for slots that the isolated node is not aware of.
   /// When the isolated node rejoins it will abdicate and request a catchup. When the response is received
   /// the node should respect the invariant and ignore any values for slots that it has already been fixed.
-  /// it should also learn the value for the slot that it has not yet fixed and accept that value even though
+  /// it should also learn the id for the slot that it has not yet fixed and accept that id even though
   /// it has self promised a higher ballot number.
   @Test
   public void testCatchupDoesNotViolateInvariantsYetDoesLearnDespiteHigherSelfPromise() {
 
-    // Given that node 1 has accepted a value at slot 1 and has made a very high
+    // Given that node 1 has accepted a id at slot 1 and has made a very high
     // self promise
     final var nodeId1 = (short) 1;
     final var journal = new TransparentJournal((short) 1);
@@ -92,13 +92,13 @@ public class SpecificTests {
     // And node1 processes the message
     node.paxos(catchUpResponse);
 
-    // Then the fixed value should not have changed after processing the catchup.
+    // Then the fixed id should not have changed after processing the catchup.
     assertEquals(acceptPreviouslyFixedSlot1, journal.fakeJournal.get(1L),
-        "The fixed value should not have changed after processing the catchup.");
-    // And the node should accept the second slot value even having made a higher
+        "The fixed id should not have changed after processing the catchup.");
+    // And the node should accept the second slot id even having made a higher
     // self-promise
     assertEquals(freshAcceptSlot2, journal.fakeJournal.get(2L),
-        "The node should accepted the second slot value even having made a higher self-promise");
+        "The node should accepted the second slot id even having made a higher self-promise");
     // And the node should not have updated its progress ballot number
     assertEquals(higherSelfPromiseNumber, node.progress.highestPromised(),
         "The node should not have updated its progress to the new ballot number");
