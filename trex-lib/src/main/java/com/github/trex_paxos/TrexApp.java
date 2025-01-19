@@ -3,7 +3,6 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.DirectMessage;
 import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
-import com.github.trex_paxos.network.Channel;
 import com.github.trex_paxos.network.ClusterMembership;
 import com.github.trex_paxos.network.NetworkLayer;
 import com.github.trex_paxos.network.NodeId;
@@ -16,6 +15,8 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static com.github.trex_paxos.TrexLogger.LOGGER;
+import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
+import static com.github.trex_paxos.network.SystemChannel.PROXY;
 
 public class TrexApp<VALUE, RESULT> {
 
@@ -25,7 +26,7 @@ public class TrexApp<VALUE, RESULT> {
     void updateFromFixed(Fixed msg) {
       var knownLeader = new NodeId(msg.leader());
       if (!Objects.equals(estimatedLeader, knownLeader)) {
-        LOGGER.fine(() -> engine.trexNode.nodeIdentifier() +  " role changed from " + estimatedLeader + " to " + knownLeader);
+        LOGGER.fine(() -> engine.trexNode.nodeIdentifier() + " role changed from " + estimatedLeader + " to " + knownLeader);
         estimatedLeader = knownLeader;
       }
     }
@@ -39,14 +40,14 @@ public class TrexApp<VALUE, RESULT> {
     private final Map<UUID, CompletableFuture<R>> pending = new ConcurrentHashMap<>();
 
     void track(UUID id, CompletableFuture<R> future) {
-      LOGGER.finer(() -> engine.trexNode.nodeIdentifier() +  " tracking response for " + id);
+      LOGGER.finer(() -> engine.trexNode.nodeIdentifier() + " tracking response for " + id);
       pending.put(id, future);
     }
 
     void complete(UUID id, R result) {
       pending.computeIfPresent(id, (_, f) -> {
         f.complete(result);
-        LOGGER.fine(() -> engine.trexNode.nodeIdentifier() +  " complete " + id);
+        LOGGER.fine(() -> engine.trexNode.nodeIdentifier() + " complete " + id);
         return null;
       });
     }
@@ -54,7 +55,7 @@ public class TrexApp<VALUE, RESULT> {
     void fail(UUID id, Throwable ex) {
       pending.computeIfPresent(id, (_, f) -> {
         f.completeExceptionally(ex);
-        LOGGER.fine(() -> engine.trexNode.nodeIdentifier() +  " fail " + id);
+        LOGGER.fine(() -> engine.trexNode.nodeIdentifier() + " fail " + id);
         return null;
       });
     }
@@ -92,8 +93,8 @@ public class TrexApp<VALUE, RESULT> {
       leaderTracker.updateFromFixed(new Fixed(engine.nodeIdentifier(), 0L, BallotNumber.MIN));
     }
     engine.start();
-    networkLayer.subscribe(Channel.CONSENSUS, this::handleConsensusMessage, "consensus-"+ engine.nodeIdentifier());
-    networkLayer.subscribe(Channel.PROXY, this::handleProxyMessage, "proxy-"+ engine.nodeIdentifier());
+    networkLayer.subscribe(CONSENSUS.value(), this::handleConsensusMessage, "consensus-" + engine.nodeIdentifier());
+    networkLayer.subscribe(PROXY.value(), this::handleProxyMessage, "proxy-" + engine.nodeIdentifier());
     networkLayer.start();
   }
 
@@ -108,7 +109,7 @@ public class TrexApp<VALUE, RESULT> {
     }
 
     var messages = paxosThenUpCall(List.of(msg));
-    LOGGER.finer(() -> engine.nodeIdentifier() + " has processed "+msg+" and is responding with " + messages);
+    LOGGER.finer(() -> engine.nodeIdentifier() + " has processed " + msg + " and is responding with " + messages);
     messages.stream()
         .filter(m -> m instanceof Fixed)
         .map(m -> (Fixed) m)
@@ -144,11 +145,11 @@ public class TrexApp<VALUE, RESULT> {
         transmitTrexMessages(messages);
       } else {
         leaderTracker.currentLeader().ifPresentOrElse(
-            leader ->{
-              LOGGER.fine(() -> engine.nodeIdentifier() + " "+ engine.trexNode.getRole() + " is proxying cmd messages" + value);
+            leader -> {
+              LOGGER.fine(() -> engine.nodeIdentifier() + " " + engine.trexNode.getRole() + " is proxying cmd messages" + value);
               byte[] valueBytes = valuePickler.serialize(value);
               Command cmd = new Command(uuid, valueBytes);
-              networkLayer.send(Channel.PROXY, leader, cmd);
+              networkLayer.send(PROXY.value(), leader, cmd);
             },
             () -> {
               var ex = new IllegalStateException("No leader available");
@@ -172,7 +173,7 @@ public class TrexApp<VALUE, RESULT> {
           nodeId.id(), cmd.uuid(), value, result));
       responseTracker.complete(cmd.uuid(), result);
     } catch (Exception e) {
-      LOGGER.warning(() -> "Failed to process command at slot "+slot+" due to : " + e.getMessage());
+      LOGGER.warning(() -> "Failed to process command at slot " + slot + " due to : " + e.getMessage());
       responseTracker.fail(cmd.uuid(), e);
     } finally {
       responseTracker.remove(cmd.uuid());
@@ -197,10 +198,10 @@ public class TrexApp<VALUE, RESULT> {
     messages.forEach(message -> {
       if (message instanceof DirectMessage directMessage) {
         LOGGER.finer(() -> engine.nodeIdentifier() + " sending direct message " + directMessage);
-        networkLayer.send(Channel.CONSENSUS, new NodeId(directMessage.to()), message);
+        networkLayer.send(CONSENSUS.value(), new NodeId(directMessage.to()), message);
       } else {
         LOGGER.finer(() -> engine.nodeIdentifier() + " broadcasting message " + message);
-        networkLayer.broadcast(clusterMembershipSupplier, Channel.CONSENSUS, message);
+        networkLayer.broadcast(clusterMembershipSupplier, CONSENSUS.value(), message);
       }
     });
   }
@@ -208,11 +209,9 @@ public class TrexApp<VALUE, RESULT> {
   public void stop() {
     try {
       networkLayer.close();
-    }
-    catch (Exception e) {
+    } catch (Exception e) {
       // ignore
-    }
-    finally {
+    } finally {
       engine.close();
     }
   }
@@ -220,7 +219,7 @@ public class TrexApp<VALUE, RESULT> {
   @SuppressWarnings("SameParameterValue")
   @TestOnly
   void setLeader(short i) {
-    if( i == engine.nodeIdentifier()) {
+    if (i == engine.nodeIdentifier()) {
       engine.setLeader();
     }
     leaderTracker.estimatedLeader = new NodeId(i);

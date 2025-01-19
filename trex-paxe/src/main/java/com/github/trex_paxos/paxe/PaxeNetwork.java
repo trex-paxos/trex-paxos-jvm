@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import static com.github.trex_paxos.network.SystemChannel.KEY_EXCHANGE;
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
 public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
@@ -57,7 +58,7 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
     this.channel.register(selector, SelectionKey.OP_READ);
 
     // Pre-allocate direct buffers for each channel type
-    for (Channel c : Arrays.asList(Channel.CONSENSUS, Channel.PROXY, Channel.KEY_EXCHANGE)) {
+    for (Channel c : SystemChannel.systemChannels()) {
       channelBuffers.put(c, new DirectBuffer(
           ByteBuffer.allocateDirect(MAX_PACKET_SIZE),
           ByteBuffer.allocateDirect(MAX_PACKET_SIZE)
@@ -78,18 +79,17 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
     buffer.putShort(channel.id());
 
     byte[] payload;
-    if (channel == Channel.KEY_EXCHANGE) {
+    if (channel.id() == KEY_EXCHANGE.id()) {
       LOGGER.finest(() -> "Processing key exchange message");
       payload = PickleHandshake.pickle((SessionKeyManager.KeyMessage) msg);
     } else {
       byte[] key = keyManager.sessionKeys.get(to);
-      byte[] finalKey = key;
       LOGGER.finest(() -> String.format("Encrypting message for %d, key %s", to.id(),
-          finalKey != null ? "present" : "missing"));
+          key != null ? "present" : "missing"));
       if (key == null) {
         // Buffer message
         byte[] serialized = serializeMessage(msg);
-        Queue<PendingMessage> queue = pendingMessages.computeIfAbsent(to, k -> new ConcurrentLinkedQueue<>());
+        Queue<PendingMessage> queue = pendingMessages.computeIfAbsent(to, _ -> new ConcurrentLinkedQueue<>());
         int queueBytes = queue.stream().mapToInt(m -> m.serializedData().length).sum();
 
         LOGGER.finest(() -> String.format("Buffering %d bytes for %s (total %d)", serialized.length, to, queueBytes));
@@ -101,9 +101,7 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
 
         // Initiate handshake
         var handshake = keyManager.initiateHandshake(to);
-        if (handshake.isPresent()) {
-          send(Channel.KEY_EXCHANGE, to, handshake.get());
-        }
+        handshake.ifPresent(keyMessage -> send(KEY_EXCHANGE.value(), to, keyMessage));
         return;
       }
       payload = PaxeCrypto.encrypt(serializeMessage(msg), key);
@@ -125,9 +123,10 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
     }
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public <T> void subscribe(Channel channel, Consumer<T> handler, String name) {
-    subscribers.computeIfAbsent(channel, k -> new ArrayList<>())
+    subscribers.computeIfAbsent(channel, _ -> new ArrayList<>())
         .add((Consumer<byte[]>) handler);
   }
 
@@ -188,8 +187,8 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
       short channelId = buffer.getShort();
       short length = buffer.getShort();
 
-      LOGGER.finest(() -> String.format("Read packet: from=%d, to=%d, channel=%s, len=%d",
-          fromId, toId, Channel.getSystemChannelName(channelId), length));
+      LOGGER.finest(() -> String.format("Read packet: from=%d, to=%d, channel=%d, len=%d",
+          fromId, toId, channelId, length));
 
       if (toId != localNode.id()) {
         LOGGER.finest(() -> "Packet not for us, dropping");
@@ -204,7 +203,7 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
       byte[] payload = new byte[length];
       buffer.get(payload);
 
-      if (msgChannel.id() == Channel.KEY_EXCHANGE.id()) {
+      if (msgChannel.id() == KEY_EXCHANGE.id()) {
         LOGGER.finest(() -> String.format("Processing key exchange from %d", fromId));
         handleKeyExchange(fromId, payload);
       } else {
@@ -249,9 +248,9 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
   }
 
   private SocketAddress resolveAddress(NodeId to) {
-    NetworkAddress addr = membership.get().addressFor(to)
+    NetworkAddress address = membership.get().addressFor(to)
         .orElseThrow(() -> new IllegalStateException("No address for " + to));
-    return new InetSocketAddress(addr.hostString(), addr.port());
+    return new InetSocketAddress(address.hostString(), address.port());
   }
 
   @Override

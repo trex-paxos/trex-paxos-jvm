@@ -1,18 +1,22 @@
 package com.github.trex_paxos.paxe;
 
-import com.github.trex_paxos.network.*;
-import java.io.IOException;
+import com.github.trex_paxos.network.ClusterMembership;
+import com.github.trex_paxos.network.NetworkAddress;
+import com.github.trex_paxos.network.NodeId;
+
 import java.net.InetSocketAddress;
 import java.nio.channels.DatagramChannel;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
+import static com.github.trex_paxos.network.SystemChannel.KEY_EXCHANGE;
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
 public class NetworkTestHarness implements AutoCloseable {
@@ -138,7 +142,7 @@ public class NetworkTestHarness implements AutoCloseable {
           LOGGER.finest(() -> String.format("Node %d initiating key exchange with %d",
               network.localNode.id(), peer.localNode.id()));
           var msg = network.keyManager.initiateHandshake(peer.localNode);
-          msg.ifPresent(keyMessage -> network.send(Channel.KEY_EXCHANGE, peer.localNode, keyMessage));
+          msg.ifPresent(keyMessage -> network.send(KEY_EXCHANGE.value(), peer.localNode, keyMessage));
         });
     AtomicInteger attempts = new AtomicInteger();
     while (System.currentTimeMillis() < deadline) {

@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Disabled
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class PaxeStackClusterTest {
-  private static final Duration TEST_TIMEOUT = Duration.ofSeconds(5);
+  private static final Duration TEST_TIMEOUT = Duration.ofSeconds(1);
 
   private NetworkTestHarness harness;
   private TrexApp<StackService.Command, StackService.Response> app1;

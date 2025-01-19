@@ -8,22 +8,21 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 
-public class TestNetworkLayer implements NetworkLayer {
+class TestNetworkLayer implements NetworkLayer {
   private final InMemoryNetwork network;
   private final Map<Channel, Pickler<?>> picklers;
   private final NodeId nodeId;
 
-  public TestNetworkLayer(NodeId nodeId, InMemoryNetwork network, Map<Channel, Pickler<?>> picklers) {
+  TestNetworkLayer(NodeId nodeId, InMemoryNetwork network, Map<Channel, Pickler<?>> picklers) {
     this.network = Objects.requireNonNull(network, "network cannot be null");
     this.picklers = Map.copyOf(picklers);
     this.nodeId = nodeId;
   }
 
-  public <T> void subscribe(Channel channel, Consumer<T> handler, String name){
+  public <T> void subscribe(Channel channel, Consumer<T> handler, String name) {
     @SuppressWarnings("unchecked")
     Pickler<T> pickler = (Pickler<T>) picklers.get(channel);
     final var namedSubscriber = new NamedSubscriber(byteBuffer -> handler.accept(pickler.deserialize(byteBuffer.array())), name);
@@ -52,7 +51,7 @@ public class TestNetworkLayer implements NetworkLayer {
     network.start();
   }
 
-  public void stop() throws Exception {
+  public void stop() {
     network.close();
   }
 

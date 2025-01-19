@@ -11,6 +11,9 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
+import static com.github.trex_paxos.network.SystemChannel.PROXY;
+
 public class StackClusterImpl implements StackService {
   static final Logger LOGGER = Logger.getLogger(StackClusterImpl.class.getName());
 
@@ -55,7 +58,7 @@ public class StackClusterImpl implements StackService {
           Map.of(new NodeId((short) 1), new NetworkAddress.HostName("localhost", 5000),
               new NodeId((short) 2), new NetworkAddress.HostName("localhost", 5001)));
       NetworkLayer networkLayer = new TestNetworkLayer(engine.nodeId(), sharedNetwork,
-          Map.of(Channel.CONSENSUS, PickleMsg.instance, Channel.PROXY, Pickle.instance)
+          Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), Pickle.instance)
       );
 
       Pickler<Value> valuePickler = PermitsRecordsPickler.createPickler(Value.class);
@@ -107,7 +110,7 @@ public class StackClusterImpl implements StackService {
           }
       );
       nodes.add(app);
-      app.setLeader((short)1);
+      app.setLeader((short) 1);
       app.start();
       LOGGER.fine(() -> "Node " + index + " started successfully");
     }

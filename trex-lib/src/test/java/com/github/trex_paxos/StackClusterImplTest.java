@@ -2,11 +2,13 @@ package com.github.trex_paxos;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class StackClusterImplTest {
 
@@ -21,7 +23,7 @@ public class StackClusterImplTest {
   }
 
   @Test
-  void testStackOperations() throws Exception {
+  void testStackOperations() {
     // given a distributed stack
     cluster.push("first");
     cluster.push("second");
@@ -39,7 +41,7 @@ public class StackClusterImplTest {
   }
 
   @Test
-  void testNodeFailure() throws Exception {
+  void testNodeFailure() {
     // given a value in the stack
     cluster.push("persistent");
 

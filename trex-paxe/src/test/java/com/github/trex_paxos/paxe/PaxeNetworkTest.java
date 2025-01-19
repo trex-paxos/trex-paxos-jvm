@@ -12,6 +12,8 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
+import static com.github.trex_paxos.network.SystemChannel.PROXY;
 import static org.junit.jupiter.api.Assertions.*;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -51,13 +53,14 @@ public class PaxeNetworkTest {
     sessionKeyManagerLogger.setUseParentHandlers(false);
   }
 
+  @SuppressWarnings("resource")
   @BeforeEach
   public void setup() throws Exception {
     testSelector = Selector.open();
     NetworkTestHarness harness = new NetworkTestHarness(new ClusterId("test"), constants);
 
-    network1 = harness.createNetwork((short)1);
-    network2 = harness.createNetwork((short)2);
+    network1 = harness.createNetwork((short) 1);
+    network2 = harness.createNetwork((short) 2);
 
     network1.start();
     network2.start();
@@ -82,7 +85,7 @@ public class PaxeNetworkTest {
   @Test
   @Order(2)
   public void testSendAndReceiveMessages() throws Exception {
-    Channel channel = Channel.CONSENSUS;
+    Channel channel = CONSENSUS.value();
     CountDownLatch latch = new CountDownLatch(2);
     AtomicReference<byte[]> received1 = new AtomicReference<>();
     AtomicReference<byte[]> received2 = new AtomicReference<>();
@@ -127,8 +130,8 @@ public class PaxeNetworkTest {
 
   @Test
   public void testChannelIsolation() throws Exception {
-    Channel channel1 = Channel.CONSENSUS;
-    Channel channel2 = Channel.PROXY;
+    Channel channel1 = CONSENSUS.value();
+    Channel channel2 = PROXY.value();
     CountDownLatch latch = new CountDownLatch(2);
     AtomicReference<byte[]> received1 = new AtomicReference<>();
     AtomicReference<byte[]> received2 = new AtomicReference<>();

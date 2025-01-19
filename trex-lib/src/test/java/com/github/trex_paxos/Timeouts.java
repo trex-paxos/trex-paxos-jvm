@@ -4,6 +4,9 @@ import java.security.SecureRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
+/// The purpose of these experiments is to understand how the choice of multiplier affects the distribution of random
+/// timeouts and the likelihood of their differences exceeding a certain threshold.
+/// TODO document how the 3.6 gives a ~50% chance success such that if you keen on flipping the coin you will succed fast
 public class Timeouts {
   final static SecureRandom random = new SecureRandom();
 

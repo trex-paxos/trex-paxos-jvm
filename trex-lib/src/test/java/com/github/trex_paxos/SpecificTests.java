@@ -15,8 +15,9 @@
  */
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.msg.*;
-
+import com.github.trex_paxos.msg.Accept;
+import com.github.trex_paxos.msg.Catchup;
+import com.github.trex_paxos.msg.CatchupResponse;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -25,9 +26,9 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static com.github.trex_paxos.TrexLogger.LOGGER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 public class SpecificTests {
   @BeforeAll
@@ -65,7 +66,7 @@ public class SpecificTests {
   @Test
   public void testCatchupDoesNotViolateInvariantsYetDoesLearnDespiteHigherSelfPromise() {
 
-    // Given that node 1 has accepted a id at slot 1 and has made a very high
+    // Given that node 1 has accepted a value at slot 1 and has made a very high
     // self promise
     final var nodeId1 = (short) 1;
     final var journal = new TransparentJournal((short) 1);
