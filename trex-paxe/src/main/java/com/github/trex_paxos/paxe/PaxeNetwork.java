@@ -67,7 +67,7 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
 
   @Override
   public <T> void send(Channel channel, NodeId to, T msg) {
-    LOGGER.finest(() -> String.format("Sending message on channel %s to %s", channel, to));
+    LOGGER.finest(() -> String.format("%s Sending message on channel %s to %s", localNode, channel, to));
     DirectBuffer buffers = channelBuffers.get(channel);
     ByteBuffer buffer = buffers.sendBuffer();
     buffer.clear();
@@ -176,7 +176,6 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
       SocketAddress sender = channel.receive(buffer);
       if (sender == null) continue;
 
-
       buffer.flip();
       if (buffer.remaining() < HEADER_SIZE) {
         LOGGER.finest(() -> String.format("Received undersized packet from %s: %d bytes", sender, buffer.remaining()));
@@ -205,7 +204,7 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
       byte[] payload = new byte[length];
       buffer.get(payload);
 
-      if (msgChannel == Channel.KEY_EXCHANGE) {
+      if (msgChannel.id() == Channel.KEY_EXCHANGE.id()) {
         LOGGER.finest(() -> String.format("Processing key exchange from %d", fromId));
         handleKeyExchange(fromId, payload);
       } else {
