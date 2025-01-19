@@ -101,14 +101,14 @@ class RecordPicklerTest {
   @Test
   void testPresentOptional() {
     var serde = RecordPickler.createPickler(OptionalRecord.class);
-    var record = new OptionalRecord(Optional.of("test id"));
+    var record = new OptionalRecord(Optional.of("test value"));
 
     byte[] bytes = serde.serialize(record);
     var deserialized = serde.deserialize(bytes);
 
     assertEquals(record, deserialized);
     assertTrue(deserialized.value().isPresent());
-    assertEquals("test id", deserialized.value().get());
+    assertEquals("test value", deserialized.value().get());
   }
 
   @Test

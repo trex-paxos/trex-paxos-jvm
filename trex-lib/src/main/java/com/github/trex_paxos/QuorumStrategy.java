@@ -35,7 +35,7 @@ import java.util.Set;
 /// - In the primary region set one node to have a voting weight of 2, the other to have a voting weight of 1
 /// - In the secondary region set both nodes to have a voting weight of 1
 /// - In the `accept` phase use the weighted quorum strategy. This will mean that when the primary contacts the other
-/// node in the primary region the id is accepted without contacting the secondary region.
+/// node in the primary region the value is accepted without contacting the secondary region.
 /// - In the `prepare` phase do not use weights use a simple majority. That requires one vote in the opposite region to
 /// force any node in the secondary region to promote to being the leader.
 /// - When you want to actually fail-over between regions the host application as a distributed system may need some things

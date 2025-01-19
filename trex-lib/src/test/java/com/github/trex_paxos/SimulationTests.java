@@ -393,7 +393,7 @@ public class SimulationTests {
       // we need to send accept messages to the other nodes
       final var r1 = simulation.trexEngine2.paxos(lm.messages().getFirst());
       simulation.trexEngine3.paxos(lm.messages().getFirst());
-      // we only need one accept response to get a fixed id
+      // we only need one accept response to get a fixed value
       final var r3 = leader.paxos(r1.messages().getFirst());
       simulation.trexEngine2.paxos(r3.messages().getFirst());
       simulation.trexEngine3.paxos(r3.messages().getFirst());

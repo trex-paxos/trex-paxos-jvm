@@ -65,15 +65,13 @@ public class SessionKeyManager {
   }
 
   public Optional<KeyMessage> initiateHandshake(NodeId peerId) {
-    LOGGER.finest(() -> String.format("Node %d initiating handshake with %d",
-        nodeId.id(), peerId.id()));
-
     if (!verifierLookup.get().containsKey(peerId)) {
       LOGGER.warning("No verifier for peer: " + peerId);
       return Optional.empty();
     }
 
-    // only if we have never tried to handshake with this peer will we create a new  key
+    // only if we have never tried to handshake with this peer will we create a new
+    // key
     activeHandshakes.computeIfAbsent(peerId, this::generateKeyPair);
 
     final var keyPair = activeHandshakes.get(peerId);
@@ -87,8 +85,6 @@ public class SessionKeyManager {
   }
 
   public void handleMessage(KeyMessage msg) {
-    LOGGER.finest(() -> String.format("Node %d handling key message type %s from %d",
-        nodeId.id(), msg.getClass().getSimpleName(), msg.from().id()));
     try {
       switch (msg) {
         case KeyMessage.KeyHandshakeRequest req -> handleRequest(req);

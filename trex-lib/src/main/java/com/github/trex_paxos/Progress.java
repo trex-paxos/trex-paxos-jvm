@@ -30,7 +30,7 @@ public record Progress(
 ) {
 
   /**
-   * When an application initializes an empty journal it has to have a NIL id.
+   * When an application initializes an empty journal it has to have a NIL value.
    *
    * @param nodeIdentifier The current node identifier.
    */

@@ -3,278 +3,289 @@ package com.github.trex_paxos.paxe;
 import com.github.trex_paxos.network.*;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketException;
 import java.nio.ByteBuffer;
-import java.nio.channels.DatagramChannel;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.Consumer;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Supplier;
-
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
-public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
-  private static final int MAX_PACKET_SIZE = 65507; // UDP max size
-  private static final int HEADER_SIZE = 8; // from(2) + to(2) + channel(2) + length(2)
+public class PaxeNetwork implements TrexNetwork, AutoCloseable {
 
+  // Buffer of one entry of any messages that would not be sent due to not yet
+  // having a session key
+  // FIXME implement a retry mechanism
+  private final Map<NodeId, PaxeMessage> pendingMessages = new ConcurrentHashMap<>();
+
+  /// Key manager for session key management which must have access to SRP verifiers.
   final SessionKeyManager keyManager;
+
+  final DatagramSocket socket;
   final NodeId localNode;
-  final DatagramChannel channel;
-  final Selector selector;
-  private final Map<Channel, List<Consumer<byte[]>>> subscribers;
-  private final Map<Channel, DirectBuffer> channelBuffers;
+  private final Map<Channel, BlockingQueue<EncryptedPaxeMessage>> channelQueues;
+
+  private final BlockingQueue<PaxePacket> outboundQueue;
+  Thread sender;
+  Thread receiver;
+  volatile boolean running = false;
+
   final Supplier<ClusterMembership> membership;
 
-  volatile boolean running;
-  private Thread receiver;
-
-  record DirectBuffer(ByteBuffer sendBuffer, ByteBuffer receiveBuffer) {
-  }
-
-  record PendingMessage(Channel channel, byte[] serializedData) {
-  }
-
-  private final Map<NodeId, Queue<PendingMessage>> pendingMessages = new ConcurrentHashMap<>();
-  private static final int MAX_BUFFERED_BYTES = 65000;
-
-  public PaxeNetwork(SessionKeyManager keyManager, int port, NodeId local,
-                     Supplier<ClusterMembership> membership) throws IOException {
+  public PaxeNetwork(
+      SessionKeyManager keyManager,
+      int port,
+      NodeId localNode,
+      Supplier<ClusterMembership> membership) throws SocketException {
     this.keyManager = keyManager;
-    this.localNode = local;
+    this.socket = new DatagramSocket(port);
+    this.localNode = localNode;
     this.membership = membership;
-    this.subscribers = new ConcurrentHashMap<>();
-    this.channelBuffers = new HashMap<>();
-
-    // Initialize NIO components
-    this.channel = DatagramChannel.open();
-    this.channel.configureBlocking(false);
-    this.channel.socket().bind(new InetSocketAddress(port));
-    this.selector = Selector.open();
-    this.channel.register(selector, SelectionKey.OP_READ);
-
-    // Pre-allocate direct buffers for each channel type
-    for (Channel c : Arrays.asList(Channel.CONSENSUS, Channel.PROXY, Channel.KEY_EXCHANGE)) {
-      channelBuffers.put(c, new DirectBuffer(
-          ByteBuffer.allocateDirect(MAX_PACKET_SIZE),
-          ByteBuffer.allocateDirect(MAX_PACKET_SIZE)
-      ));
-    }
+    this.channelQueues = new ConcurrentHashMap<>();
+    this.outboundQueue = new LinkedBlockingQueue<>();
   }
 
   @Override
-  public <T> void send(Channel channel, NodeId to, T msg) {
-    LOGGER.finest(() -> String.format("%s Sending message on channel %s to %s", localNode, channel, to));
-    DirectBuffer buffers = channelBuffers.get(channel);
-    ByteBuffer buffer = buffers.sendBuffer();
-    buffer.clear();
-
-    // Write header
-    buffer.putShort(localNode.id());
-    buffer.putShort(to.id());
-    buffer.putShort(channel.id());
-
-    byte[] payload;
-    if (channel == Channel.KEY_EXCHANGE) {
-      LOGGER.finest(() -> "Processing key exchange message");
-      payload = PickleHandshake.pickle((SessionKeyManager.KeyMessage) msg);
-    } else {
-      byte[] key = keyManager.sessionKeys.get(to);
-      byte[] finalKey = key;
-      LOGGER.finest(() -> String.format("Encrypting message for %d, key %s", to.id(),
-          finalKey != null ? "present" : "missing"));
-      if (key == null) {
-        // Buffer message
-        byte[] serialized = serializeMessage(msg);
-        Queue<PendingMessage> queue = pendingMessages.computeIfAbsent(to, k -> new ConcurrentLinkedQueue<>());
-        int queueBytes = queue.stream().mapToInt(m -> m.serializedData().length).sum();
-
-        LOGGER.finest(() -> String.format("Buffering %d bytes for %s (total %d)", serialized.length, to, queueBytes));
-
-        if (queueBytes + serialized.length > MAX_BUFFERED_BYTES) {
-          throw new IllegalStateException("Message buffer full for " + to);
-        }
-        queue.add(new PendingMessage(channel, serialized));
-
-        // Initiate handshake
-        var handshake = keyManager.initiateHandshake(to);
-        if (handshake.isPresent()) {
-          send(Channel.KEY_EXCHANGE, to, handshake.get());
-        }
-        return;
-      }
-      payload = PaxeCrypto.encrypt(serializeMessage(msg), key);
-    }
-
-    buffer.putShort((short) payload.length);
-    buffer.put(payload);
-    buffer.flip();
-
+  public void send(Channel channel, short to, ByteBuffer data) {
+    LOGGER.finest(() -> String.format(
+        "Node %d sending on channel %s to %d: data length=%d",
+        localNode.id(), channel, to, data.remaining()
+    ));
     try {
-      SocketAddress address = resolveAddress(to);
-      while (buffer.hasRemaining()) {
-        int sent = this.channel.send(buffer, address);
-        LOGGER.finest(() -> String.format("Sent %d bytes to %s", sent, address));
+      // Read the entire buffer if it has remaining data
+      byte[] payload;
+      if (data.hasArray()) {
+        payload = data.array();
+      } else {
+        payload = new byte[data.remaining()];
+        data.get(payload);
       }
-    } catch (IOException e) {
-      LOGGER.warning(() -> String.format("Failed to send message to %s: %s", to, e.getMessage()));
-      throw new RuntimeException(e);
+
+      PaxeMessage message = new PaxeMessage(
+          localNode,
+          new NodeId(to),
+          channel,
+          payload
+      );
+
+      encryptAndSend(message);
+
+    } catch (Exception e) {
+      LOGGER.severe("Failed to send message: " + e.getMessage());
+      throw new RuntimeException("Failed to send message", e);
     }
   }
 
   @Override
-  public <T> void subscribe(Channel channel, Consumer<T> handler, String name) {
-    subscribers.computeIfAbsent(channel, k -> new ArrayList<>())
-        .add((Consumer<byte[]>) handler);
+  public void subscribe(Channel channel, NamedSubscriber handler) {
+    LOGGER.finest(() -> String.format(
+        "Node %d subscribing handler %s to channel %s",
+        localNode.id(), handler.name(), channel
+    ));
+
+    // Create a virtual thread to process messages from the channel queue
+    Thread.ofVirtual()
+        .name("subscriber-" + handler.name())
+        .start(() -> {
+          while (running) {
+            try {
+              // Get message from the channel
+              PaxeMessage msg = receive(channel);
+
+              // Convert to ByteBuffer and send to handler
+              ByteBuffer buffer = ByteBuffer.wrap(msg.payload());
+              handler.accept(buffer);
+
+            } catch (InterruptedException e) {
+              if (running) {
+                LOGGER.warning("Channel subscriber interrupted: " + handler.name());
+              }
+              break;
+            } catch (Exception e) {
+              LOGGER.severe("Error processing message on channel " + channel + ": " + e.getMessage());
+            }
+          }
+        });
   }
 
-  @Override
-  public <T> void broadcast(Supplier<ClusterMembership> membershipSupplier, Channel channel, T msg) {
-    membershipSupplier.get().otherNodes(localNode).forEach(node -> send(channel, node, msg));
-  }
-
-  @Override
   public void start() {
-    if (running) return;
+    if (running) {
+      LOGGER.finer(()->"TrexNetwork already running");
+      return;
+    }
     running = true;
-    receiver = Thread.ofPlatform()
-        .name("paxe-receiver-" + localNode.id())
+
+    this.receiver = Thread.ofPlatform()
+        .name("receiver-" + localNode.id())
         .start(this::receiveLoop);
+
+    this.sender = Thread.ofVirtual()
+        .name("sender-" + localNode.id())
+        .start(this::processSendQueue);
+
+    // Initiate handshakes with other nodes
+    membership.get().otherNodes(localNode)
+        .forEach(node -> keyManager.initiateHandshake(node)
+            .ifPresent(keyMsg -> sendHandshake(node, keyMsg)));
+
+    LOGGER.info("Network started for node " + localNode.id());
+  }
+
+  private BlockingQueue<EncryptedPaxeMessage> getOrCreateChannelQueue(Channel channel) {
+    return channelQueues.computeIfAbsent(channel,
+        _ -> new LinkedBlockingQueue<>());
+  }
+
+  private void processSendQueue() {
+    while (running) {
+      try {
+        // Take the next packet from the outbound queue
+        PaxePacket packet = outboundQueue.take();
+
+        // Resolve destination address using ClusterMembership
+        NodeId destinationNode = packet.to();
+        Optional<NetworkAddress> addressOpt = membership.get().addressFor(destinationNode);
+
+        if (addressOpt.isEmpty()) {
+          LOGGER.warning("Unknown destination: " + destinationNode);
+          continue; // Skip this packet
+        }
+
+        NetworkAddress address = addressOpt.get();
+        InetAddress inetAddress = InetAddress.getByName(address.hostString());
+        int port = address.port();
+
+        // Serialize packet to bytes
+        byte[] data = packet.toBytes();
+
+        // Create and send UDP datagram
+        DatagramPacket datagram = new DatagramPacket(data, data.length, inetAddress, port);
+        socket.send(datagram);
+
+      } catch (InterruptedException e) {
+        if (!running)
+          break; // Graceful shutdown
+      } catch (IOException e) {
+        LOGGER.warning("Failed to send packet: " + e.getMessage());
+      }
+    }
   }
 
   private void receiveLoop() {
+    var buffer = new byte[65535];
+    var packet = new DatagramPacket(buffer, buffer.length);
+
     while (running) {
       try {
-        if (selector.select() > 0) {
-          Iterator<SelectionKey> selectedKeys = selector.selectedKeys().iterator();
-          while (selectedKeys.hasNext()) {
-            SelectionKey key = selectedKeys.next();
-            selectedKeys.remove();
+        socket.receive(packet);
+        var paxePacket = PaxePacket.fromBytes(
+            Arrays.copyOf(packet.getData(), packet.getLength()));
 
-            if (key.isReadable()) {
-              readFromChannel();
-            }
-          }
+        if (!paxePacket.to().equals(localNode)) {
+          continue;
         }
+
+        if (paxePacket.channel().equals(Channel.KEY_EXCHANGE)) {
+          SessionKeyManager.KeyMessage keyMsg = PickleHandshake.unpickle(paxePacket.payload());
+          keyManager.handleMessage(keyMsg);
+        } else {
+          var queue = getOrCreateChannelQueue(paxePacket.channel());
+          queue.add(new EncryptedPaxeMessage(paxePacket));
+        }
+
       } catch (IOException e) {
         if (running) {
-          LOGGER.warning("Error in receive loop: " + e.getMessage());
+          LOGGER.warning("receiveLoop error: " + e.getMessage());
         }
       }
     }
   }
 
-  private void readFromChannel() throws IOException {
-    // Rotate through receive buffers for each channel
-    for (Map.Entry<Channel, DirectBuffer> entry : channelBuffers.entrySet()) {
-      ByteBuffer buffer = entry.getValue().receiveBuffer();
-      buffer.clear();
-
-      SocketAddress sender = channel.receive(buffer);
-      if (sender == null) continue;
-
-      buffer.flip();
-      if (buffer.remaining() < HEADER_SIZE) {
-        LOGGER.finest(() -> String.format("Received undersized packet from %s: %d bytes", sender, buffer.remaining()));
-        continue;
-      }
-
-      // Read header
-      short fromId = buffer.getShort();
-      short toId = buffer.getShort();
-      short channelId = buffer.getShort();
-      short length = buffer.getShort();
-
-      LOGGER.finest(() -> String.format("Read packet: from=%d, to=%d, channel=%s, len=%d",
-          fromId, toId, Channel.getSystemChannelName(channelId), length));
-
-      if (toId != localNode.id()) {
-        LOGGER.finest(() -> "Packet not for us, dropping");
-        continue;
-      }
-
-      Channel msgChannel = new Channel(channelId);
-
-      LOGGER.finest(() -> String.format("Processing message from %d on channel %s", fromId, msgChannel));
-
-      // Extract payload
-      byte[] payload = new byte[length];
-      buffer.get(payload);
-
-      if (msgChannel.id() == Channel.KEY_EXCHANGE.id()) {
-        LOGGER.finest(() -> String.format("Processing key exchange from %d", fromId));
-        handleKeyExchange(fromId, payload);
-      } else {
-        try {
-          byte[] decrypted = decrypt(payload, new NodeId(fromId));
-          LOGGER.finest(() -> String.format("Dispatching %d byte message from %d on channel %s",
-              decrypted.length, fromId, msgChannel));
-          dispatchToSubscribers(msgChannel, decrypted);
-        } catch (Exception e) {
-          LOGGER.warning(() -> String.format("Failed to process message from %d: %s", fromId, e.getMessage()));
-        }
-      }
-    }
+  public record EncryptedPaxeMessage(PaxePacket packet) {
   }
 
-  private void dispatchToSubscribers(Channel channel, byte[] msg) {
-    List<Consumer<byte[]>> handlers = subscribers.get(channel);
-    if (handlers != null) {
-      for (Consumer<byte[]> handler : handlers) {
-        handler.accept(msg);
-      }
-    }
-  }
+  // Called by consumers to get messages from a channel
+  public PaxeMessage receive(Channel channel) throws Exception {
+    var queue = getOrCreateChannelQueue(channel);
+    LOGGER.finest(() -> String.format(
+        "Node %d waiting for message on channel %s",
+        localNode.id(), channel
+    ));
+    var encrypted = queue.take();
 
-  private byte[] decrypt(byte[] data, NodeId from) {
-    byte[] key = keyManager.sessionKeys.get(from);
+    var key = keyManager.sessionKeys.get(encrypted.packet().from());
     if (key == null) {
-      throw new IllegalStateException("No session key available from " + from);
+      throw new SecurityException("Unknown sender");
     }
-    return PaxeCrypto.decrypt(data, key);
+
+    var msg = PaxePacket.decrypt(encrypted.packet(), key);
+    LOGGER.finest(() -> String.format(
+        "Node %d received on channel %s from %d: payload length=%d",
+        localNode.id(), channel, msg.from().id(), msg.payload().length
+    ));
+    return msg;
   }
 
-  /// For key exchange, deserialize without encryption
-  void handleKeyExchange(short fromId, byte[] payload) {
-    LOGGER.finest(() -> String.format("Processing key exchange message from %d", fromId));
-    SessionKeyManager.KeyMessage msg = PickleHandshake.unpickle(payload);
-    keyManager.handleMessage(msg);
+  public void encryptAndSend(PaxeMessage message) throws Exception {
+    if( !running ) {
+      throw new IllegalStateException("Network is not running");
+    }
+    final var key = keyManager.sessionKeys.get(message.to());
+    if (key == null) {
+      pendingMessages.put(message.to(), message);
+      keyManager.initiateHandshake(message.to())
+          .ifPresent(keyMsg -> sendHandshake(message.to(), keyMsg));
+    } else {
+      final var paxePacket = PaxePacket.encrypt(message, localNode, key);
+      outboundQueue.add(paxePacket);
+    }
   }
 
-  private byte[] serializeMessage(Object msg) {
-    return ((byte[]) msg);
-  }
+  void sendHandshake(NodeId to, SessionKeyManager.KeyMessage msg) {
+    Optional<NetworkAddress> addressOpt = membership.get().addressFor(to);
 
-  private SocketAddress resolveAddress(NodeId to) {
-    NetworkAddress addr = membership.get().addressFor(to)
-        .orElseThrow(() -> new IllegalStateException("No address for " + to));
-    return new InetSocketAddress(addr.hostString(), addr.port());
+    if (addressOpt.isEmpty()) {
+      LOGGER.warning("Unknown destination: " + to);
+      return; // Skip this packet
+    }
+
+    byte[] payload = PickleHandshake.pickle(msg);
+
+    NetworkAddress address = addressOpt.get();
+    try {
+      InetAddress inetAddress = InetAddress.getByName(address.hostString());
+      int port = address.port();
+
+      final var handshake = new PaxePacket(
+          localNode,
+          to,
+          Channel.KEY_EXCHANGE,
+          new byte[PaxePacket.NONCE_SIZE],
+          new byte[PaxePacket.AUTH_TAG_SIZE],
+          payload);
+
+      final var data = handshake.toBytes();
+
+      // Create and send UDP datagram
+      DatagramPacket datagram = new DatagramPacket(data, data.length, inetAddress, port);
+      socket.send(datagram);
+    } catch (IOException e) {
+      LOGGER.severe("Failed to send handshake message: " + e.getMessage());
+    }
   }
 
   @Override
   public void close() {
-    running = false;
-    if (selector != null) {
-      selector.wakeup();
-      try {
-        selector.close();
-      } catch (IOException e) {
-        LOGGER.warning("Error closing selector: " + e.getMessage());
-      }
-    }
-    if (channel != null) {
-      try {
-        channel.close();
-      } catch (IOException e) {
-        LOGGER.warning("Error closing channel: " + e.getMessage());
-      }
-    }
-    if (receiver != null) {
-      receiver.interrupt();
-      receiver = null;
-    }
+    this.running = false;
+    this.receiver.interrupt();
+    this.sender.interrupt();
+    this.socket.close();
   }
+
 }

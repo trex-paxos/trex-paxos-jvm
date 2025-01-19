@@ -1,9 +1,12 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.network.*;
+import org.jetbrains.annotations.NotNull;
 
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -11,54 +14,102 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+@SuppressWarnings("unused")
 public class StackClusterImpl implements StackService {
-  static final Logger LOGGER = Logger.getLogger(StackClusterImpl.class.getName());
-
-  private final List<TrexApp<Value, Response>> nodes = new ArrayList<>();
-  private final Stack<String> stack = new Stack<>();
+  private static final Logger LOGGER = Logger.getLogger(StackClusterImpl.class.getName());
 
   public static void setLogLevel(Level level) {
-    // Configure root logger and handler
     Logger root = Logger.getLogger("");
     root.setLevel(level);
     ConsoleHandler handler = new ConsoleHandler();
     handler.setLevel(level);
     root.addHandler(handler);
+    // TrexApp logger setup
+    Logger trexLogger = Logger.getLogger(TrexApp.class.getName());
+    trexLogger.setLevel(level);
+    // NetworkLayer logger setup
+    Logger networkLayerLogger = Logger.getLogger(NetworkLayer.class.getName());
+    networkLayerLogger.setLevel(level);
+  }
 
-    // Configure component-specific loggers
-    for (String name : Arrays.asList(
-        StackClusterImpl.class.getName(),
-        TrexApp.class.getName(),
-        TrexNode.class.getName(),
-        NetworkLayer.class.getName()
-    )) {
-      Logger logger = Logger.getLogger(name);
-      logger.setLevel(level);
-      logger.setUseParentHandlers(false);
-      logger.addHandler(handler);
-      LOGGER.fine(() -> "Configured logger: " + name + " at level " + level);
+  record ChannelAndSubscriber(Channel channel, TrexNetwork.NamedSubscriber subscriber) {
+  }
+
+  private static class InMemoryNetwork implements TrexNetwork {
+    private final List<ChannelAndSubscriber> handlers = new ArrayList<>();
+    private final LinkedBlockingQueue<NetworkMessage> messageQueue = new LinkedBlockingQueue<>();
+    private volatile boolean running = true;
+    private final String networkId;
+
+    public InMemoryNetwork(String networkId) {
+      this.networkId = networkId;
+      LOGGER.fine(() -> "Created InMemoryNetwork: " + networkId);
+    }
+
+    private record NetworkMessage(short nodeId, Channel channel, ByteBuffer data) {
+    }
+
+    @Override
+    public void send(Channel channel, short nodeId, ByteBuffer data) {
+      if (running) {
+        messageQueue.add(new NetworkMessage(nodeId, channel, data));
+      }
+    }
+
+    @Override
+    public void subscribe(Channel channel, NamedSubscriber handler) {
+      ChannelAndSubscriber channelAndSubscriber = new ChannelAndSubscriber(channel, handler);
+      handlers.add(channelAndSubscriber);
+    }
+
+    @Override
+    public void start() {
+      Thread.ofVirtual().name("network-" + networkId).start(() -> {
+        while (running) {
+          try {
+            NetworkMessage msg = messageQueue.poll(100, TimeUnit.MILLISECONDS);
+
+            if (msg != null) {
+              handlers.forEach(h -> {
+                if (h.channel().equals(msg.channel)) {
+                  LOGGER.fine(() -> networkId + " received message on channel " + msg.channel + " from " + msg.nodeId + " delivering to " + h.subscriber().name());
+                  h.subscriber().accept(msg.data);
+                }
+              });
+            }
+          } catch (InterruptedException e) {
+            if (running) {
+              LOGGER.warning(networkId + " message processor interrupted: " + e.getMessage());
+            }
+          }
+        }
+      });
+      LOGGER.info(() -> networkId + " network started with subscribers " + handlers);
+    }
+
+    @Override
+    public void close() {
+      LOGGER.fine(() -> networkId + " network stopping");
+      running = false;
     }
   }
 
-  public StackClusterImpl() {
-    this(new InMemoryNetwork("sharedNetwork"));
-  }
+  private final List<TrexApp<Value, Response>> nodes = new ArrayList<>();
+  private final Stack<String> stack = new Stack<>();
+  private volatile boolean running = true;
 
-  StackClusterImpl(InMemoryNetwork sharedNetwork) {
-    LOGGER.fine("Initializing StackClusterImpl");
+  public StackClusterImpl() {
+    InMemoryNetwork sharedNetwork = new InMemoryNetwork("sharedNetwork");
+
     for (short i = 1; i <= 2; i++) {
       final var index = i;
-      LOGGER.fine(() -> "Creating node " + index);
-
       var engine = getTrexEngine(index);
+      Pickler<Value> valuePickler = PermitsRecordsPickler.createPickler(Value.class);
       Supplier<ClusterMembership> members = () -> new ClusterMembership(
           Map.of(new NodeId((short) 1), new NetworkAddress.HostName("localhost", 5000),
               new NodeId((short) 2), new NetworkAddress.HostName("localhost", 5001)));
-      NetworkLayer networkLayer = new TestNetworkLayer(engine.nodeId(), sharedNetwork,
-          Map.of(Channel.CONSENSUS, PickleMsg.instance, Channel.PROXY, Pickle.instance)
-      );
+      NetworkLayer networkLayer = new NetworkLayer(sharedNetwork, Map.of(Channel.CONSENSUS, PickleMsg.instance));
 
-      Pickler<Value> valuePickler = PermitsRecordsPickler.createPickler(Value.class);
       var app = new TrexApp<>(
           members,
           engine,
@@ -70,117 +121,35 @@ public class StackClusterImpl implements StackService {
               try {
                 return switch (cmd) {
                   case Push p -> {
-                    LOGGER.fine(() -> String.format("Node %d pushing: %s, current size: %d",
-                        index, p.item(), stack.size()));
+                    LOGGER.fine(() -> "Node " + index + " pushing: " + p.item());
                     stack.push(p.item());
-                    LOGGER.fine(() -> String.format("Node %d push complete, new size: %d",
-                        index, stack.size()));
                     yield new Response(Optional.empty());
                   }
                   case Pop _ -> {
-                    if (stack.isEmpty()) {
-                      LOGGER.fine(() -> "Node " + index + " attempted pop on empty stack");
-                      yield new Response(Optional.of("Stack is empty"));
-                    }
                     var item = stack.pop();
-                    LOGGER.fine(() -> String.format("Node %d popped: %s, new size: %d",
-                        index, item, stack.size()));
+                    LOGGER.fine(() -> "Node " + index + " popped: " + item);
                     yield new Response(Optional.of(item));
                   }
                   case Peek _ -> {
-                    if (stack.isEmpty()) {
-                      LOGGER.warning(() -> "Node " + index + " attempted peek on empty stack");
-                      yield new Response(Optional.of("Stack is empty"));
-                    }
                     var item = stack.peek();
-                    LOGGER.fine(() -> String.format("Node %d peeked: %s, size: %d",
-                        index, item, stack.size()));
+                    LOGGER.fine(() -> "Node " + index + " peeked: " + item);
                     yield new Response(Optional.of(item));
                   }
                 };
               } catch (EmptyStackException e) {
-                LOGGER.warning(() -> String.format("Node %d stack operation failed: %s",
-                    index, e.getMessage()));
+                LOGGER.warning("Node " + index + " attempted operation on empty stack");
                 return new Response(Optional.of("Stack is empty"));
               }
             }
           }
       );
       nodes.add(app);
-      app.setLeader((short)1);
       app.start();
       LOGGER.fine(() -> "Node " + index + " started successfully");
     }
   }
 
-  public AtomicInteger nodeToggle = new AtomicInteger(0);
-
-  public void toggleNode() {
-    int oldNode = nodeToggle.get() % nodes.size();
-    int newNode = nodeToggle.incrementAndGet() % nodes.size();
-    LOGGER.fine(() -> String.format("Toggling active node: %d -> %d", oldNode, newNode));
-  }
-
-  @Override
-  public Response push(String item) {
-    LOGGER.fine(() -> String.format("Push requested: item=%s, targetNode=%d",
-        item, nodeToggle.get() % nodes.size()));
-    var future = new CompletableFuture<Response>();
-    nodes.get(nodeToggle.get() % nodes.size()).submitValue(new Push(item), future);
-    try {
-      var response = future.get(1, TimeUnit.SECONDS);
-      LOGGER.fine(() -> "Push completed successfully");
-      return response;
-    } catch (Exception e) {
-      LOGGER.warning(() -> String.format("Push failed: %s", e.getMessage()));
-      return new Response(Optional.of("Error: " + e.getMessage()));
-    }
-  }
-
-  @Override
-  public Response pop() {
-    LOGGER.fine(() -> String.format("Pop requested: targetNode=%d", nodeToggle.get() % nodes.size()));
-    var future = new CompletableFuture<Response>();
-    nodes.get(nodeToggle.get() % nodes.size()).submitValue(new Pop(), future);
-    try {
-      var response = future.get(1, TimeUnit.SECONDS);
-      LOGGER.fine(() -> String.format("Pop completed: %s", response.value().orElse("empty")));
-      return response;
-    } catch (Exception e) {
-      LOGGER.warning(() -> String.format("Pop failed: %s", e.getMessage()));
-      return new Response(Optional.of("Error: " + e.getMessage()));
-    }
-  }
-
-  @Override
-  public Response peek() {
-    LOGGER.fine(() -> String.format("Peek requested: targetNode=%d", nodeToggle.get() % nodes.size()));
-    var future = new CompletableFuture<Response>();
-    nodes.get(nodeToggle.get() % nodes.size()).submitValue(new Peek(), future);
-    try {
-      var response = future.get(1, TimeUnit.SECONDS);
-      LOGGER.fine(() -> String.format("Peek completed: %s", response.value().orElse("empty")));
-      return response;
-    } catch (Exception e) {
-      LOGGER.warning(() -> String.format("Peek failed: %s", e.getMessage()));
-      return new Response(Optional.of("Error: " + e.getMessage()));
-    }
-  }
-
-  public void shutdown() {
-    LOGGER.fine("Initiating StackClusterImpl shutdown");
-    nodes.forEach(n -> {
-      try {
-        n.stop();
-      } catch (Exception e) {
-        LOGGER.warning(() -> "Error during node shutdown: " + e.getMessage());
-      }
-    });
-    LOGGER.fine("StackClusterImpl shutdown complete");
-  }
-
-  // Rest of existing implementation remains unchanged
-  private static TrexEngine getTrexEngine(short i) {
+  private static @NotNull TrexEngine getTrexEngine(short i) {
     var journal = new TransparentJournal(i);
     QuorumStrategy quorum = new SimpleMajority(2);
     var node = new TrexNode(Level.INFO, i, quorum, journal);
@@ -204,11 +173,74 @@ public class StackClusterImpl implements StackService {
     };
   }
 
-  record ChannelAndSubscriber(Channel channel, NamedSubscriber subscriber) {
+  public AtomicInteger nodeToggle = new AtomicInteger(0);
+
+  public void toggleNode() {
+    nodeToggle.getAndIncrement();
+  }
+
+  @Override
+  public Response push(String item) {
+    LOGGER.fine(() -> "Push method invoked with: " + item);
+    var future = new CompletableFuture<Response>();
+    nodes.get(nodeToggle.get()%nodes.size()).submitValue(new Push(item), future);
+    try {
+      LOGGER.fine(() -> "Waiting for push response");
+      var response = future.get(1, TimeUnit.HOURS);
+      LOGGER.fine(() -> "Push response received: " + response);
+      return response;
+    } catch (Exception e) {
+      LOGGER.warning("Push failed: " + e.getMessage());
+      return new Response(Optional.of("Error: " + e.getMessage()));
+    }
+  }
+
+  @Override
+  public Response pop() {
+    LOGGER.fine("Pop method invoked");
+    var future = new CompletableFuture<Response>();
+    nodes.get(nodeToggle.get()%nodes.size()).submitValue(new Pop(), future);
+    try {
+      LOGGER.fine("Waiting for pop response");
+      var response = future.get(1, TimeUnit.SECONDS);
+      LOGGER.fine(() -> "Pop response received: " + response);
+      return response;
+    } catch (Exception e) {
+      LOGGER.warning("Pop failed: " + e.getMessage());
+      return new Response(Optional.of("Error: " + e.getMessage()));
+    }
+  }
+
+  @Override
+  public Response peek() {
+    LOGGER.fine("Peek method invoked");
+    var future = new CompletableFuture<Response>();
+    nodes.get(nodeToggle.get()%nodes.size()).submitValue(new Peek(), future);
+    try {
+      LOGGER.fine("Waiting for peek response");
+      var response = future.get(1, TimeUnit.SECONDS);
+      LOGGER.fine(() -> "Peek response received: " + response);
+      return response;
+    } catch (Exception e) {
+      LOGGER.warning("Peek failed: " + e.getMessage());
+      return new Response(Optional.of("Error: " + e.getMessage()));
+    }
+  }
+
+  public void shutdown() {
+    LOGGER.fine("Shutting down StackClusterImpl");
+    running = false;
+    nodes.forEach(n -> {
+      try {
+        n.stop();
+      } catch (Exception e) {
+        LOGGER.warning("Error shutting down node: " + e.getMessage());
+      }
+    });
   }
 
   public static void main(String[] args) {
-    setLogLevel(Level.INFO);
+    setLogLevel(Level.FINEST);
     StackClusterImpl cluster = new StackClusterImpl();
     cluster.toggleNode();
     try {

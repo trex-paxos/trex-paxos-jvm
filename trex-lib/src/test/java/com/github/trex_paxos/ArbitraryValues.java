@@ -18,7 +18,7 @@ public class ArbitraryValues {
 
   /// State of the journal at the fixed slot
   enum JournalState {
-    EMPTY,              // No id at slot
+    EMPTY,              // No value at slot
     MATCHING_NUMBER,    // Has `accept` with matching ballot number
     DIFFERENT_NUMBER   // Has `accept` with different ballot number
   }

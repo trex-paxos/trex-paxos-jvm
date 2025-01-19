@@ -43,7 +43,7 @@ import java.util.Optional;
 /// It is important to note you should not delete `accept` messages the moment they are up-called into the application.
 /// They should be kept around so that other nodes can request retransmission of missed messages. To
 /// keep the database size under control you can run a cronjob that reads the {@link Progress#highestFixedIndex()}
-/// from all databases and take the min id. You can then delete all `accept` messages from all nodes that are at a
+/// from all databases and take the min value. You can then delete all `accept` messages from all nodes that are at a
 /// lower log slot index.
 ///
 /// VERY IMPORTANT: If you get errors where you don't know what the state of the underlying journal has become you should call
@@ -68,12 +68,12 @@ public interface Journal {
   ///                                                                                                                                                           history when moving nodes between servers we require the node identifier. This is only a safety feature.
   Progress readProgress(short nodeIdentifier);
 
-  /// Save a value wrapped in an `accept` into the log.
+  /// Save a value into the log.
   /// Logically this method is storing `accept(S,N,V)` so it needs to store the values `{N,V}` at log slot `S`
   /// The `N` is the term number of the leader that generated the message.
   /// Typically, values are written in sequential `S` order.
   ///
-  /// @param accept An accept message that is a log index, command id and term number.
+  /// @param accept An accept message that is a log index, command value and term number.
   void writeAccept(Accept accept);
 
   /// Load any accept record from the log. There may be no accept record for the given log index.
@@ -82,7 +82,7 @@ public interface Journal {
   /// You should not delete any `accept` messages until you know all nodes have a higher [Progress#highestFixedIndex()]
   /// than the log index of the accept message.
   ///
-  /// When a slot is learned to be fixed by a `fixed(S,N')` the id is read from the log and  if `N' != N` then
+  /// When a slot is learned to be fixed by a `fixed(S,N')` the value is read from the log and  if `N' != N` then
   /// Retransmission of the correct `accept` will be requested from the leader.
   ///
   /// @param logIndex The log slot to load the accept record for.

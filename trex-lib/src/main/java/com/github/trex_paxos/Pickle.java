@@ -29,28 +29,7 @@ import com.github.trex_paxos.msg.Accept;
 /// This class does things the boilerplate way.
 public class Pickle {
 
-  public static Pickler<Command> instance = new Pickler<Command>() {
-
-    @Override
-    public byte[] serialize(Command cmd) {
-      try {
-        return Pickle.write(cmd);
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-
-    @Override
-    public Command deserialize(byte[] bytes) {
-      try {
-        return (Command) Pickle.readCommand(bytes);
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  };
-
-  public static byte[] writeProgress(Progress progress) throws IOException {
+    public static byte[] writeProgress(Progress progress) throws IOException {
         try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
                 DataOutputStream dos = new DataOutputStream(byteArrayOutputStream)) {
             write(progress, dos);

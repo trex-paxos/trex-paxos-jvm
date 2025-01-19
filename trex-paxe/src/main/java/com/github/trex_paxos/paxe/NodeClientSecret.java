@@ -2,6 +2,7 @@ package com.github.trex_paxos.paxe;
 
 import java.util.Objects;
 
+import com.github.trex_paxos.network.ClusterId;
 import com.github.trex_paxos.network.NodeId;
 
 public record NodeClientSecret(

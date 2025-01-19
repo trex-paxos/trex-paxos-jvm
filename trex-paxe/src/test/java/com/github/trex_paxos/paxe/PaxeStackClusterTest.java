@@ -1,12 +1,11 @@
 package com.github.trex_paxos.paxe;
 
 import com.github.trex_paxos.*;
+import com.github.trex_paxos.network.*;
 import org.junit.jupiter.api.*;
 
 import java.time.Duration;
-import java.util.EmptyStackException;
-import java.util.Optional;
-import java.util.Stack;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -16,9 +15,8 @@ import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@Disabled
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public class PaxeStackClusterTest {
+  public class PaxeStackClusterTest {
   private static final Duration TEST_TIMEOUT = Duration.ofSeconds(5);
 
   private NetworkTestHarness harness;
@@ -49,8 +47,8 @@ public class PaxeStackClusterTest {
   void setup() throws Exception {
     harness = new NetworkTestHarness();
 
-    PaxeNetwork network1 = harness.createNetwork((short) 1);
-    PaxeNetwork network2 = harness.createNetwork((short) 2);
+    PaxeNetwork network1 = harness.createNetwork((short)1);
+    PaxeNetwork network2 = harness.createNetwork((short)2);
 
     harness.waitForNetworkEstablishment();
 
@@ -68,7 +66,10 @@ public class PaxeStackClusterTest {
       PaxeNetwork network,
       boolean isLeader) {
 
-    PaxeNetwork networkLayer = null;
+    NetworkLayer networkLayer = new NetworkLayer(
+        network,
+        Map.of(Channel.CONSENSUS, PickleMsg.instance)
+    );
 
     TrexNode node = createNode(network.localNode.id());
     TrexEngine engine = createEngine(node, isLeader);
@@ -94,16 +95,13 @@ public class PaxeStackClusterTest {
   private TrexEngine createEngine(TrexNode node, boolean isLeader) {
     return new TrexEngine(node) {
       @Override
-      protected void setRandomTimeout() {
-      }
+      protected void setRandomTimeout() {}
 
       @Override
-      protected void clearTimeout() {
-      }
+      protected void clearTimeout() {}
 
       @Override
-      protected void setNextHeartbeat() {
-      }
+      protected void setNextHeartbeat() {}
 
       {
         if (isLeader) {
@@ -153,7 +151,7 @@ public class PaxeStackClusterTest {
   }
 
   @AfterEach
-  void stopAll() {
+  void teardown() {
     if (app1 != null) app1.stop();
     if (app2 != null) app2.stop();
     if (harness != null) harness.close();
