@@ -1,152 +1,191 @@
 package com.github.trex_paxos.paxe;
 
 import javax.crypto.Cipher;
-import javax.crypto.NoSuchPaddingException;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 
+import java.util.logging.Logger;
+
 public final class PaxeCrypto {
-  static final int GCM_NONCE_LENGTH = 12;
-  static final int GCM_TAG_LENGTH = 128;
-  static final int DEK_SIZE = 16;      // AES-128
-  static final int PAYLOAD_THRESHOLD = 64;
-  static final int GCM_TAG_BYTES = GCM_TAG_LENGTH / 8;
-  static final int DEK_SECTION_SIZE = GCM_NONCE_LENGTH + DEK_SIZE + GCM_TAG_BYTES; // 12 + 16 + 16 = 44 bytes;
+  private static final Logger LOGGER = Logger.getLogger(PaxeCrypto.class.getName());
+  private static final int GCM_NONCE_LENGTH = 12;
+  private static final int GCM_AUTH_TAG_LENGTH = 16;
+  private static final int GCM_TAG_LENGTH_BITS = 128;
+  public static final int DEK_THRESHOLD = 64;
+  private static final byte FLAG_DEK = 0x01;
+  public static final int DEK_SIZE = 16;
+  public static final int DEK_SECTION_SIZE = DEK_SIZE + GCM_NONCE_LENGTH + GCM_AUTH_TAG_LENGTH + 2;
 
   private static final ThreadLocal<SecureRandom> RANDOM = ThreadLocal.withInitial(SecureRandom::new);
   private static final ThreadLocal<Cipher> CIPHER = ThreadLocal.withInitial(() -> {
     try {
       return Cipher.getInstance("AES/GCM/NoPadding");
-    } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+    } catch (GeneralSecurityException e) {
       throw new RuntimeException("Required crypto algorithm unavailable", e);
     }
   });
 
-  /**
-   * Encrypted payload format:
-   * Direct: [flags:1][nonce:12][ciphertext:n][tag:16]
-   * DEK:    [flags:1][dek_nonce:12][dek_ciphertext:16][dek_tag:16][nonce:12][ciphertext:n][tag:16]
-   */
-  public enum Mode {
-    DIRECT(0x00),
-    WITH_DEK(0x01);
-
-    final byte flag;
-
-    Mode(int flag) {
-      this.flag = (byte) flag;
-    }
+  // Legacy API for PaxeNetwork compatibility
+  public static byte[] encrypt(byte[] payload, byte[] sessionKey) {
+    ByteBuffer buffer = ByteBuffer.allocate(1 + GCM_NONCE_LENGTH + payload.length + GCM_AUTH_TAG_LENGTH);
+    encryptStandard(buffer, payload, sessionKey);
+    buffer.flip();
+    byte[] result = new byte[buffer.remaining()];
+    buffer.get(result);
+    return result;
   }
 
-  public static byte[] encrypt(byte[] data, byte[] key) {
-    return encrypt(data, key, data.length > PAYLOAD_THRESHOLD ? Mode.WITH_DEK : Mode.DIRECT);
+  // Legacy API for PaxeNetwork compatibility
+  public static byte[] decrypt(byte[] encrypted, byte[] sessionKey) {
+    ByteBuffer input = ByteBuffer.wrap(encrypted);
+    ByteBuffer output = ByteBuffer.allocate(encrypted.length);
+    return decrypt(output, input, sessionKey);
   }
 
-  public static byte[] encrypt(byte[] data, byte[] key, Mode mode) {
-    if (mode == Mode.WITH_DEK) {
-      byte[] dek = generateKey();
-      byte[] encryptedDek = gcmEncrypt(dek, key);
-      byte[] encryptedData = gcmEncrypt(data, dek);
-
-      return ByteBuffer.allocate(1 + encryptedDek.length + encryptedData.length)
-          .put(mode.flag)
-          .put(encryptedDek)
-          .put(encryptedData)
-          .array();
-    }
-
-    byte[] encrypted = gcmEncrypt(data, key);
-    return ByteBuffer.allocate(1 + encrypted.length)
-        .put(mode.flag)
-        .put(encrypted)
-        .array();
-  }
-
-  public static byte[] decrypt(byte[] data, byte[] key) {
-    ByteBuffer buffer = ByteBuffer.wrap(data);
-    Mode mode = (buffer.get() == Mode.WITH_DEK.flag) ? Mode.WITH_DEK : Mode.DIRECT;
-
-    if (mode == Mode.WITH_DEK) {
-      byte[] encryptedDek = new byte[GCM_NONCE_LENGTH + DEK_SIZE + GCM_TAG_BYTES];
-      buffer.get(encryptedDek);
-      byte[] dek = gcmDecrypt(encryptedDek, key);
-
-      byte[] encryptedData = new byte[buffer.remaining()];
-      buffer.get(encryptedData);
-      return gcmDecrypt(encryptedData, dek);
-    }
-
-    byte[] encryptedData = new byte[buffer.remaining()];
-    buffer.get(encryptedData);
-    return gcmDecrypt(encryptedData, key);
-  }
-
-  public static byte[] reencryptDek(byte[] data, byte[] oldKey, byte[] newKey) {
-    ByteBuffer buffer = ByteBuffer.wrap(data);
-    Mode mode = (buffer.get() == Mode.WITH_DEK.flag) ? Mode.WITH_DEK : Mode.DIRECT;
-
-    if (mode != Mode.WITH_DEK) {
-      throw new IllegalArgumentException("Cannot reencrypt DEK on direct encrypted data");
-    }
-
-    byte[] encryptedDek = new byte[GCM_NONCE_LENGTH + DEK_SIZE + GCM_TAG_BYTES];
-    buffer.get(encryptedDek);
-    byte[] dek = gcmDecrypt(encryptedDek, oldKey);
-
-    byte[] reencryptedDek = gcmEncrypt(dek, newKey);
-    return ByteBuffer.allocate(1 + reencryptedDek.length + buffer.remaining())
-        .put(mode.flag)
-        .put(reencryptedDek)
-        .put(buffer)
-        .array();
-  }
-
-  private static byte[] generateKey() {
-    byte[] key = new byte[DEK_SIZE];
-    RANDOM.get().nextBytes(key);
-    return key;
-  }
-
-  private static byte[] gcmEncrypt(byte[] data, byte[] key) {
+  public static void encryptStandard(ByteBuffer output, byte[] payload, byte[] sessionKey) {
     try {
       byte[] nonce = new byte[GCM_NONCE_LENGTH];
       RANDOM.get().nextBytes(nonce);
 
+      output.put((byte)0);
+      output.put(nonce);
+
       Cipher cipher = CIPHER.get();
       cipher.init(Cipher.ENCRYPT_MODE,
-          new SecretKeySpec(key, "AES"),
-          new GCMParameterSpec(GCM_TAG_LENGTH, nonce));
+          new SecretKeySpec(sessionKey, "AES"),
+          new GCMParameterSpec(GCM_TAG_LENGTH_BITS, nonce));
 
-      byte[] ciphertext = cipher.doFinal(data);
-      return ByteBuffer.allocate(nonce.length + ciphertext.length)
-          .put(nonce)
-          .put(ciphertext)
-          .array();
+      output.put(cipher.doFinal(payload));
+
     } catch (GeneralSecurityException e) {
-      throw new RuntimeException("GCM encryption failed", e);
+      throw new SecurityException("Encryption failed", e);
     }
   }
 
-  private static byte[] gcmDecrypt(byte[] data, byte[] key) {
+  public static void dekEncrypt(ByteBuffer output, byte[] payload, byte[] sessionKey) {
+    if (payload.length <= DEK_THRESHOLD) {
+      encryptStandard(output, payload, sessionKey);
+      return;
+    }
+
     try {
-      ByteBuffer buffer = ByteBuffer.wrap(data);
+      // Generate DEK
+      KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+      keyGen.init(128);
+      byte[] dekKey = keyGen.generateKey().getEncoded();
+
+      // Generate nonces
+      byte[] sessionNonce = new byte[GCM_NONCE_LENGTH];
+      byte[] dekNonce = new byte[GCM_NONCE_LENGTH];
+      RANDOM.get().nextBytes(sessionNonce);
+      RANDOM.get().nextBytes(dekNonce);
+
+      // Write flag and session nonce
+      output.put(FLAG_DEK);
+      output.put(sessionNonce);
+
+      // Encrypt payload with DEK
+      Cipher dekCipher = CIPHER.get();
+      dekCipher.init(Cipher.ENCRYPT_MODE,
+          new SecretKeySpec(dekKey, "AES"),
+          new GCMParameterSpec(GCM_TAG_LENGTH_BITS, dekNonce));
+      byte[] encryptedPayload = dekCipher.doFinal(payload);
+
+      // Create and encrypt envelope
+      byte[] envelope = new byte[DEK_SIZE + GCM_NONCE_LENGTH + 2];
+      ByteBuffer envelopeBuffer = ByteBuffer.wrap(envelope);
+      envelopeBuffer.put(dekKey).put(dekNonce).putShort((short)payload.length);
+
+      Cipher sessionCipher = CIPHER.get();
+      sessionCipher.init(Cipher.ENCRYPT_MODE,
+          new SecretKeySpec(sessionKey, "AES"),
+          new GCMParameterSpec(GCM_TAG_LENGTH_BITS, sessionNonce));
+
+      output.put(sessionCipher.doFinal(envelope));
+      output.put(encryptedPayload);
+
+    } catch (GeneralSecurityException e) {
+      throw new SecurityException("DEK encryption failed", e);
+    }
+  }
+
+  public static byte[] decrypt(ByteBuffer output, ByteBuffer input, byte[] sessionKey) {
+    if (input.remaining() < GCM_NONCE_LENGTH + 1) {
+      throw new IllegalArgumentException("Input buffer too short for header");
+    }
+
+    byte flags = input.get();
+    return (flags & FLAG_DEK) == 0 ?
+        decryptStandard(input, sessionKey) :
+        decryptDek(input, sessionKey);
+  }
+
+  private static byte[] decryptStandard(ByteBuffer input, byte[] sessionKey) {
+    try {
       byte[] nonce = new byte[GCM_NONCE_LENGTH];
-      buffer.get(nonce);
+      input.get(nonce);
+
+      byte[] encrypted = new byte[input.remaining()];
+      input.get(encrypted);
 
       Cipher cipher = CIPHER.get();
       cipher.init(Cipher.DECRYPT_MODE,
-          new SecretKeySpec(key, "AES"),
-          new GCMParameterSpec(GCM_TAG_LENGTH, nonce));
+          new SecretKeySpec(sessionKey, "AES"),
+          new GCMParameterSpec(GCM_TAG_LENGTH_BITS, nonce));
 
-      byte[] ciphertext = new byte[buffer.remaining()];
-      buffer.get(ciphertext);
-      return cipher.doFinal(ciphertext);
+      return cipher.doFinal(encrypted);
+
     } catch (GeneralSecurityException e) {
-      throw new RuntimeException("GCM decryption failed", e);
+      throw new SecurityException("Decryption failed", e);
+    }
+  }
+
+  private static byte[] decryptDek(ByteBuffer input, byte[] sessionKey) {
+    try {
+      if (input.remaining() < GCM_NONCE_LENGTH + DEK_SECTION_SIZE) {
+        throw new IllegalArgumentException("Input buffer too short for DEK content");
+      }
+
+      byte[] sessionNonce = new byte[GCM_NONCE_LENGTH];
+      input.get(sessionNonce);
+
+      byte[] encryptedEnvelope = new byte[DEK_SECTION_SIZE];
+      input.get(encryptedEnvelope);
+
+      Cipher sessionCipher = CIPHER.get();
+      sessionCipher.init(Cipher.DECRYPT_MODE,
+          new SecretKeySpec(sessionKey, "AES"),
+          new GCMParameterSpec(GCM_TAG_LENGTH_BITS, sessionNonce));
+
+      byte[] envelope = sessionCipher.doFinal(encryptedEnvelope);
+      ByteBuffer envelopeBuffer = ByteBuffer.wrap(envelope);
+
+      byte[] dekKey = new byte[DEK_SIZE];
+      byte[] dekNonce = new byte[GCM_NONCE_LENGTH];
+      envelopeBuffer.get(dekKey).get(dekNonce);
+      short payloadLength = envelopeBuffer.getShort();
+
+      if (input.remaining() < payloadLength + GCM_AUTH_TAG_LENGTH) {
+        throw new IllegalArgumentException("Input buffer too short for payload");
+      }
+
+      byte[] encryptedPayload = new byte[input.remaining()];
+      input.get(encryptedPayload);
+
+      Cipher dekCipher = CIPHER.get();
+      dekCipher.init(Cipher.DECRYPT_MODE,
+          new SecretKeySpec(dekKey, "AES"),
+          new GCMParameterSpec(GCM_TAG_LENGTH_BITS, dekNonce));
+
+      return dekCipher.doFinal(encryptedPayload);
+
+    } catch (GeneralSecurityException e) {
+      throw new SecurityException("DEK decryption failed", e);
     }
   }
 }

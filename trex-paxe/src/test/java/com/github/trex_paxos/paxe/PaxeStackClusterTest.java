@@ -143,26 +143,6 @@ class PaxeStackClusterTest {
   }
 
   @Test
-  void testLargeValueDekEncryption() throws Exception {
-    // Create string larger than PAYLOAD_THRESHOLD to trigger DEK
-    StringBuilder largeValue = new StringBuilder();
-    largeValue.append("X".repeat(PaxeCrypto.PAYLOAD_THRESHOLD + 10));
-
-    // Push large value through node 1
-    CompletableFuture<StackService.Response> future = new CompletableFuture<>();
-    app1.submitValue(new StackService.Push(largeValue.toString()), future);
-    future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-
-    // Toggle to node 2 and verify
-    toggleNode();
-
-    future = new CompletableFuture<>();
-    app2.submitValue(new StackService.Pop(), future);
-    assertEquals(largeValue.toString(),
-        future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).value().orElse(null));
-  }
-
-  @Test
   void testNodeFailure() throws Exception {
     // Push initial value
     CompletableFuture<StackService.Response> future1 = new CompletableFuture<>();

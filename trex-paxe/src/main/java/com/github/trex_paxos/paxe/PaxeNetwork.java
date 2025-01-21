@@ -20,6 +20,41 @@ import java.util.function.Supplier;
 import static com.github.trex_paxos.network.SystemChannel.KEY_EXCHANGE;
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
+/// Wire protocol for Paxe secured network communication.
+///
+/// The protocol uses Data Encryption Keys (DEK) for efficient broadcast of large messages.
+/// For payloads >64 bytes, we first encrypt the data once with a random DEK using AES-GCM,
+/// then encrypt only the DEK itself with each recipient's session key. This avoids
+/// re-encrypting large payloads multiple times during broadcast. Both the inner (DEK)
+/// and outer (session key) encryption use AES-GCM with fresh IVs each time.
+///
+/// Datagram Structure:
+/// ```
+/// Header (8 bytes):
+///   from:     2 bytes - source node ID
+///   to:       2 bytes - destination node ID
+///   channel:  2 bytes - protocol channel ID
+///   length:   2 bytes - total payload length
+///
+/// Flags (1 byte):
+///   bit 0:    1 = DEK encryption used, 0 = direct session key encryption
+///   bits 1-7: reserved
+///
+/// For direct encryption (flags.bit0 == 0):
+///   nonce:      12 bytes
+///   payload:    N bytes AES-GCM encrypted with session key
+///   auth_tag:   16 bytes
+///
+/// For DEK encryption (flags.bit0 == 1):
+///   session_nonce:     12 bytes  - Fresh IV for session key encryption
+///   session_auth_tag:  16 bytes  - Session key auth tag
+///   encrypted_envelope: M bytes  - Fixed size envelope encrypted with session key containing:
+///     dek_key:         16 bytes    - Random 128-bit DEK
+///     dek_nonce:       12 bytes    - Fresh IV for DEK encryption
+///     dek_auth_tag:    16 bytes    - DEK auth tag
+///     dek_length:       2 bytes    - Length of DEK encrypted payload
+///   dek_payload:       N bytes   - Payload encrypted with DEK
+///```
 public class PaxeNetwork implements NetworkLayer, AutoCloseable {
   private static final int MAX_PACKET_SIZE = 65507; // UDP max size
   private static final int HEADER_SIZE = 8; // from(2) + to(2) + channel(2) + length(2)

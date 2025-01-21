@@ -34,7 +34,6 @@ public class PaxeNetworkTest {
   private PaxeNetwork network2;
   private Selector testSelector;
 
-
   @BeforeAll
   static void setupLogging() {
     final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
