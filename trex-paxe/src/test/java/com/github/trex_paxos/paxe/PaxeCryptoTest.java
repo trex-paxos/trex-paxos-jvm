@@ -146,7 +146,7 @@ class PaxeCryptoTest {
     truncated.put(data).flip();
 
     ByteBuffer decrypt = getBuffer();
-    assertThrows(IllegalArgumentException.class, () ->
+    assertThrows(SecurityException.class, () ->
             PaxeCrypto.decrypt(decrypt, truncated, sessionKey),
         "Decryption of truncated message should fail with IllegalArgumentException");
   }
