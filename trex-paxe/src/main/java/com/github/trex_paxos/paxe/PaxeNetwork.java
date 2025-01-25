@@ -176,7 +176,7 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
         handshake.ifPresent(keyMessage -> send(KEY_EXCHANGE.value(), to, keyMessage));
         return;
       }
-      payload = PaxeCrypto.encrypt(serializeMessage(channel, msg), key);
+      payload = Crypto.encrypt(serializeMessage(channel, msg), key);
     }
 
     buffer.putShort((short) payload.length);
@@ -218,7 +218,7 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
         }
 
         // First encrypt with DEK - this is done once per broadcast
-        byte[] baseEncrypted = PaxeCrypto.encrypt(payload, sessionKey);
+        byte[] baseEncrypted = Crypto.encrypt(payload, sessionKey);
         ByteBuffer buffer = ByteBuffer.allocate(HEADER_SIZE + baseEncrypted.length);
 
         // Write header
@@ -267,17 +267,17 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
     }
 
     // Extract DEK section
-    byte[] dek = new byte[PaxeCrypto.DEK_SIZE];
+    byte[] dek = new byte[PaxeProtocol.DEK_KEY_SIZE];
     int savedPosition = buffer.position();
     buffer.position(dekStart);
     buffer.get(dek);
 
     // Encrypt DEK with recipient's session key
-    byte[] encryptedDek = PaxeCrypto.encrypt(dek, sessionKey);
+    byte[] encryptedDek = Crypto.encrypt(dek, sessionKey);
 
     // Write encrypted DEK back to buffer
     buffer.position(dekStart);
-    buffer.put(encryptedDek, 0, PaxeCrypto.DEK_SECTION_SIZE);
+    buffer.put(encryptedDek, 0, PaxeProtocol.DEK_SECTION_SIZE);
     buffer.position(savedPosition);
   }
 
@@ -387,7 +387,7 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
     if (key == null) {
       throw new IllegalStateException("No session key available from " + from);
     }
-    return PaxeCrypto.decrypt(data, key);
+    return Crypto.decrypt(data, key);
   }
 
   /// For key exchange, deserialize without encryption
