@@ -34,10 +34,3 @@ PAXE is a lightweight encrypted protocol for Paxos clusters supporting multiplex
    - Must complete before encrypted traffic
 2. Encrypted stream communication (0-RTT) using channels
 3. Automatic session resumption after network changes
-
-## References
-1. When large messages are fragmented:
-   - Each fragment includes Message ID for reassembly
-   - Receiving node must buffer and reorder fragments
-   - Complete message processed after last fragment received
-2. Applications must handle timeout and cleanup of incomplete fragment sequences

@@ -2,9 +2,12 @@ package com.github.trex_paxos.paxe;
 
 import org.junit.jupiter.api.*;
 import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
+
+import static com.github.trex_paxos.paxe.Crypto.dumpBuffer;
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 import static com.github.trex_paxos.paxe.PaxeProtocol.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -53,12 +56,13 @@ class CryptoTest {
     random.nextBytes(payload);
 
     ByteBuffer encrypt = getBuffer();
-    ByteBuffer inputBuffer = BufferUtils.wrapBytes(payload, true);
+    ByteBuffer buffer = ByteBuffer.allocateDirect(payload.length);
+    buffer.put(payload).flip();
 
     LOGGER.finest(() -> String.format("Original buffer: %s",
         dumpBuffer(encrypt, 0, 16)));
 
-    Crypto.encryptStandard(encrypt, inputBuffer, sessionKey);
+    Crypto.encryptStandard(encrypt, buffer, sessionKey);
     encrypt.flip();  // Prepare for reading
 
     LOGGER.finest(() -> String.format("Flipped encrypted buffer: pos=%d limit=%d remaining=%d",
@@ -70,43 +74,18 @@ class CryptoTest {
     assertArrayEquals(payload, decrypted, "Decrypted payload should match original");
   }
 
-  private static final int DEK_HEADER_SIZE = 1 + GCM_NONCE_LENGTH;  // flags + nonce
-
-
-
-  // Add dumpBuffer helper identical to the one in Crypto
-  private static String dumpBuffer(ByteBuffer buffer, int start, int len) {
-    StringBuilder sb = new StringBuilder();
-    int pos = buffer.position();
-    buffer.position(start);
-    for(int i = 0; i < len && buffer.hasRemaining(); i++) {
-      sb.append(String.format("%02x ", buffer.get()));
-    }
-    buffer.position(pos);
-    return sb.toString();
-  }
-
-
   @Test
-  void testDekEncryption() {
+  void testDekEncryption() throws GeneralSecurityException {
     byte[] payload = new byte[1024];
     random.nextBytes(payload);
 
+    final var dekPayload = Crypto.dekInner(payload);
     ByteBuffer encrypt = getBuffer();
-    ByteBuffer inputBuffer = BufferUtils.wrapBytes(payload, true);
 
-    LOGGER.finest(() -> String.format("DEK buffer start: pos=%d limit=%d",
-        encrypt.position(), encrypt.limit()));
-
-    Crypto.encryptDek(encrypt, inputBuffer, sessionKey);
+    Crypto.encryptDek(encrypt, dekPayload, sessionKey);
     encrypt.flip();
 
-    LOGGER.finest(() -> String.format("DEK encrypted: pos=%d limit=%d remaining=%d",
-        encrypt.position(), encrypt.limit(), encrypt.remaining()));
-    LOGGER.finest(() -> String.format("DEK header: %s",
-        dumpBuffer(encrypt, 0, DEK_HEADER_SIZE)));
-
-    byte[] decrypted = Crypto.decrypt(encrypt, sessionKey);
+    byte[] decrypted = Crypto.decryptDek(encrypt, sessionKey);
     assertArrayEquals(payload, decrypted, "DEK decrypted payload should match");
   }
 
@@ -119,8 +98,9 @@ class CryptoTest {
     random.nextBytes(wrongKey);
 
     ByteBuffer encrypt = getBuffer();
-    ByteBuffer inputBuffer = BufferUtils.wrapBytes(payload, true);
-    Crypto.encryptStandard(encrypt, inputBuffer, sessionKey);
+    ByteBuffer buffer = ByteBuffer.allocateDirect(payload.length);
+    buffer.put(payload).flip();
+    Crypto.encryptStandard(encrypt, buffer, sessionKey);
     encrypt.flip();
     LOGGER.finest(() -> String.format("testDecryptionFailsWithWrongKey: after encrypt position=%d remaining=%d",
         encrypt.position(), encrypt.remaining()));
@@ -137,8 +117,9 @@ class CryptoTest {
     random.nextBytes(payload);
 
     ByteBuffer encrypt = getBuffer();
-    ByteBuffer inputBuffer = BufferUtils.wrapBytes(payload, true);
-    Crypto.encryptStandard(encrypt, inputBuffer, sessionKey);
+    ByteBuffer buffer = ByteBuffer.allocateDirect(payload.length);
+    buffer.put(payload).flip();
+    Crypto.encryptStandard(encrypt, buffer, sessionKey);
 
     // Get encrypted data as bytes
     encrypt.flip();
@@ -167,8 +148,9 @@ class CryptoTest {
     random.nextBytes(payload);
 
     ByteBuffer encrypt = getBuffer();
-    ByteBuffer inputBuffer = BufferUtils.wrapBytes(payload, true);
-    Crypto.encryptStandard(encrypt, inputBuffer, sessionKey);
+    ByteBuffer buffer1 = ByteBuffer.allocateDirect(payload.length);
+    buffer1.put(payload).flip();
+    Crypto.encryptStandard(encrypt, buffer1, sessionKey);
     encrypt.flip();
     LOGGER.finest(() -> String.format("testDecryptionFailsWithTruncatedMessage: encrypted length=%d",
         encrypt.remaining()));
@@ -179,26 +161,11 @@ class CryptoTest {
     LOGGER.finest(() -> String.format("testDecryptionFailsWithTruncatedMessage: truncated data length=%d",
         data.length));
 
-    ByteBuffer truncated = BufferUtils.wrapBytes(data, true);
+    ByteBuffer buffer = ByteBuffer.allocateDirect(data.length);
+    buffer.put(data).flip();
     assertThrows(SecurityException.class, () ->
-            Crypto.decrypt(truncated, sessionKey),
+            Crypto.decrypt(buffer, sessionKey),
         "Decryption of truncated message should fail with SecurityException");
-  }
-
-  @Test
-  void testSmallPayloadUsesDirect() {
-    LOGGER.finest(() -> "Starting testSmallPayloadUsesDirect");
-    byte[] payload = new byte[DEK_THRESHOLD - 1];
-    random.nextBytes(payload);
-
-    ByteBuffer encrypt = getBuffer();
-    ByteBuffer inputBuffer = BufferUtils.wrapBytes(payload, true);
-    Crypto.encryptDek(encrypt, inputBuffer, sessionKey);
-    encrypt.flip();
-    LOGGER.finest(() -> String.format("testSmallPayloadUsesDirect: encrypted length=%d",
-        encrypt.remaining()));
-
-    assertEquals(0, encrypt.get() & FLAG_DEK, "Small payload should use direct encryption");
   }
 
   private ByteBuffer getBuffer() {

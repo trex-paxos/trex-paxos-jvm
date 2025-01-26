@@ -7,7 +7,7 @@ import java.util.logging.Logger;
 /// Encapsulates wire format knowledge and validation logic.
 public final class PaxeProtocol {
   // FIXME do not use a separate logger use one static init logger of the main protocol class
-  private static final Logger LOGGER = Logger.getLogger(PaxeProtocol.class.getName());
+  static final Logger LOGGER = Logger.getLogger(PaxeProtocol.class.getName());
 
   // Header structure (8 bytes)
   public static final int FROM_OFFSET = 0;
@@ -75,20 +75,6 @@ public final class PaxeProtocol {
         fromId, toId, channelId, length));
 
     return new Header(fromId, toId, channelId, length);
-  }
-
-  /// Create envelope structure for DEK encryption
-  ///
-  /// @param buffer Target buffer
-  /// @param dekKey DEK encryption key
-  /// @param dekNonce DEK nonce
-  /// @param payloadLength Length of payload
-  public static void writeEnvelope(ByteBuffer buffer, byte[] dekKey, byte[] dekNonce, short payloadLength) {
-    buffer.put(dekKey)
-        .put(dekNonce)
-        .putShort(payloadLength);
-    LOGGER.finest(() -> String.format("Wrote envelope: key_size=%d nonce_size=%d payload_length=%d",
-        dekKey.length, dekNonce.length, payloadLength));
   }
 
   /// Read envelope structure from buffer
