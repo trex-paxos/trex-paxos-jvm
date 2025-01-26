@@ -45,6 +45,7 @@ class PaxeNetworkTest {
   void setup() throws Exception {
     LOGGER.fine("Setting up test networks");
     testSelector = Selector.open();
+    @SuppressWarnings("resource")
     NetworkTestHarness harness = new NetworkTestHarness(new ClusterId("test"), CONSTANTS);
 
     network1 = harness.createNetwork((short) 1);

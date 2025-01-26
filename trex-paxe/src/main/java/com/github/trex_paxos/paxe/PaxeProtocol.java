@@ -25,9 +25,10 @@ public final class PaxeProtocol {
   public static final int MIN_MESSAGE_SIZE = HEADER_SIZE + 1; // Header + flags
   public static final int DEK_THRESHOLD = 64;
   public static final int DEK_KEY_SIZE = 16;
-  public static final int DEK_SECTION_SIZE = DEK_KEY_SIZE + GCM_NONCE_LENGTH + GCM_TAG_LENGTH + 2;
 
-  private PaxeProtocol() {}
+  private PaxeProtocol() {
+  }
+
   // TODO use this
   public static boolean isValidFlags(byte flags) {
     // Standard encryption: Only MAGIC_1 set

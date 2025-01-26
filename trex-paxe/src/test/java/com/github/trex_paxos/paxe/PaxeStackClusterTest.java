@@ -186,11 +186,11 @@ class PaxeStackClusterTest {
 
   @AfterEach
   void tearDown() {
-    LOGGER.fine("Test teardown starting");
+    LOGGER.fine("Test tear down starting");
     if (app1 != null) app1.stop();
     if (app2 != null) app2.stop();
     if (harness != null) harness.close();
-    LOGGER.fine("Test teardown complete");
+    LOGGER.fine("Test tear down complete");
   }
 
   static class StackProcessor implements Function<StackService.Command, StackService.Response> {
