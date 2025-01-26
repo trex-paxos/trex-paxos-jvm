@@ -32,7 +32,6 @@ public final class Crypto {
     return HexFormat.of().formatHex(bytes).replaceAll("(.{2})", "$1 ").trim();
   }
 
-  /// Legacy API compatibility
   public static byte[] encrypt(byte[] payload, byte[] sessionKey) {
     ByteBuffer buffer = ByteBuffer.allocateDirect(payload.length);
     buffer.put(payload).flip();
@@ -47,7 +46,6 @@ public final class Crypto {
     return result;
   }
 
-  /// Legacy API compatibility
   public static byte[] decrypt(byte[] encrypted, byte[] sessionKey) {
     ByteBuffer buffer = ByteBuffer.allocateDirect(encrypted.length);
     buffer.put(encrypted).flip();

@@ -34,10 +34,12 @@ class PaxeNetworkTest {
 
   @BeforeAll
   static void setupLogging() {
-    LOGGER.setLevel(Level.FINEST);
+    final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
+    final Level level = Level.parse(logLevel);
     ConsoleHandler handler = new ConsoleHandler();
-    handler.setLevel(Level.FINEST);
+    handler.setLevel(level);
     LOGGER.addHandler(handler);
+    LOGGER.setLevel(level);
     LOGGER.setUseParentHandlers(false);
   }
 

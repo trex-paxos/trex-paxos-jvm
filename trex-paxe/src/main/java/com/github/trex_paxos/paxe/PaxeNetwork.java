@@ -11,39 +11,95 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
+import java.security.GeneralSecurityException;
 import java.util.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import static com.github.trex_paxos.network.SystemChannel.KEY_EXCHANGE;
+import static com.github.trex_paxos.network.SystemChannel.*;
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
+import static com.github.trex_paxos.paxe.PaxeProtocol.MAX_UDP_SIZE;
 
-/// Wire protocol for Paxe secured network communication
-public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
-  private static final int MAX_PACKET_SIZE = 65507;
-  private static final int HEADER_SIZE = 8;
-  private static final int MAX_BUFFERED_BYTES = 64240;
+/// Wire protocol for Paxe secured network communication.
+///
+/// The protocol uses Data Encryption Keys (DEK) for efficient broadcast of large messages.
+/// For payloads >64 bytes, we first encrypt the data once with a random DEK using AES-GCM,
+/// then encrypt only the DEK itself with each recipient's session key. This avoids
+/// re-encrypting large payloads multiple times during broadcast. Both the inner (DEK)
+/// and outer (session key) encryption use AES-GCM with fresh IVs each time.
+///
+/// Datagram Structure:
+/// ```
+/// Header (8 bytes):
+///   from:     2 bytes - source node ID
+///   to:       2 bytes - destination node ID
+///   channel:  2 bytes - protocol channel ID
+///   length:   2 bytes - total payload length
+///
+/// Flags (1 byte):
+///   bit 0:    1 = DEK encryption used, 0 = direct session key encryption
+///   bit 1:    magic bit, must be 0
+///   bit 2:    magic bit, must be 1
+///   bit 3-7: reserved
+///
+/// For direct encryption (flags.bit0 == 0):
+///   nonce:      12 bytes
+///   payload:    N bytes AES-GCM encrypted with session key
+///   auth_tag:   16 bytes
+///
+/// For DEK encryption (flags.bit0 == 1):
+///   session_nonce:     12 bytes  - Fresh IV for session key encryption
+///   session_auth_tag:  16 bytes  - Session key auth tag
+///   encrypted_envelope: M bytes  - Fixed size envelope encrypted with session key containing:
+///     dek_key:         16 bytes    - Random 128-bit DEK
+///     dek_nonce:       12 bytes    - Fresh IV for DEK encryption
+///     dek_auth_tag:    16 bytes    - DEK auth tag
+///     dek_length:       2 bytes    - Length of DEK encrypted payload
+///   dek_payload:       N bytes   - Payload encrypted with DEK
+///
+/// Max payload sizes:
+/// - Direct encryption: 65507 - 8 - 1 - 12 - 16 = 65470 bytes
+/// - DEK encryption: 65507 - 8 - 1 - 12 - 16 - 16 - 12 - 16 - 2 = 65424 bytes
+///```
+public class PaxeNetwork implements NetworkLayer, AutoCloseable {
+
+  sealed interface Traffic {
+    record Outbound<T>(Channel channel, NodeId to, T msg) implements Traffic {
+    }
+
+    record Inbound(Channel channel, NodeId from, byte[] payload) implements Traffic {
+    }
+  }
+
+  static final int MAX_PACKET_SIZE = 65507; // TODO test the limits
+  static final int HEADER_SIZE = 8;
+  static final int MAX_BUFFERED_BYTES = 64240; // TODO test the limits
+  static final int MAX_PAYLOAD_SIZE = 65424; // due to DEK encryption overhead
 
   final SessionKeyManager keyManager;
   final NodeId localNode;
   final DatagramChannel channel;
   final Selector selector;
   private final Map<Channel, List<Consumer<?>>> subscribers;
-  private final Map<Channel, DirectBuffer> channelBuffers;
   final Supplier<ClusterMembership> membership;
   private final Map<Channel, Pickler<?>> picklers;
 
   private volatile boolean running;
 
-  private record DirectBuffer(ByteBuffer sendBuffer, ByteBuffer receiveBuffer) {
-  }
-
   private record PendingMessage(Channel channel, byte[] serializedData) {
   }
 
+  // if we have no session key we buffer the message until we have one
   private final Map<NodeId, Queue<PendingMessage>> pendingMessages = new ConcurrentHashMap<>();
+
+  // we want to offload processing inbound messages to different threads
+  private final Map<Channel, BlockingQueue<Traffic.Inbound>> inboundQueues = new ConcurrentHashMap<>();
+  // we want to offload processing outbound messages to different threads
+  private final Map<Channel, BlockingQueue<Traffic.Outbound<?>>> outboundQueues = new ConcurrentHashMap<>();
 
   public static final class Builder {
     private final Map<Channel, Pickler<?>> picklers = new HashMap<>();
@@ -61,8 +117,9 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
       this.port = port;
       this.local = local;
       this.membership = membership;
-      picklers.put(SystemChannel.CONSENSUS.value(), PickleMsg.instance);
-      picklers.put(SystemChannel.PROXY.value(), Pickle.instance);
+      picklers.put(CONSENSUS.value(), PickleMsg.instance);
+      picklers.put(PROXY.value(), Pickle.instance);
+      picklers.put(KEY_EXCHANGE.value(), PickleHandshake.instance);
     }
 
     public PaxeNetwork build() throws IOException {
@@ -78,7 +135,6 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
     this.membership = membership;
     this.picklers = Map.copyOf(picklers);
     this.subscribers = new ConcurrentHashMap<>();
-    this.channelBuffers = new HashMap<>();
 
     LOGGER.fine(() -> String.format("Initializing network for node %s on port %d", local, port));
 
@@ -87,29 +143,74 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
     this.channel.socket().bind(new InetSocketAddress(port));
     this.selector = Selector.open();
     this.channel.register(selector, SelectionKey.OP_READ);
+  }
 
-    // Pre-allocate direct buffers for each channel type
-    for (Channel c : SystemChannel.systemChannels()) {
-      channelBuffers.put(c, new DirectBuffer(
-          ByteBuffer.allocateDirect(MAX_PACKET_SIZE),
-          ByteBuffer.allocateDirect(MAX_PACKET_SIZE)
-      ));
-      LOGGER.finest(() -> String.format("Allocated buffers for channel %s", c));
+  protected void initializeChannels() {
+    SystemChannel.systemChannels().forEach(channel -> {
+      inboundQueues.put(channel, new ArrayBlockingQueue<>(1000));
+      outboundQueues.put(channel, new ArrayBlockingQueue<>(1000));
+
+      if (channel == CONSENSUS.value() || channel == PROXY.value()) {
+        // Platform threads for critical system channels
+        Thread.ofPlatform()
+            .name("paxe-in-" + channel.id())
+            .start(() -> processInbound(channel));
+        Thread.ofPlatform()
+            .name("paxe-out-" + channel.id())
+            .start(() -> processOutbound(channel));
+      } else {
+        // Virtual threads for other channels
+        Thread.ofVirtual()
+            .name("paxe-in-" + channel.id())
+            .start(() -> processInbound(channel));
+        Thread.ofVirtual()
+            .name("paxe-out-" + channel.id())
+            .start(() -> processOutbound(channel));
+      }
+    });
+  }
+
+  protected void processInbound(Channel channel) {
+    while (running) {
+      try {
+        Traffic.Inbound traffic = inboundQueues.get(channel).take();
+        // Process inbound messages
+        dispatchToSubscribers(channel, traffic.payload());
+      } catch (InterruptedException e) {
+        if (running) {
+          LOGGER.warning("Inbound processing interrupted: " + e.getMessage());
+          Thread.currentThread().interrupt();
+        }
+      }
+    }
+  }
+
+  protected void processOutbound(Channel channel) {
+    while (running) {
+      try {
+        Traffic.Outbound<?> traffic = outboundQueues.get(channel).take();
+        send(channel, traffic.to(), traffic.msg());
+      } catch (InterruptedException e) {
+        if (running) {
+          LOGGER.warning("Outbound processing interrupted: " + e.getMessage());
+          Thread.currentThread().interrupt();
+        }
+      }
     }
   }
 
   @Override
   public <T> void send(Channel channel, NodeId to, T msg) {
+    if (!running) {
+      return;
+    }
+    if (to.id() == localNode.id()) {
+      LOGGER.finest(() -> String.format("Ignoring message to self on channel %s: %s", channel, msg));
+      return;
+    }
+
     LOGGER.finest(() -> String.format("%s Sending message on channel %s to %s: %s",
         localNode, channel, to, msg));
-
-    DirectBuffer buffers = channelBuffers.get(channel);
-    ByteBuffer buffer = buffers.sendBuffer();
-    buffer.clear();
-
-    buffer.putShort(localNode.id());
-    buffer.putShort(to.id());
-    buffer.putShort(channel.id());
 
     byte[] payload;
     if (channel.id() == KEY_EXCHANGE.id()) {
@@ -123,8 +224,19 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
         bufferPendingMessage(channel, to, msg);
         return;
       }
-      payload = Crypto.encrypt(serializeMessage(msg, channel), key);
+      final var serializeMessage = serializeMessage(msg, channel);
+      if (serializeMessage.length >= MAX_PAYLOAD_SIZE) {
+        throw new IllegalArgumentException("Serialized message %s too large: %d bytes".formatted(msg, serializeMessage.length));
+      }
+      payload = Crypto.encrypt(serializeMessage, key);
     }
+
+    ByteBuffer buffer = ByteBuffer.allocateDirect(payload.length + HEADER_SIZE);
+    buffer.clear();
+
+    buffer.putShort(localNode.id());
+    buffer.putShort(to.id());
+    buffer.putShort(channel.id());
 
     buffer.putShort((short) payload.length);
     buffer.put(payload);
@@ -134,6 +246,8 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
       SocketAddress address = resolveAddress(to);
       int sent = this.channel.send(buffer, address);
       LOGGER.finest(() -> String.format("Sent %d bytes to %s", sent, address));
+    } catch (java.nio.channels.ClosedChannelException e) {
+      LOGGER.fine(() -> String.format("Failed to send message to %s: %s", to, "Channel closed"));
     } catch (IOException e) {
       LOGGER.warning(() -> String.format("Failed to send message to %s: %s", to, e.getMessage()));
       throw new RuntimeException(e);
@@ -160,8 +274,27 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
   @Override
   public <T> void broadcast(Supplier<ClusterMembership> membershipSupplier, Channel channel, T msg) {
     Collection<NodeId> recipients = membershipSupplier.get().otherNodes(localNode);
-    for (NodeId recipient : recipients) {
-      send(channel, recipient, msg);
+    byte[] serialized = serializeMessage(msg, channel);
+
+    if (serialized.length <= PaxeProtocol.DEK_THRESHOLD) {
+      // Small messages: Use standard per-recipient encryption
+      recipients.forEach(recipient -> send(channel, recipient, msg));
+    } else {
+      try {
+        // Large messages: Encrypt payload once with DEK
+        var dekPayload = Crypto.dekInner(serialized);
+
+        // Then only encrypt DEK per recipient
+        for (NodeId recipient : recipients) {
+          ByteBuffer output = ByteBuffer.allocateDirect(MAX_UDP_SIZE);
+          Crypto.encryptDek(output, dekPayload, keyManager.sessionKeys.get(recipient));
+          output.flip();
+          // Send the encrypted DEK and reuse the encrypted payload
+          send(channel, recipient, output);
+        }
+      } catch (GeneralSecurityException e) {
+        throw new SecurityException("DEK encryption failed", e);
+      }
     }
   }
 
@@ -175,6 +308,10 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
   public void start() {
     if (running) return;
     running = true;
+    subscribe(KEY_EXCHANGE.value(), keyManager::handleMessage, "key-exchange");
+    // Launch threads that consume from the queues
+    initializeChannels();
+    // Launch the hot core receiver thread that reads from the network
     Thread.ofPlatform()
         .name("paxe-receiver-" + localNode.id())
         .start(this::receiveLoop);
@@ -203,57 +340,60 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
     }
   }
 
+  private final ByteBuffer readBuffer = ByteBuffer.allocateDirect(MAX_PACKET_SIZE);
+
   private void readFromChannel() throws IOException {
-    for (Map.Entry<Channel, DirectBuffer> entry : channelBuffers.entrySet()) {
-      ByteBuffer buffer = entry.getValue().receiveBuffer();
-      buffer.clear();
+    readBuffer.clear();
+    SocketAddress sender = channel.receive(readBuffer);
+    if (sender == null) return;
 
-      SocketAddress sender = channel.receive(buffer);
-      if (sender == null) continue;
+    readBuffer.flip();
+    if (readBuffer.remaining() < HEADER_SIZE) {
+      LOGGER.finest(() -> String.format("Received undersized packet from %s: %d bytes",
+          sender, readBuffer.remaining()));
+      return;
+    }
 
-      buffer.flip();
-      if (buffer.remaining() < HEADER_SIZE) {
-        LOGGER.finest(() -> String.format("Received undersized packet from %s: %d bytes",
-            sender, buffer.remaining()));
-        continue;
-      }
+    short fromId = readBuffer.getShort();
+    short toId = readBuffer.getShort();
+    short channelId = readBuffer.getShort();
+    short length = readBuffer.getShort();
 
-      short fromId = buffer.getShort();
-      short toId = buffer.getShort();
-      short channelId = buffer.getShort();
-      short length = buffer.getShort();
+    LOGGER.finest(() -> String.format("Read packet: from=%d, to=%d, channel=%d, len=%d",
+        fromId, toId, channelId, length));
 
-      LOGGER.finest(() -> String.format("Read packet: from=%d, to=%d, channel=%d, len=%d",
-          fromId, toId, channelId, length));
+    if (toId != localNode.id()) {
+      LOGGER.finest(() -> String.format("Packet not for us (to=%d, we are %d), dropping",
+          toId, localNode.id()));
+      return;
+    }
 
-      if (toId != localNode.id()) {
-        LOGGER.finest(() -> String.format("Packet not for us (to=%d, we are %d), dropping",
-            toId, localNode.id()));
-        continue;
-      }
+    Channel msgChannel = new Channel(channelId);
+    if (!inboundQueues.containsKey(msgChannel)) {
+      LOGGER.warning(() -> String.format("Unknown channel %d", channelId));
+      return;
+    }
 
-      Channel msgChannel = new Channel(channelId);
-      LOGGER.finest(() -> String.format("Processing message from %d on channel %s",
-          fromId, msgChannel));
+    LOGGER.finer(() -> String.format("Processing message from %d on channel %s",
+        fromId, msgChannel));
 
-      byte[] payload = new byte[length];
-      buffer.get(payload);
+    byte[] payload = new byte[length];
+    readBuffer.get(payload);
 
-      if (msgChannel.id() == KEY_EXCHANGE.id()) {
-        LOGGER.finest(() -> String.format("Processing key exchange from %d", fromId));
-        handleKeyExchange(fromId, payload);
-      } else {
-        try {
-          byte[] decrypted = decrypt(payload, new NodeId(fromId));
-          LOGGER.finest(() -> String.format("Dispatching %d byte message from %d on channel %s",
-              decrypted.length, fromId, msgChannel));
-          dispatchToSubscribers(msgChannel, decrypted);
-        } catch (Exception e) {
-          LOGGER.warning(() -> String.format("Failed to process message from %d: %s",
-              fromId, e.getMessage()));
-        }
+    if (msgChannel.id() != KEY_EXCHANGE.id()) {
+      try {
+        byte[] decrypted = decrypt(payload, new NodeId(fromId));
+        LOGGER.finest(() -> String.format("Dispatching %d byte message from %d on channel %s",
+            decrypted.length, fromId, msgChannel));
+        payload = decrypted;
+      } catch (Exception e) {
+        LOGGER.warning(() -> String.format("Failed to process message from %d: %s",
+            fromId, e.getMessage()));
+        return;
       }
     }
+
+    inboundQueues.get(msgChannel).add(new Traffic.Inbound(msgChannel, new NodeId(fromId), payload));
   }
 
   private byte[] decrypt(byte[] data, NodeId from) {
@@ -262,12 +402,6 @@ public final class PaxeNetwork implements NetworkLayer, AutoCloseable {
       throw new IllegalStateException("No session key for " + from);
     }
     return Crypto.decrypt(data, key);
-  }
-
-  private void handleKeyExchange(short fromId, byte[] payload) {
-    LOGGER.finest(() -> String.format("Processing key exchange message from %d", fromId));
-    SessionKeyManager.KeyMessage msg = PickleHandshake.unpickle(payload);
-    keyManager.handleMessage(msg);
   }
 
   private void dispatchToSubscribers(Channel channel, byte[] bytes) {

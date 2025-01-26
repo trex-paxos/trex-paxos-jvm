@@ -1,5 +1,6 @@
 package com.github.trex_paxos.paxe;
 
+import com.github.trex_paxos.Pickler;
 import com.github.trex_paxos.network.NodeId;
 
 import java.nio.ByteBuffer;
@@ -170,6 +171,19 @@ public class SessionKeyManager {
 
 // Package-private serialization class inside SessionKeyManager.java
 class PickleHandshake {
+
+  public static Pickler<SessionKeyManager.KeyMessage> instance = new Pickler<>() {
+    @Override
+    public byte[] serialize(SessionKeyManager.KeyMessage msg) {
+      return PickleHandshake.pickle(msg);
+    }
+
+    @Override
+    public SessionKeyManager.KeyMessage deserialize(byte[] bytes) {
+      return PickleHandshake.unpickle(bytes);
+    }
+  };
+
   static byte[] pickle(SessionKeyManager.KeyMessage msg) {
     ByteBuffer buffer = ByteBuffer.allocate(calculateSize(msg));
     buffer.put(toByte(msg));

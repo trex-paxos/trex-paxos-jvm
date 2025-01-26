@@ -261,7 +261,7 @@ public abstract class TrexEngine implements AutoCloseable {
   /// Please use try-with-resources to ensure that the TrexNode is closed properly on exceptions due to bad data or journal write exceptions.
   @Override
   public void close() {
-    LOGGER.warning("Closing TrexEngine. We are marking TrexNode as stopped.");
+    LOGGER.info("Closing TrexEngine. We are marking TrexNode as stopped.");
     trexNode.close();
   }
 

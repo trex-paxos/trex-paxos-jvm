@@ -31,17 +31,13 @@ class PaxeStackClusterTest {
 
   @BeforeAll
   static void setupLogging() {
+    final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
+    final Level level = Level.parse(logLevel);
     ConsoleHandler handler = new ConsoleHandler();
-    handler.setLevel(Level.INFO);
-
-    LOGGER.setLevel(Level.INFO);
-    LOGGER.setUseParentHandlers(false);
+    handler.setLevel(level);
     LOGGER.addHandler(handler);
-
-    // Additional component loggers
-    TrexLogger.LOGGER.setLevel(Level.INFO);
-    TrexLogger.LOGGER.setUseParentHandlers(false);
-    TrexLogger.LOGGER.addHandler(handler);
+    LOGGER.setLevel(level);
+    LOGGER.setUseParentHandlers(false);
   }
 
   @BeforeEach
