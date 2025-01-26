@@ -18,7 +18,6 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.BroadcastMessage;
 import com.github.trex_paxos.msg.DirectMessage;
 import com.github.trex_paxos.msg.TrexMessage;
-
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -36,41 +35,42 @@ import java.util.random.RandomGenerator;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static com.github.trex_paxos.TrexLogger.LOGGER;
 import static com.github.trex_paxos.Simulation.inconsistentFixedIndex;
+import static com.github.trex_paxos.TrexLogger.LOGGER;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class SimulationTests {
 
-          @BeforeAll
-        static void setupLogging() {
 
-            final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
-            final Level level = Level.parse(logLevel);
-            
-            LOGGER.setLevel(level);
-            ConsoleHandler consoleHandler = new ConsoleHandler();
-            consoleHandler.setLevel(level);
-            LOGGER.addHandler(consoleHandler);
-    
-            // Configure SessionKeyManager logger
-            Logger sessionKeyManagerLogger = Logger.getLogger("");
-            sessionKeyManagerLogger.setLevel(level);
-            ConsoleHandler skmHandler = new ConsoleHandler();
-            skmHandler.setLevel(level);
-            sessionKeyManagerLogger.addHandler(skmHandler);
-    
-            // Optionally disable parent handlers if needed
-            LOGGER.setUseParentHandlers(false);
-            sessionKeyManagerLogger.setUseParentHandlers(false);
-        }
+  @BeforeAll
+  static void setupLogging() {
+
+    final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
+    final Level level = Level.parse(logLevel);
+
+    LOGGER.setLevel(level);
+    ConsoleHandler consoleHandler = new ConsoleHandler();
+    consoleHandler.setLevel(level);
+    LOGGER.addHandler(consoleHandler);
+
+    // Configure SessionKeyManager logger
+    Logger sessionKeyManagerLogger = Logger.getLogger("");
+    sessionKeyManagerLogger.setLevel(level);
+    ConsoleHandler skmHandler = new ConsoleHandler();
+    skmHandler.setLevel(level);
+    sessionKeyManagerLogger.addHandler(skmHandler);
+
+    // Optionally disable parent handlers if needed
+    LOGGER.setUseParentHandlers(false);
+    sessionKeyManagerLogger.setUseParentHandlers(false);
+  }
 
   @Test
   public void testLeaderElection1000() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(1234);
     IntStream.range(0, 1000).forEach(i -> {
-      LOGGER.info("\n ================= \nstarting iteration: " + i);
-      testLeaderElection(rng);
+          LOGGER.info("\n ================= \nstarting iteration: " + i);
+          testLeaderElection(rng);
         }
     );
   }
@@ -106,7 +106,7 @@ public class SimulationTests {
   public void testClientWorkPerfectNetwork1000() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(9876);
     IntStream.range(0, 1000).forEach(i -> {
-      LOGGER.info("\n ================= \nstarting iteration: " + i);
+          LOGGER.info("\n ================= \nstarting iteration: " + i);
           testClientWork(rng);
         }
     );
@@ -167,10 +167,10 @@ public class SimulationTests {
 
     IntStream.range(0, 1000).forEach(i -> {
           LOGGER.info("\n ================= \nstarting iteration: " + i);
-      final var minLogLength = testWorkLossyNetwork(rng);
-      if (minLogLength > maxOfMinimum.get()) {
-        maxOfMinimum.set(minLogLength);
-      }
+          final var minLogLength = testWorkLossyNetwork(rng);
+          if (minLogLength > maxOfMinimum.get()) {
+            maxOfMinimum.set(minLogLength);
+          }
         }
     );
 

@@ -1,6 +1,5 @@
 package com.github.trex_paxos.paxe;
 
-import com.github.trex_paxos.paxe.SRPUtils.*;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
@@ -10,7 +9,7 @@ import static com.github.trex_paxos.paxe.SRPUtils.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /// Using the Secure Remote Password (SRP) Protocol for TLS Authentication
-/// This directly follows RFC 5054 at https://www.ietf.org/rfc/rfc5054.txt
+/// This directly follows RFC 5054 at [rfc5054.txt](https://www.ietf.org/rfc/rfc5054.txt)
 /// This test case verifies SRPUtils.java using the test vectors in the RFC.
 class SRPUtilsTests {
 
@@ -231,8 +230,8 @@ class SRPUtilsTests {
         "Premaster secret does not match RFC 5054 Appendix B");
 
     final var finalKey = SRPUtils.hashedSecret(NHex, premaster);
-    // sha1 hash is 20 bytes and we will HDKF expand it to 32 bytes for AES
-    assertTrue(finalKey.length == 32, "Final key length is not 33 bytes when hashed");
+    // sha1 hash is 20 bytes, and we will HDKF expand it to 32 bytes for AES
+    assertEquals(32, finalKey.length, "Final key length is not 33 bytes when hashed");
   }
 
   @Test
@@ -284,7 +283,7 @@ class SRPUtilsTests {
         "Premaster secret does not match RFC 5054 Appendix B");
 
     final var finalKey = SRPUtils.hashedSecret(NHex, premaster);
-    // sha1 hash is 20 bytes and we will HDKF expand it to 32 bytes for AES
-    assertTrue(finalKey.length == 32, "Final key length is not 32 bytes when hashed");
+    // sha1 hash is 20 bytes, and we will HDKF expand it to 32 bytes for AES
+    assertEquals(32, finalKey.length, "Final key length is not 32 bytes when hashed");
   }
 }

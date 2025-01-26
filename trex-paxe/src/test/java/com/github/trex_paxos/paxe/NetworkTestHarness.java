@@ -87,7 +87,7 @@ public class NetworkTestHarness implements AutoCloseable {
         verifierLookup
     );
 
-    PaxeNetwork network = new PaxeNetwork(keyManager, port, id, membershipSupplier);
+    PaxeNetwork network = new PaxeNetwork.Builder(keyManager, port, id, membershipSupplier).build();
     networks.add(network);
     LOGGER.fine(() -> String.format("Network node %d created successfully", nodeId));
     return network;

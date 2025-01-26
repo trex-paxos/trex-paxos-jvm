@@ -1,43 +1,142 @@
-
-# PAXE Protocol Specification v0.9
+# Paxe Protocol Documentation
 
 ## Overview
-PAXE is a lightweight encrypted protocol for Paxos clusters supporting multiplexed channels over UDP. It provides 0-RTT resumption for established sessions and 1-RTT authentication for new sessions.
 
-## Packet Format
+Paxe implements authenticated encryption for Trex Paxos messages using AES-GCM. It supports both standard and Data
+Encryption Key (DEK) modes for efficient large payload handling.
+
+## Wire Format
+
+### Message Header (8 bytes)
+
 ```
-[UDP Header]
-[PAXE Header - 4 bytes]
-  From Node ID:    2 byte
-  To Node ID:      2 byte  
-  Channel ID:      2 byte
-[Encryption Header - 28 bytes] 
-  Nonce:           12 bytes 
-  Auth Tag:        16 bytes
-[Encrypted Payload]
-  Type:            1 byte
-  Length:          4 bytes
-  Data:            variable
++--------+--------+--------+--------+--------+--------+--------+--------+
+| fromId | toId   | channel| length                                    |
++--------+--------+--------+--------+--------+--------+--------+--------+
 ```
 
-## Channels
-- Channel 0: Reserved for PAXE consensus messages
+- fromId (2 bytes): Source node identifier
+- toId (2 bytes): Destination node identifier
+- channel (2 bytes): Communication channel identifier
+- length (2 bytes): Payload length
 
-## Session Keys
-- Derived from SRP exchange between node pairs
-- Key = HKDF(srp_shared_secret, "PAXE-V2", from_id | to_id)
-- Same key used for both directions between node pair
+### Standard Message Format
 
-## Message Flow
-1. SRP authentication (1-RTT) if no session exists:
-   - Indicated by Auth Required flag
-   - Must complete before encrypted traffic
-2. Encrypted stream communication (0-RTT) using channels
-3. Automatic session resumption after network changes
+```
++----------------+--------+-----------+------------+-----------------+
+| Header (8)     | Flags  | Nonce(12) | Payload    | Auth Tag (16)  |
++----------------+--------+-----------+------------+-----------------+
+```
 
-## References
-1. When large messages are fragmented:
-   - Each fragment includes Message ID for reassembly
-   - Receiving node must buffer and reorder fragments
-   - Complete message processed after last fragment received
-2. Applications must handle timeout and cleanup of incomplete fragment sequences
+### DEK Message Format
+
+```
++----------------+--------+-----------+------------+----------+--------+------------+-----------------+
+| Header (8)     | Flags  | Nonce(12) | DEK Key(32)| DEKNonce | Length | Payload    | Auth Tag (16)  |
++----------------+--------+-----------+------------+----------+--------+------------+-----------------+
+```
+
+### Flags Byte Structure
+
+- Bit 0: DEK flag (0=standard, 1=DEK mode)
+- Bit 1: Must be 0
+- Bit 2: Must be 1
+- Bits 3-7: Reserved
+
+## Key Classes
+
+### PaxeNetwork
+
+Core networking implementation handling:
+
+- Message encryption/decryption
+- Network I/O
+- Channel management
+- Pending message buffering
+
+### SessionKeyManager
+
+Manages secure key exchange:
+
+- Implements SRP (RFC 5054) handshakes
+- Tracks active sessions
+- Handles key derivation
+- Maintains node verifiers
+
+### Crypto
+
+Encryption primitives:
+
+- AES-GCM operations
+- Nonce generation
+- Buffer management
+- DEK encryption logic
+
+### NetworkTestHarness
+
+Test infrastructure providing:
+
+- Network simulation
+- Node creation
+- Key exchange verification
+- Cluster membership management
+
+## Security Properties
+
+### Authentication
+
+- Every packet includes GCM authentication tag
+- All headers are authenticated (fromId, toId, channel)
+- Failed authentication triggers SecurityException
+
+### Confidentiality
+
+- AES-256-GCM for all payloads
+- Unique nonce per message
+- DEK mode for large messages
+
+### Key Exchange
+
+- SRP v6a (RFC 5054) for initial authentication
+- Session key derivation via HKDF
+- Key confirmation through GCM tag validation
+
+## Usage Guidelines
+
+### Message Size
+
+- Standard mode for messages < 64KB
+- DEK mode automatically used for larger payloads
+- Maximum UDP packet size: 65507 bytes
+
+### Channel Management
+
+- System channels (1-99) reserved
+- Application channels start from 100
+- Broadcast vs direct messaging support
+
+### Key Lifecycle
+
+- Session keys rotated on network partition
+- Verifiers distributed via configuration
+- Node IDs must be globally unique
+
+## Error Handling
+
+### Network Errors
+
+- Failed sends queued for retry
+- Messages rejected if no session key
+- Automatic key re-establishment
+
+### Crypto Failures
+
+- SecurityException on auth failures
+- Buffer overflow protection
+- Connection teardown on key errors
+
+## Test Support
+
+- InMemoryNetwork for unit testing
+- NetworkTestHarness for integration
+- Logging levels follow JUL conventions

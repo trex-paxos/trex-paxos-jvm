@@ -20,7 +20,7 @@ import static com.github.trex_paxos.network.SystemChannel.PROXY;
 
 public class TrexApp<VALUE, RESULT> {
 
-  private class LeaderTracker {
+  protected class LeaderTracker {
     volatile NodeId estimatedLeader = null;
 
     void updateFromFixed(Fixed msg) {
@@ -65,13 +65,13 @@ public class TrexApp<VALUE, RESULT> {
     }
   }
 
-  private final TrexEngine engine;
-  private final NetworkLayer networkLayer;
-  private final Function<VALUE, RESULT> serverFunction;
-  private final Supplier<ClusterMembership> clusterMembershipSupplier;
-  private final LeaderTracker leaderTracker = new LeaderTracker();
-  private final ResponseTracker<RESULT> responseTracker = new ResponseTracker<>();
-  private final Pickler<VALUE> valuePickler;
+  protected final TrexEngine engine;
+  protected final NetworkLayer networkLayer;
+  protected final Function<VALUE, RESULT> serverFunction;
+  protected final Supplier<ClusterMembership> clusterMembershipSupplier;
+  final protected LeaderTracker leaderTracker = new LeaderTracker();
+  final ResponseTracker<RESULT> responseTracker = new ResponseTracker<>();
+  protected final Pickler<VALUE> valuePickler;
   public final NodeId nodeId;
 
   public TrexApp(
@@ -218,7 +218,7 @@ public class TrexApp<VALUE, RESULT> {
 
   @SuppressWarnings("SameParameterValue")
   @TestOnly
-  void setLeader(short i) {
+  protected void setLeader(short i) {
     if (i == engine.nodeIdentifier()) {
       engine.setLeader();
     }

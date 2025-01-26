@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Stream;
+
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 /// The TrexEngine manages the timeout behaviours that surround the core Paxos algorithm.
@@ -36,7 +37,7 @@ public abstract class TrexEngine implements AutoCloseable {
   public static final String THREAD_INTERRUPTED = "TrexEngine was interrupted awaiting the mutex probably to shutdown while under load.";
 
   /// The underlying TrexNode that is the actual Part-time Parliament algorithm implementation guarded by this class.
-  final TrexNode trexNode;
+  final protected TrexNode trexNode;
 
   final NodeId nodeId;
 

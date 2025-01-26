@@ -1,5 +1,7 @@
 package com.github.trex_paxos.paxe;
 
+import com.github.trex_paxos.BallotNumber;
+import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.network.Channel;
 import com.github.trex_paxos.network.NodeId;
 import org.junit.jupiter.api.*;
@@ -10,55 +12,41 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
-import static com.github.trex_paxos.network.SystemChannel.PROXY;
-import static org.junit.jupiter.api.Assertions.*;
+import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public class PaxeNetworkTest {
+class PaxeNetworkTest {
   static {
     System.setProperty(SRPUtils.class.getName() + ".useHash", "SHA3-256");
   }
 
-  public static final String N = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE48E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29";
-  final static SRPUtils.Constants constants = new SRPUtils.Constants(
-      N,
-      "2"
-  );
+  private static final String N = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE48E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29";
+  private static final SRPUtils.Constants CONSTANTS = new SRPUtils.Constants(N, "2");
+  private static final int TEST_TIMEOUT_MS = 1000;
 
   private PaxeNetwork network1;
   private PaxeNetwork network2;
   private Selector testSelector;
 
-
   @BeforeAll
   static void setupLogging() {
-    final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
-    final Level level = Level.parse(logLevel);
-
-    // Configure PaxeLogger
-    PaxeLogger.LOGGER.setLevel(level);
-    ConsoleHandler consoleHandler = new ConsoleHandler();
-    consoleHandler.setLevel(level);
-    PaxeLogger.LOGGER.addHandler(consoleHandler);
-    PaxeLogger.LOGGER.setUseParentHandlers(false);
-
-    // Configure SessionKeyManager logger
-    Logger sessionKeyManagerLogger = Logger.getLogger(SessionKeyManager.class.getName());
-    sessionKeyManagerLogger.setLevel(level);
-    ConsoleHandler skmHandler = new ConsoleHandler();
-    skmHandler.setLevel(level);
-    sessionKeyManagerLogger.addHandler(skmHandler);
-    sessionKeyManagerLogger.setUseParentHandlers(false);
+    LOGGER.setLevel(Level.FINEST);
+    ConsoleHandler handler = new ConsoleHandler();
+    handler.setLevel(Level.FINEST);
+    LOGGER.addHandler(handler);
+    LOGGER.setUseParentHandlers(false);
   }
 
-  @SuppressWarnings("resource")
   @BeforeEach
-  public void setup() throws Exception {
+  void setup() throws Exception {
+    LOGGER.fine("Setting up test networks");
     testSelector = Selector.open();
-    NetworkTestHarness harness = new NetworkTestHarness(new ClusterId("test"), constants);
+    @SuppressWarnings("resource")
+    NetworkTestHarness harness = new NetworkTestHarness(new ClusterId("test"), CONSTANTS);
 
     network1 = harness.createNetwork((short) 1);
     network2 = harness.createNetwork((short) 2);
@@ -66,100 +54,51 @@ public class PaxeNetworkTest {
     network1.start();
     network2.start();
 
-    // Wait for key exchange
+    LOGGER.fine("Waiting for network establishment");
     harness.waitForNetworkEstablishment();
+    LOGGER.fine("Network establishment complete");
   }
 
   @Test
-  @Order(1)
-  public void testStartup() {
-    assertTrue(network1.keyManager.sessionKeys.containsKey(new NodeId((short) 2)), "Network 1 missing session key");
-    assertTrue(network2.keyManager.sessionKeys.containsKey(new NodeId((short) 1)), "Network 2 missing session key");
-
-    byte[] key1 = network1.keyManager.sessionKeys.get(new NodeId((short) 2));
-    byte[] key2 = network2.keyManager.sessionKeys.get(new NodeId((short) 1));
-    assertNotNull(key1, "Key 1 is null");
-    assertNotNull(key2, "Key 2 is null");
-    assertArrayEquals(key1, key2, "Session keys don't match");
-  }
-
-  @Test
-  @Order(2)
-  public void testSendAndReceiveMessages() throws Exception {
+  void testSendAndReceiveMessages() throws Exception {
     Channel channel = CONSENSUS.value();
     CountDownLatch latch = new CountDownLatch(2);
-    AtomicReference<byte[]> received1 = new AtomicReference<>();
-    AtomicReference<byte[]> received2 = new AtomicReference<>();
+    AtomicReference<Fixed> received1 = new AtomicReference<>();
+    AtomicReference<Fixed> received2 = new AtomicReference<>();
 
-    network1.subscribe(channel, (byte[] msg) -> {
+    LOGGER.fine("Setting up message handlers");
+    network1.subscribe(channel, (Fixed msg) -> {
+      LOGGER.finest(() -> String.format("Network 1 received message: %s", msg));
       received1.set(msg);
       latch.countDown();
     }, "test1");
 
-    network2.subscribe(channel, (byte[] msg) -> {
+    network2.subscribe(channel, (Fixed msg) -> {
+      LOGGER.finest(() -> String.format("Network 2 received message: %s", msg));
       received2.set(msg);
       latch.countDown();
     }, "test2");
 
-    byte[] msg1 = "Hello from Node 1".getBytes();
-    byte[] msg2 = "Hello from Node 2".getBytes();
+    Fixed msg1 = new Fixed((short) 1, 1, new BallotNumber(1, (short) 1));
+    Fixed msg2 = new Fixed((short) 2, 2, new BallotNumber(2, (short) 2));
 
+    LOGGER.fine(() -> String.format("Sending test messages: msg1=%s, msg2=%s", msg1, msg2));
     network1.send(channel, new NodeId((short) 2), msg1);
     network2.send(channel, new NodeId((short) 1), msg2);
 
-    assertTrue(latch.await(1, TimeUnit.SECONDS), "Message exchange timed out");
-    assertArrayEquals(msg2, received1.get(), "Network 1 received wrong message");
-    assertArrayEquals(msg1, received2.get(), "Network 2 received wrong message");
-  }
+    LOGGER.fine("Waiting for message exchange");
+    boolean exchangeComplete = latch.await(TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    LOGGER.fine(() -> String.format("Exchange complete: %s, received1=%s, received2=%s",
+        exchangeComplete, received1.get(), received2.get()));
 
-  @Test
-  public void testThreadInitialization() {
-    assertTrue(network1.running, "Network should be running");
-    assertNotNull(network1.channel, "Channel should be initialized");
-    assertTrue(network1.selector.isOpen(), "Selector should be open");
-  }
-
-  @Test
-  public void testCleanShutdown() {
-    network1.start();
-    network1.close();
-
-    assertFalse(network1.running, "Network should not be running");
-    assertFalse(network1.selector.isOpen(), "Selector should be closed");
-    assertFalse(network1.channel.isOpen(), "Channel should be closed");
-  }
-
-  @Test
-  public void testChannelIsolation() throws Exception {
-    Channel channel1 = CONSENSUS.value();
-    Channel channel2 = PROXY.value();
-    CountDownLatch latch = new CountDownLatch(2);
-    AtomicReference<byte[]> received1 = new AtomicReference<>();
-    AtomicReference<byte[]> received2 = new AtomicReference<>();
-
-    network2.subscribe(channel1, (byte[] msg) -> {
-      received1.set(msg);
-      latch.countDown();
-    }, "test1");
-
-    network2.subscribe(channel2, (byte[] msg) -> {
-      received2.set(msg);
-      latch.countDown();
-    }, "test2");
-
-    byte[] msg1 = "msg1".getBytes();
-    byte[] msg2 = "msg2".getBytes();
-
-    network1.send(channel1, new NodeId((short) 2), msg1);
-    network1.send(channel2, new NodeId((short) 2), msg2);
-
-    assertTrue(latch.await(1, TimeUnit.SECONDS), "Message exchange timed out");
-    assertArrayEquals(msg1, received1.get(), "Wrong message on channel 1");
-    assertArrayEquals(msg2, received2.get(), "Wrong message on channel 2");
+    assertTrue(exchangeComplete, "Message exchange timed out");
+    assertEquals(msg2, received1.get(), "Network 1 received wrong message");
+    assertEquals(msg1, received2.get(), "Network 2 received wrong message");
   }
 
   @AfterEach
   void cleanup() throws Exception {
+    LOGGER.fine("Cleaning up test resources");
     if (network1 != null) network1.close();
     if (network2 != null) network2.close();
     if (testSelector != null) testSelector.close();

@@ -12,8 +12,10 @@ import java.util.stream.IntStream;
 
 public class PickleMsg implements Pickler<TrexMessage> {
   public static PickleMsg instance = new PickleMsg();
+
   protected PickleMsg() {
   }
+
   private static final int HEADER_SIZE = 5; // fromNode(2) + toNode(2) + type(1)
   private static final int BALLOT_NUMBER_SIZE = Integer.BYTES + 2; // counter(4) + nodeId(2)
 
@@ -301,8 +303,8 @@ public class PickleMsg implements Pickler<TrexMessage> {
   }
 
   @Override
-  public byte[] serialize(TrexMessage cmd) {
-    return pickle(cmd);
+  public byte[] serialize(TrexMessage trexMessage) {
+    return pickle(trexMessage);
   }
 
   @Override
