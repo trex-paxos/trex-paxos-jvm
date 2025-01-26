@@ -6,13 +6,15 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
+import java.util.HexFormat;
 
+import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 import static com.github.trex_paxos.paxe.PaxeProtocol.*;
 
 /// Cryptographic operations for the Paxe protocol with zero-copy buffer handling
 public final class Crypto {
 
-  private static final ThreadLocal<SecureRandom> RANDOM = ThreadLocal.withInitial(SecureRandom::new);
+  private static final SecureRandom RANDOM = new SecureRandom();
   private static final ThreadLocal<Cipher> CIPHER = ThreadLocal.withInitial(() -> {
     try {
       return Cipher.getInstance("AES/GCM/NoPadding");
@@ -21,16 +23,13 @@ public final class Crypto {
     }
   });
 
-  // Add dumpBuffer helper identical to the one in Crypto
   static String dumpBuffer(ByteBuffer buffer, int start, int len) {
-    StringBuilder sb = new StringBuilder();
-    int pos = buffer.position();
+    byte[] bytes = new byte[Math.min(len, buffer.remaining())];
+    int originalPosition = buffer.position();
     buffer.position(start);
-    for(int i = 0; i < len && buffer.hasRemaining(); i++) {
-      sb.append(String.format("%02x ", buffer.get()));
-    }
-    buffer.position(pos);
-    return sb.toString();
+    buffer.get(bytes);
+    buffer.position(originalPosition);
+    return HexFormat.of().formatHex(bytes).replaceAll("(.{2})", "$1 ").trim();
   }
 
   /// Legacy API compatibility
@@ -61,7 +60,7 @@ public final class Crypto {
       output.put(FLAG_MAGIC_1);
 
       byte[] nonce = new byte[GCM_NONCE_LENGTH];
-      RANDOM.get().nextBytes(nonce);
+      RANDOM.nextBytes(nonce);
       output.put(nonce);
 
       Cipher cipher = CIPHER.get();
@@ -129,10 +128,10 @@ public final class Crypto {
 
   public static DekPayload dekInner(byte[] payload) throws GeneralSecurityException {
     byte[] dekKey = new byte[DEK_KEY_SIZE];
-    RANDOM.get().nextBytes(dekKey);
+    RANDOM.nextBytes(dekKey);
 
     byte[] dekNonce = new byte[GCM_NONCE_LENGTH];
-    RANDOM.get().nextBytes(dekNonce);
+    RANDOM.nextBytes(dekNonce);
 
     Cipher dekCipher = CIPHER.get();
     dekCipher.init(Cipher.ENCRYPT_MODE,
@@ -151,12 +150,12 @@ public final class Crypto {
   /// Encrypts a Data Encryption Key (DEK) payload using session encryption
   /// Creates a buffer with:
   /// - [byte] flags: FLAG_DEK | FLAG_MAGIC_1
-  /// - [12 bytes] session nonce
-  /// - [32 bytes] session-encrypted DEK key
-  /// - [12 bytes] DEK nonce (not encrypted)
-  /// - [2 bytes] encrypted payload length
+  /// - [12bytes] session nonce
+  /// - [32bytes] session-encrypted DEK key
+  /// - [12bytes] DEK nonce (not encrypted)
+  /// - [2bytes] encrypted payload length
   /// - bytes DEK-encrypted payload
-  /// - [16 bytes] GCM tag
+  /// - [16bytes] GCM tag
   ///
   /// @param output Buffer to write the encrypted message to
   /// @param payload The DEK payload containing key, nonce and encrypted data
@@ -167,12 +166,12 @@ public final class Crypto {
       // Skip zeroing the header - let protocol handle it
       output.position(FLAGS_OFFSET);
 
-      byte flags = (byte)(FLAG_DEK | FLAG_MAGIC_1);
+      byte flags = (byte) (FLAG_DEK | FLAG_MAGIC_1);
       LOGGER.finest(() -> String.format("Writing flags=%02x at position=%d", flags, output.position()));
       output.put(flags);
 
       byte[] sessionNonce = new byte[GCM_NONCE_LENGTH];
-      RANDOM.get().nextBytes(sessionNonce);
+      RANDOM.nextBytes(sessionNonce);
       LOGGER.finest(() -> String.format("Writing sessionNonce at position=%d", output.position()));
       output.put(sessionNonce);
 
@@ -194,7 +193,7 @@ public final class Crypto {
 
 
       LOGGER.finest(() -> String.format("Writing payload length=%d at position=%d", payload.dekEncrypted.length, output.position()));
-      output.putShort((short)payload.dekEncrypted.length);
+      output.putShort((short) payload.dekEncrypted.length);
       output.put(payload.dekEncrypted);
 
     } catch (GeneralSecurityException e) {

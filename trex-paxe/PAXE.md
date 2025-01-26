@@ -2,7 +2,8 @@
 # PAXE Protocol Specification v0.9
 
 ## Overview
-PAXE is a lightweight encrypted protocol for Paxos clusters supporting multiplexed channels over UDP. It provides 0-RTT resumption for established sessions and 1-RTT authentication for new sessions.
+PAXE is a lightweight encrypted protocol for Paxos clusters supporting multiplexed channels over UDP. 
+It provides 0-RTT resumption for established sessions and 1-RTT authentication for new sessions.
 
 ## Packet Format
 ```

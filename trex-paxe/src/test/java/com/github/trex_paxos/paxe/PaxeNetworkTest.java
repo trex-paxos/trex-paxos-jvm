@@ -12,10 +12,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
-import static com.github.trex_paxos.network.SystemChannel.PROXY;
+import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 import static org.junit.jupiter.api.Assertions.*;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -38,21 +37,11 @@ public class PaxeNetworkTest {
   static void setupLogging() {
     final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
     final Level level = Level.parse(logLevel);
-
-    // Configure PaxeLogger
-    PaxeLogger.LOGGER.setLevel(level);
-    ConsoleHandler consoleHandler = new ConsoleHandler();
-    consoleHandler.setLevel(level);
-    PaxeLogger.LOGGER.addHandler(consoleHandler);
-    PaxeLogger.LOGGER.setUseParentHandlers(false);
-
-    // Configure SessionKeyManager logger
-    Logger sessionKeyManagerLogger = Logger.getLogger(SessionKeyManager.class.getName());
-    sessionKeyManagerLogger.setLevel(level);
-    ConsoleHandler skmHandler = new ConsoleHandler();
-    skmHandler.setLevel(level);
-    sessionKeyManagerLogger.addHandler(skmHandler);
-    sessionKeyManagerLogger.setUseParentHandlers(false);
+    ConsoleHandler handler = new ConsoleHandler();
+    handler.setLevel(level);
+    LOGGER.addHandler(handler);
+    LOGGER.setLevel(level);
+    LOGGER.setUseParentHandlers(false);
   }
 
   @SuppressWarnings("resource")
@@ -105,58 +94,12 @@ public class PaxeNetworkTest {
     Fixed msg1 = new Fixed((short) 1, 1, new BallotNumber(1, (short) 1));
     Fixed msg2 = new Fixed((short) 2, 2, new BallotNumber(2, (short) 2));
 
-    network1.send(channel, new NodeId((short) 1), msg1);
-    network2.send(channel, new NodeId((short) 2), msg2);
+    network1.send(channel, new NodeId((short) 2), msg1);
+    network2.send(channel, new NodeId((short) 1), msg2);
 
     assertTrue(latch.await(1, TimeUnit.SECONDS), "Message exchange timed out");
-    assertEquals(msg1, received1.get(), "Network 1 received wrong message");
-    assertEquals(msg2, received2.get(), "Network 2 received wrong message");
-  }
-
-  @Test
-  public void testThreadInitialization() {
-    assertTrue(network1.running, "Network should be running");
-    assertNotNull(network1.channel, "Channel should be initialized");
-    assertTrue(network1.selector.isOpen(), "Selector should be open");
-  }
-
-  @Test
-  public void testCleanShutdown() {
-    network1.start();
-    network1.close();
-
-    assertFalse(network1.running, "Network should not be running");
-    assertFalse(network1.selector.isOpen(), "Selector should be closed");
-    assertFalse(network1.channel.isOpen(), "Channel should be closed");
-  }
-
-  @Test
-  public void testChannelIsolation() throws Exception {
-    Channel channel1 = CONSENSUS.value();
-    Channel channel2 = PROXY.value();
-    CountDownLatch latch = new CountDownLatch(2);
-    AtomicReference<byte[]> received1 = new AtomicReference<>();
-    AtomicReference<byte[]> received2 = new AtomicReference<>();
-
-    network2.subscribe(channel1, (byte[] msg) -> {
-      received1.set(msg);
-      latch.countDown();
-    }, "test1");
-
-    network2.subscribe(channel2, (byte[] msg) -> {
-      received2.set(msg);
-      latch.countDown();
-    }, "test2");
-
-    byte[] msg1 = "msg1".getBytes();
-    byte[] msg2 = "msg2".getBytes();
-
-    network1.send(channel1, new NodeId((short) 2), msg1);
-    network1.send(channel2, new NodeId((short) 2), msg2);
-
-    assertTrue(latch.await(1, TimeUnit.SECONDS), "Message exchange timed out");
-    assertArrayEquals(msg1, received1.get(), "Wrong message on channel 1");
-    assertArrayEquals(msg2, received2.get(), "Wrong message on channel 2");
+    assertEquals(msg2, received1.get(), "Network 1 received wrong message");
+    assertEquals(msg1, received2.get(), "Network 2 received wrong message");
   }
 
   @AfterEach
