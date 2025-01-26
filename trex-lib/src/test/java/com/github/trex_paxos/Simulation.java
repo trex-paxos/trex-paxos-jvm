@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
+
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 class Simulation {
@@ -113,7 +114,7 @@ class Simulation {
                       .flatMap(e -> {
                         final var commands = IntStream.range(0, 3).mapToObj(i -> {
                           final var data = now + ":" + e.getKey() + i;
-                          return new Command( data.getBytes());
+                          return new Command(data.getBytes());
                         }).toList();
                         final var engine = e.getValue();
                         return engine.isLeader() ? engine.nextLeaderBatchOfMessages(commands).stream()
@@ -241,7 +242,7 @@ class Simulation {
     this.now = now;
   }
 
-  void setTimeout(short nodeIdentifier) {
+  void setRandomTimeout(short nodeIdentifier) {
     final var oldTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
     final var timeout = rng.nextInt((int) shortMaxTimeout + 1, (int) longMaxTimeout);
     final var when = Math.max(lastNow, now) + timeout;
@@ -252,7 +253,7 @@ class Simulation {
     nodeTimeouts.put(nodeIdentifier, when);
     events.add(new Timeout(nodeIdentifier));
     final var newTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
-    LOGGER.fine(() -> "\tsetTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier + "+=" + timeout);
+    LOGGER.fine(() -> "\tsetRandomTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier + "+=" + timeout);
   }
 
   void clearTimeout(short nodeIdentifier) {
@@ -336,7 +337,7 @@ class Simulation {
 
     @Override
     protected void setRandomTimeout() {
-      Simulation.this.setTimeout(trexNode.nodeIdentifier());
+      Simulation.this.setRandomTimeout(trexNode.nodeIdentifier());
     }
 
     @Override
