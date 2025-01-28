@@ -18,7 +18,7 @@ import static com.github.trex_paxos.TrexLogger.LOGGER;
 import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
 import static com.github.trex_paxos.network.SystemChannel.PROXY;
 
-public class TrexApp<VALUE, RESULT> {
+public class TrexApp<COMMAND, RESULT> {
 
   protected class LeaderTracker {
     volatile NodeId estimatedLeader = null;
@@ -67,19 +67,19 @@ public class TrexApp<VALUE, RESULT> {
 
   protected final TrexEngine engine;
   protected final NetworkLayer networkLayer;
-  protected final Function<VALUE, RESULT> serverFunction;
+  protected final Function<COMMAND, RESULT> serverFunction;
   protected final Supplier<ClusterMembership> clusterMembershipSupplier;
   final protected LeaderTracker leaderTracker = new LeaderTracker();
   final ResponseTracker<RESULT> responseTracker = new ResponseTracker<>();
-  protected final Pickler<VALUE> valuePickler;
+  protected final Pickler<COMMAND> valuePickler;
   public final NodeId nodeId;
 
   public TrexApp(
       Supplier<ClusterMembership> clusterMembershipSupplier,
       TrexEngine engine,
       NetworkLayer networkLayer,
-      Pickler<VALUE> valuePickler,
-      Function<VALUE, RESULT> serverFunction) {
+      Pickler<COMMAND> valuePickler,
+      Function<COMMAND, RESULT> serverFunction) {
     this.engine = engine;
     this.networkLayer = networkLayer;
     this.serverFunction = serverFunction;
@@ -132,7 +132,7 @@ public class TrexApp<VALUE, RESULT> {
     }
   }
 
-  public void submitValue(VALUE value, CompletableFuture<RESULT> future) {
+  public void submitValue(COMMAND value, CompletableFuture<RESULT> future) {
     final var uuid = UUIDGenerator.generateUUID();
     try {
       responseTracker.track(uuid, future);
@@ -167,7 +167,7 @@ public class TrexApp<VALUE, RESULT> {
 
   void upCall(Long slot, Command cmd) {
     try {
-      VALUE value = valuePickler.deserialize(cmd.operationBytes());
+      COMMAND value = valuePickler.deserialize(cmd.operationBytes());
       RESULT result = serverFunction.apply(value);
       LOGGER.fine(() -> String.format("[Node %d] upCall for UUID: %s, value: %s, result: %s",
           nodeId.id(), cmd.uuid(), value, result));

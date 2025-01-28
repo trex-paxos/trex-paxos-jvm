@@ -67,6 +67,7 @@ class PaxeStackClusterTest {
     LOGGER.fine("Test setup complete");
   }
 
+  @SuppressWarnings("SameParameterValue")
   private TrexApp<StackService.Command, StackService.Response> createApp(
       PaxeNetwork network,
       final short leader) {

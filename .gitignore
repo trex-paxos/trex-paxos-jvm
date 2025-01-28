@@ -5,3 +5,4 @@ trex2-lib/target/
 .idea/
 */.jqwik-database
 all.java
+*.db

@@ -1,10 +1,11 @@
-package com.github.trex_paxos.paxe;
+package com.github.trex_paxos.paxe.demo;
 
 import com.github.trex_paxos.*;
 import com.github.trex_paxos.network.ClusterMembership;
 import com.github.trex_paxos.network.NetworkAddress;
 import com.github.trex_paxos.network.NodeId;
 import com.github.trex_paxos.network.SystemChannel;
+import com.github.trex_paxos.paxe.*;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 
@@ -22,7 +23,7 @@ public class ClusteredStackImpl implements AutoCloseable {
   private final MVMap<String, String> passwordFileMap;
   private final MVMap<String, String> networkMap;
   private final MVMap<Long, String> stackMap;
-  private final ClusterStackAdmin.Identity identity;
+  private final Identity identity;
   private final PaxeNetwork network;
   private final TrexApp<StackCommand, StackResponse> app;
   private final Stack<String> stack = new Stack<>();
@@ -79,12 +80,14 @@ public class ClusteredStackImpl implements AutoCloseable {
     passwordFileMap = store.openMap(ClusterStackAdmin.PASSWORD_FILE_MAP);
     networkMap = store.openMap(ClusterStackAdmin.NETWORK_MAP);
     stackMap = store.openMap("stack_data");
-    identity = ClusterStackAdmin.Identity.from(id);
+    identity = Identity.from(id);
 
     validateIdentity();
     validateMinimumNodes();
 
     // Reconstruct stack state
+    // FIXME this is junk. we should be recording if it was a push or a pop or whatever. we have searalised commands in the journal that we can apply and log here.
+    // come to think of it we can simply just read the log from the journal and replay it from the beginning no need to have some other way of storing the state of the stack
     if (!stackMap.isEmpty()) {
       var maxKey = stackMap.lastKey();
       for (long i = 0; i <= maxKey; i++) {
@@ -112,7 +115,7 @@ public class ClusteredStackImpl implements AutoCloseable {
   private Map<NodeId, NetworkAddress> loadNetworkAddresses() {
     Map<NodeId, NetworkAddress> addresses = new HashMap<>();
     networkMap.forEach((id, addr) -> {
-      var nodeId = new NodeId(ClusterStackAdmin.Identity.from(id).nodeId());
+      var nodeId = new NodeId(Identity.from(id).nodeId());
       String[] parts = addr.split(":", 2);
       addresses.put(nodeId, new NetworkAddress.HostName(parts[0], Integer.parseInt(parts[1])));
     });
@@ -127,12 +130,13 @@ public class ClusteredStackImpl implements AutoCloseable {
 
     Map<NodeId, NodeVerifier> verifiers = new HashMap<>();
     passwordFileMap.forEach((id, params) -> {
-      var nodeId = ClusterStackAdmin.Identity.from(id).nodeId();
+      var nodeId = Identity.from(id).nodeId();
       String[] parts = params.split(",");
       verifiers.put(new NodeId(nodeId), new NodeVerifier(id, parts[3])); // verifier is 4th part
     });
 
-    SessionKeyManager keyManager = new SessionKeyManager(new NodeId(identity.nodeId()), new SRPUtils.Constants(ClusterStackAdmin.DEFAULT_N, ClusterStackAdmin.DEFAULT_G), secret, () -> verifiers);
+    SessionKeyManager keyManager = new SessionKeyManager(new NodeId(identity.nodeId()),
+        new SRPUtils.Constants(ClusterStackAdmin.DEFAULT_N, ClusterStackAdmin.DEFAULT_G), secret, () -> verifiers);
 
     try {
       return new PaxeNetwork.Builder(keyManager, port, new NodeId(identity.nodeId()), currentMembership).build();

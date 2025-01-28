@@ -8,7 +8,7 @@
 /// - `ClusterMembership`: Cluster topology management
 ///
 /// Design characteristics:
-/// 1. Only VALUE objects are sent between nodes
+/// 1. Only COMMAND objects are sent between nodes
 /// 2. RESULT objects are computed locally at each node
 /// 3. Transport agnostic to support different network implementations
 package com.github.trex_paxos.network;

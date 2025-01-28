@@ -1,18 +1,18 @@
 /// This package contains the core classes and interfaces for the Trex Paxos implementation.
 ///
 /// The library provides fault-tolerant distributed consensus through the TrexApp class:
-/// `TrexApp<VALUE,RESULT>` runs Paxos consensus on VALUE objects across a cluster, then
-/// transforms each chosen VALUE into a RESULT locally at each node.
+/// `TrexApp<COMMAND,RESULT>` runs Paxos consensus on COMMAND objects across a cluster, then
+/// transforms each chosen COMMAND into a RESULT locally at each node.
 ///
 /// To use TrexApp, applications need to provide:
 /// 1. A [com.github.trex_paxos.Journal] implementation backed by the application's database, allowing atomic commits of
 ///    both consensus state and application state
-/// 2. A [com.github.trex_paxos.Pickler] implementation for thee VALUE type
+/// 2. A [com.github.trex_paxos.Pickler] implementation for thee COMMAND type
 /// 3. A `TrexNetwork` that sends messages over the network
-/// 4. A `Function<VALUE,RESULT>` containing the core application logic to process each chosen VALUE
+/// 4. A `Function<COMMAND,RESULT>` containing the core application logic to process each chosen COMMAND
 ///
 /// Supporting classes and interfaces:
-/// - [com.github.trex_paxos.Pickler]: Converts objects of type T to and from byte arrays. Required for VALUE types which are the
+/// - [com.github.trex_paxos.Pickler]: Converts objects of type T to and from byte arrays. Required for COMMAND types which are the
 ///   host application command values that are passed between network nodes and written into the [com.github.trex_paxos.Journal].
 /// - [com.github.trex_paxos.TrexEngine]: Manages timeouts and heartbeats around the core Paxos algorithm implemented in TrexNode.
 /// - [com.github.trex_paxos.TrexNode]: Implements the core Paxos algorithm, processing messages and maintaining consistency.
