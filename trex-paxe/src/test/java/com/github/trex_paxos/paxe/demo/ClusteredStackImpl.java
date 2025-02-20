@@ -4,7 +4,6 @@ import com.github.trex_paxos.*;
 import com.github.trex_paxos.network.ClusterMembership;
 import com.github.trex_paxos.network.NetworkAddress;
 import com.github.trex_paxos.network.NodeId;
-import com.github.trex_paxos.network.SystemChannel;
 import com.github.trex_paxos.paxe.*;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
@@ -149,28 +148,18 @@ public class ClusteredStackImpl implements AutoCloseable {
 
   private TrexApp<StackCommand, StackResponse> createApp(PaxeNetwork network) {
     var scheduler = new TimeoutScheduler(identity.nodeId());
-    return new TrexApp<>(currentMembership, new TrexEngine(new TrexNode(Level.INFO, identity.nodeId(), new DynamicMajorityQuorum(currentMembership), new MVStoreJournal(store))) {
-      @Override
-      protected void setRandomTimeout() {
-        scheduler.setTimeout(() -> timeout().ifPresent(prepare -> network.broadcast(currentMembership, SystemChannel.CONSENSUS.value(), prepare)));
-      }
-
-      @Override
-      protected void clearTimeout() {
-        scheduler.clearTimeout();
-      }
-
-      @Override
-      protected void setNextHeartbeat() {
-        scheduler.setHeartbeat(this::createHeartbeatMessagesAndReschedule);
-      }
-
-      @Override
-      public void close() {
-        super.close();
-        scheduler.close();
-      }
-    }, network, PermitsRecordsPickler.createPickler(StackCommand.class), this::processCommand);
+    return new TrexApp<>(
+        currentMembership,
+        new TrexEngine(
+            new TrexNode(Level.INFO, identity.nodeId(), new DynamicMajorityQuorum(currentMembership), new MVStoreJournal(store)),
+            (_, _) -> {
+              throw new UnsupportedOperationException("Not implemented");
+            }
+        ),
+        network,
+        PermitsRecordsPickler.createPickler(StackCommand.class),
+        this::processCommand
+    );
   }
 
   private StackResponse processCommand(StackCommand cmd) {

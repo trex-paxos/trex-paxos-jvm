@@ -75,19 +75,9 @@ class PaxeStackClusterTest {
         network.localNode.id(), leader));
 
     TrexNode node = createNode(network.localNode.id());
-    TrexEngine engine = new TrexEngine(node) {
-      @Override
-      protected void setRandomTimeout() {
-      }
-
-      @Override
-      protected void clearTimeout() {
-      }
-
-      @Override
-      protected void setNextHeartbeat() {
-      }
-
+    TrexEngine engine = new TrexEngine(node, (index, command) -> {
+      throw new UnsupportedOperationException("Command handler not implemented");
+    }) {
       {
         if (leader == trexNode.nodeIdentifier()) {
           LOGGER.info(() -> "Setting node " + leader + " as leader");

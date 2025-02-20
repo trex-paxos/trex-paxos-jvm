@@ -1,3 +1,4 @@
+.continue/
 .jqwik-database
 .metals/
 target/
@@ -6,3 +7,6 @@ trex2-lib/target/
 */.jqwik-database
 all.java
 *.db
+all.md
+all.java
+my.chatllm

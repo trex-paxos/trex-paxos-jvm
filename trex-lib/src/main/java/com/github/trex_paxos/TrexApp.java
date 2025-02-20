@@ -92,7 +92,6 @@ public class TrexApp<COMMAND, RESULT> {
     if (engine.isLeader()) {
       leaderTracker.updateFromFixed(new Fixed(engine.nodeIdentifier(), 0L, BallotNumber.MIN));
     }
-    engine.start();
     networkLayer.subscribe(CONSENSUS.value(), this::handleConsensusMessage, "consensus-" + engine.nodeIdentifier());
     networkLayer.subscribe(PROXY.value(), this::handleProxyMessage, "proxy-" + engine.nodeIdentifier());
     networkLayer.start();

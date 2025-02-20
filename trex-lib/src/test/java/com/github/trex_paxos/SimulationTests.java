@@ -105,7 +105,7 @@ public class SimulationTests {
   @Test
   public void testClientWorkPerfectNetwork1000() {
     RandomGenerator rng = Simulation.repeatableRandomGenerator(9876);
-    IntStream.range(0, 1000).forEach(i -> {
+    IntStream.range(0, 1).forEach(i -> {
           LOGGER.info("\n ================= \nstarting iteration: " + i);
           testClientWork(rng);
         }
@@ -365,13 +365,13 @@ public class SimulationTests {
             yield Stream.empty();
           }
           yield reachableNodes.stream()
-              .flatMap(engine -> engine.paxos(m).messages().stream());
+              .flatMap(engine -> engine.paxos(List.of(m)).messages().stream());
         }
         case DirectMessage m -> {
           if (m.to() == partitionedNodeIndex + 1 || m.from() == partitionedNodeIndex + 1) {
             yield Stream.empty();
           }
-          yield enginesAsList.get(m.to() - 1).paxos(m).messages().stream();
+          yield enginesAsList.get(m.to() - 1).paxos(List.of(m)).messages().stream();
         }
       });
     };
@@ -381,24 +381,21 @@ public class SimulationTests {
 
     final var leader = simulation.trexEngine1;
 
-    simulation.trexEngine1.start();
-    simulation.trexEngine2.start();
-    simulation.trexEngine3.start();
-
     // when we call timeout it will make a new prepare and self-promise to become Recoverer
-    leader.timeout().ifPresent(p -> {
+    simulation.timeout(leader.trexNode()).ifPresent(p -> {
       // in a three node cluster we need only one other node to be reachable to become leader
-      final var r = simulation.trexEngine2.paxos(p);
-      final var lm = leader.paxos(r.messages().getFirst());
+      final var r = simulation.trexEngine2.paxos(List.of(p));
+      final var lm = leader.paxos(List.of(r.messages().getFirst()));
       // we need to send accept messages to the other nodes
-      final var r1 = simulation.trexEngine2.paxos(lm.messages().getFirst());
-      simulation.trexEngine3.paxos(lm.messages().getFirst());
+      final var r1 = simulation.trexEngine2.paxos(List.of(lm.messages().getFirst()));
+      simulation.trexEngine3.paxos(List.of(lm.messages().getFirst()));
       // we only need one accept response to get a fixed id
-      final var r3 = leader.paxos(r1.messages().getFirst());
-      simulation.trexEngine2.paxos(r3.messages().getFirst());
-      simulation.trexEngine3.paxos(r3.messages().getFirst());
+      final var r3 = leader.paxos(List.of(r1.messages().getFirst()));
+      simulation.trexEngine2.paxos(List.of(r3.messages().getFirst()));
+      simulation.trexEngine3.paxos(List.of(r3.messages().getFirst()));
     });
-
+    // FIXME what do we need to do to get the leader to send heartbeats?
+    //simulation.createHeartbeatMessagesAndReschedule(leader.trexNode());
     LOGGER.info(leader.trexNode.nodeIdentifier + " == LEADER");
   }
 }

@@ -192,19 +192,9 @@ public class StackClusterImpl implements StackService {
       node.setLeader();
     }
 
-    return new TrexEngine(node) {
-      @Override
-      protected void setRandomTimeout() {
-      }
-
-      @Override
-      protected void clearTimeout() {
-      }
-
-      @Override
-      protected void setNextHeartbeat() {
-      }
-    };
+    return new TrexEngine(node, (_, _) -> {
+      throw new AssertionError("Not implemented");
+    });
   }
 
   record ChannelAndSubscriber(Channel channel, NamedSubscriber subscriber) {

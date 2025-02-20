@@ -4,7 +4,6 @@ import com.github.trex_paxos.*;
 import com.github.trex_paxos.msg.PrepareResponse;
 import com.github.trex_paxos.network.ClusterMembership;
 import com.github.trex_paxos.network.NodeId;
-import com.github.trex_paxos.network.SystemChannel;
 import com.github.trex_paxos.paxe.*;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
@@ -108,30 +107,11 @@ public class StackApp implements StackService, AutoCloseable {
         new MVStoreJournal(store)
     );
 
-    return new TrexEngine(node) {
-      @Override
-      protected void setRandomTimeout() {
-        // In createEngine():
-        scheduler.setTimeout(() -> timeout().ifPresent(prepare ->
-            network.broadcast(membership, SystemChannel.CONSENSUS.value(), prepare)));
-      }
-
-      @Override
-      protected void clearTimeout() {
-        scheduler.clearTimeout();
-      }
-
-      @Override
-      protected void setNextHeartbeat() {
-        scheduler.setHeartbeat(this::createHeartbeatMessagesAndReschedule);
-      }
-
-      @Override
-      public void close() {
-        super.close();
-        scheduler.close();
-      }
-    };
+    return new TrexEngine(node,
+        (index, command) -> {
+          throw new UnsupportedOperationException("Command handler not implemented");
+        }
+    );
   }
 
   @Override
