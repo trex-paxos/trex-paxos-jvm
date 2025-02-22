@@ -27,6 +27,8 @@ import java.util.stream.Collectors;
 /// commands and a possibly empty list of messages to be sent out. The journal must be made crash durable before any
 /// messages are sent out see [Journal].
 ///
+/// TODO this needs to contain the result.
+///
 /// @param commands A possibly empty list of sequentially chosen values aka fixed commands for the host application to process.
 /// @param messages A possibly empty list of messages that were generated to be sent out after the journal is made crash durable.
 public record TrexResult(List<TrexMessage> messages, TreeMap<Long, AbstractCommand> commands) {
@@ -34,6 +36,7 @@ public record TrexResult(List<TrexMessage> messages, TreeMap<Long, AbstractComma
     messages = List.copyOf(messages);
     commands = new TreeMap<>(commands);
   }
+
   static TrexResult noResult() {
     return new TrexResult(List.of(), new TreeMap<>());
   }
