@@ -1,6 +1,7 @@
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.msg.*;
+import com.github.trex_paxos.msg.Accept;
+import com.github.trex_paxos.msg.AcceptResponse;
 import net.jqwik.api.*;
 
 import java.util.concurrent.atomic.AtomicReference;
@@ -53,7 +54,7 @@ public class AcceptPropertyTests {
     final var cmd = switch (testCase.value) {
       case NULL -> null;
       case NOOP -> NoOperation.NOOP;
-      case COMMAND -> new Command( "data".getBytes());
+      case COMMAND -> new Command("data".getBytes());
     };
 
     // Track journal writes
@@ -90,7 +91,7 @@ public class AcceptPropertyTests {
 
     // Verify
     if (result instanceof TrexResult(final var messages, final var commands)) {
-      // No commands should be generated from accept
+      // No results should be generated from accept
       assert commands.isEmpty();
 
       assert messages.size() == 1;

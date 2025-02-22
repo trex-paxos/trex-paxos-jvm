@@ -72,6 +72,7 @@ public class TimeoutScheduler {
               long elapsed = System.nanoTime() - start;
               long sleepTime = HEARTBEAT.toNanos() - elapsed;
               if (sleepTime > 0) {
+                //noinspection BusyWait
                 Thread.sleep(sleepTime / 1_000_000, (int) (sleepTime % 1_000_000));
               }
             }

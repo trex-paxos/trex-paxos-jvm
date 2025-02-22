@@ -2,7 +2,6 @@ package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.Accept;
 import com.github.trex_paxos.msg.CatchupResponse;
-
 import net.jqwik.api.*;
 
 import java.util.ArrayList;
@@ -80,7 +79,7 @@ public class CatchupResponsePropertyTests {
             otherNodeId,
             otherIndex + i,
             otherNumber,
-            new Command( ("data" + i).getBytes())
+            new Command(("data" + i).getBytes())
         ))
         .toList();
 
@@ -141,6 +140,6 @@ public class CatchupResponsePropertyTests {
           promiseCounterRelation,
           catchUpAlignment,
           acceptCount) -> role != null ?
-        new TestCase(role, nodeIdentifierRelation, promiseCounterRelation, catchUpAlignment, Optional.ofNullable(acceptCount).orElse(0)) : null);
+        new TestCase(role, nodeIdentifierRelation, promiseCounterRelation, catchUpAlignment, Optional.of(acceptCount).orElse(0)) : null);
   }
 }

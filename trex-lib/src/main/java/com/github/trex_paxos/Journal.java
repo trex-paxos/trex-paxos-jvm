@@ -37,7 +37,7 @@ import java.util.Optional;
 /// as the journal writes. SUse the {@link TrexEngine} constructor with the `hostManagedTransactions=true` flag set to true.
 /// This will prevent the TrexEngine from calling the [#sync()] method. You then must commit the database transaction after
 /// *every* call to [TrexEngine#paxos(java.util.List)] and before any messages are transmitted to the network. When that
-/// method return fixed commands you can apply the commands to your database and then commit the transaction. Once again
+/// method return fixed results you can apply the results to your database and then commit the transaction. Once again
 /// this must happen before ending any messages to the network.
 ///
 /// It is important to note you should not delete `accept` messages the moment they are up-called into the application.

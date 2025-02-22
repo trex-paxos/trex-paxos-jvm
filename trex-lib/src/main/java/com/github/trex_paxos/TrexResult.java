@@ -24,17 +24,17 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /// The result of running the paxos algorithm for an input messages is a possible empty list of sequentially fixed
-/// commands and a possibly empty list of messages to be sent out. The journal must be made crash durable before any
+/// results and a possibly empty list of messages to be sent out. The journal must be made crash durable before any
 /// messages are sent out see [Journal].
 ///
 /// TODO this needs to contain the result.
 ///
-/// @param commands A possibly empty list of sequentially chosen values aka fixed commands for the host application to process.
+/// @param results A possibly empty list of sequentially chosen values aka fixed results for the host application to process.
 /// @param messages A possibly empty list of messages that were generated to be sent out after the journal is made crash durable.
-public record TrexResult(List<TrexMessage> messages, TreeMap<Long, AbstractCommand> commands) {
+public record TrexResult(List<TrexMessage> messages, TreeMap<Long, AbstractCommand> results) {
   public TrexResult {
     messages = List.copyOf(messages);
-    commands = new TreeMap<>(commands);
+    results = new TreeMap<>(results);
   }
 
   static TrexResult noResult() {
@@ -50,27 +50,27 @@ public record TrexResult(List<TrexMessage> messages, TreeMap<Long, AbstractComma
     }
     final var allMessages = results.stream().flatMap(r -> r.messages().stream()).toList();
     final var allCommands = results.stream()
-        .flatMap(r -> r.commands().entrySet().stream())
+        .flatMap(r -> r.results().entrySet().stream())
         .collect(Collectors.toMap(
             Map.Entry::getKey,
             Map.Entry::getValue,
-            // paxos gives unique commands at each slot we assert that is the case below.
+            // paxos gives unique results at each slot we assert that is the case below.
             (v, _) -> v,
             TreeMap::new // Use TreeMap as the map supplier
         ));
 
     // Check that the size of unique key-id pairs of the inputs matches the size of allCommands
-    // If this is not the case then we manged to fix different commands at the same slot.
+    // If this is not the case then we manged to fix different results at the same slot.
     assert allCommands.size() == results.stream()
-        .flatMap(r -> r.commands().entrySet().stream())
+        .flatMap(r -> r.results().entrySet().stream())
         .collect(Collectors.toSet()).size();
 
     return new TrexResult(allMessages, allCommands);
   }
 
   public Collection<Object> fixed() {
-    return commands().isEmpty() ? List.of() :
-        commands()
+    return results().isEmpty() ? List.of() :
+        results()
             .values()
             .stream()
             .filter(c -> c instanceof Command)

@@ -130,7 +130,7 @@ public class TrexNode {
   /// [Journal].
   ///
   /// @param input The message to process.
-  /// @return A possibly empty list of messages to send out to the cluster plus a possibly empty list of chosen commands to up-call to the host
+  /// @return A possibly empty list of messages to send out to the cluster plus a possibly empty list of chosen results to up-call to the host
   /// application. The journal state must be made crash durable before sending out any messages.
   /// @throws IllegalStateException If the node has been marked as crashed it will always throw an exception and will
   /// need rebooting. See {@link #isCrashed()}.
@@ -144,7 +144,7 @@ public class TrexNode {
     }
     // This will hold any outbound message that must only be sent after the journal has been flushed to durable storage.
     List<TrexMessage> messages = new ArrayList<>();
-    // This will hold any fixed commands. These may be written to the data store under the same translation as the journal.stat.
+    // This will hold any fixed results. These may be written to the data store under the same translation as the journal.stat.
     TreeMap<Long, AbstractCommand> commands = new TreeMap<>();
     // This tracks what our old state was so that we can crash if we change the state for the wrong message types.
     final var priorProgress = progress;
@@ -173,7 +173,7 @@ public class TrexNode {
         }
         if (!commands.isEmpty()) {
           // The general advice is not to throw. In this case the general advice is wrong.
-          // We must throw if the journal gives us weird commands as that is a fatal error.
+          // We must throw if the journal gives us weird results as that is a fatal error.
           validateCommandIndexes(input, commands, priorProgress);
         }
       }
@@ -401,8 +401,8 @@ public class TrexNode {
   static final String PROTOCOL_VIOLATION_SLOT_FIXING = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the promise has been changed when the message is not a LearningMessage type.";
   static final String CRASHED = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted) is now the only source of truth.";
   static final String CRASHING = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted) is now the only source of truth to to throwable: ";
-  static final String COMMAND_INDEXES = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued commands that do not align to its committed slot index: ";
-  static final String COMMAND_GAPS = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued commands that are not sequential in commited slot index: ";
+  static final String COMMAND_INDEXES = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued results that do not align to its committed slot index: ";
+  static final String COMMAND_GAPS = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued results that are not sequential in commited slot index: ";
 
   /// Here we check that we have not violated the Paxos algorithm invariants. If we have then we lock then mark the node as crashed.
   private void validateProtocolInvariants(TrexMessage input, Progress priorProgress) {
@@ -777,7 +777,7 @@ public class TrexNode {
   }
 
   /// This node must no longer run as it is an unknown state due to an exception. You must set this to step any more
-  /// commands getting picked and sent to clients. If you are running host managed transactions then you should call
+  /// results getting picked and sent to clients. If you are running host managed transactions then you should call
   /// this if you ever get any exceptions you do not recover your state from the data store. `TrexEngine` will call this
   /// when it has a thread interrupted which is assumes is due to the whole application shutting down.
   public void crash() {

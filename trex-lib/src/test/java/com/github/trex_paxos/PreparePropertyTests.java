@@ -1,6 +1,9 @@
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.msg.*;
+import com.github.trex_paxos.msg.Accept;
+import com.github.trex_paxos.msg.Fixed;
+import com.github.trex_paxos.msg.Prepare;
+import com.github.trex_paxos.msg.PrepareResponse;
 import net.jqwik.api.*;
 
 import java.util.Optional;
@@ -98,7 +101,7 @@ public class PreparePropertyTests {
 
     // Verify that no invariants of our protocol are violated
     if (result instanceof TrexResult(var messages, var commands)) {
-      // No commands should be generated from prepare
+      // No results should be generated from prepare
       assert commands.isEmpty();
 
       // Should get either nothing or a single prepare response.
@@ -135,7 +138,7 @@ public class PreparePropertyTests {
           }
         }
 
-        if( messages.size() == 2 ) {
+        if (messages.size() == 2) {
           assert testCase.fixedSlotRelation == ArbitraryValues.FixedSlotRelation.LESS;
           var fixed = (Fixed) messages.getLast();
           assert fixed.from() == nodeId;

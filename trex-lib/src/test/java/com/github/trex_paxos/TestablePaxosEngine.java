@@ -5,12 +5,12 @@ import com.github.trex_paxos.msg.TrexMessage;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
-import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.logging.Level;
 
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 
-abstract class TestablePaxosEngine extends TrexEngine {
+abstract class TestablePaxosEngine<RESULT> extends TrexEngine<RESULT> {
 
   final TransparentJournal journal;
 
@@ -25,7 +25,7 @@ abstract class TestablePaxosEngine extends TrexEngine {
       short nodeIdentifier,
       QuorumStrategy quorumStrategy,
       TransparentJournal journal,
-      BiConsumer<Long, Command> commitCallback
+      BiFunction<Long, Command, RESULT> commitCallback
   ) {
     // Pass commitCallback to super constructor
     super(new TrexNode(Level.INFO, nodeIdentifier, quorumStrategy, journal), commitCallback);
@@ -42,8 +42,8 @@ abstract class TestablePaxosEngine extends TrexEngine {
     if (oldRole != newRole) {
       LOGGER.info(() -> "Node has changed role:" + trexNode.nodeIdentifier() + " == " + newRole);
     }
-    if (!result.commands().isEmpty()) {
-      allCommandsMap.putAll(result.commands());
+    if (!result.results().isEmpty()) {
+      allCommandsMap.putAll(result.results());
     }
     return result;
   }

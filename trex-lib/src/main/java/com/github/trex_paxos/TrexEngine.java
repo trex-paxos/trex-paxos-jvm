@@ -9,7 +9,7 @@ import org.jetbrains.annotations.TestOnly;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
-import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.stream.Stream;
 
 import static com.github.trex_paxos.TrexLogger.LOGGER;
@@ -18,18 +18,18 @@ import static com.github.trex_paxos.TrexLogger.LOGGER;
 /// It is closable to use try-with-resources to ensure that the TrexNode is closed properly on exceptions due to bad
 /// data or journal write exceptions.
 /// The core paxos algorithm is implemented in the TrexNode class that is wrapped by this class.
-public class TrexEngine implements AutoCloseable {
+public class TrexEngine<RESULT> implements AutoCloseable {
   /// The underlying TrexNode that is the actual Part-time Parliament algorithm implementation guarded by this class.
   final protected TrexNode trexNode;
 
   final NodeId nodeId;
 
-  /// The callback to the host application to apply the chosen commands to the application state.
-  final protected BiConsumer<Long, Command> upCallUnderMutex;
+  /// The callback to the host application to apply the chosen results to the application state.
+  final protected BiFunction<Long, Command, RESULT> upCallUnderMutex;
 
   public TrexEngine(
       TrexNode trexNode,
-      BiConsumer<Long, Command> upCall) {
+      BiFunction<Long, Command, RESULT> upCall) {
     this.trexNode = trexNode;
     this.nodeId = new NodeId(trexNode.nodeIdentifier());
     this.upCallUnderMutex = upCall;
@@ -45,7 +45,7 @@ public class TrexEngine implements AutoCloseable {
   /// 3. Internally the {@link TrexNode} will recurse once or twice with the mutex is held when it generates a broadcast message that
   /// it instantaneously sends to itself and processes its own responses to those messages such as voting for itself.
   /// 4. The {@link TrexNode} will return a list of messages to send out to the cluster and/or a list of selected Commands.
-  /// 5. While the mutex is held the {@link #upCallUnderMutex} callback will be called to apply the chosen commands in order to update the application state.
+  /// 5. While the mutex is held the {@link #upCallUnderMutex} callback will be called to apply the chosen results in order to update the application state.
   /// 6. Any results of applying the command to th application state will be passed back to the application.
   /// 7. The {@link Journal#sync()} will be called to make the journal crash durable.
   /// 8. The mutex will be released.
@@ -56,24 +56,24 @@ public class TrexEngine implements AutoCloseable {
     try {
       mutex.acquire();
       try {
-        final var results = trexMessages
+        final var chosen = trexMessages
             .stream()
             .filter(m -> m.from() != trexNode.nodeIdentifier())
             .map(this::paxosNotThreadSafe)
             .toList();
 
-        var result = TrexResult.merge(results);
+        var combined = TrexResult.merge(chosen);
 
-        // Apply commands under mutex protection to ensure that identical primary ordering is maintained on all nodes.
-        for (Map.Entry<Long, AbstractCommand> entry : result.commands().entrySet()) {
+        // Apply results under mutex protection to ensure that identical primary ordering is maintained on all nodes.
+        for (Map.Entry<Long, AbstractCommand> entry : combined.results().entrySet()) {
           if (entry.getValue() instanceof Command cmd) {
-            upCallUnderMutex.accept(entry.getKey(), cmd);
+            final var host = upCallUnderMutex.apply(entry.getKey(), cmd);
           }
         }
         // Here we call sync which is intended to make the journal crash durable.
         // If you are using a framework like spring or JEE this method might do nothing as you are using a transaction manager.
         trexNode.journal.sync();
-        return result;
+        return combined;
       } finally {
         mutex.release();
       }
@@ -101,7 +101,7 @@ public class TrexEngine implements AutoCloseable {
     return result;
   }
 
-  /// Create the next leader batch of messages for the given set of commands. This should be called by the host application
+  /// Create the next leader batch of messages for the given set of results. This should be called by the host application
   /// when {@link #isLeader()} is true.
   public List<TrexMessage> nextLeaderBatchOfMessages(List<Command> commands) {
     if (trexNode.isFollow()) {
@@ -119,7 +119,7 @@ public class TrexEngine implements AutoCloseable {
     final var nextAcceptMessage = trexNode.nextAcceptMessage(command);
     // FIXME: pull this out so that we can run it as a batch
     final var r = trexNode.paxos(nextAcceptMessage);
-    assert r.commands().isEmpty() && r.messages().size() == 1
+    assert r.results().isEmpty() && r.messages().size() == 1
         && r.messages().getFirst() instanceof AcceptResponse;
     return nextAcceptMessage;
   }

@@ -18,7 +18,6 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.*;
 
 import java.util.*;
-import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.random.RandomGenerator;
 import java.util.random.RandomGeneratorFactory;
@@ -102,7 +101,7 @@ class Simulation {
                   return prepare.stream();
                 }
 
-                // if it is a messages that has arrived run paxos after we have reset timouts
+                // if it is a messages that has arrived run paxos after we have reset timeouts
                 case Send send -> {
                   return networkSimulation(send, now, nemesis);
                 }
@@ -156,11 +155,11 @@ class Simulation {
           trexEngine3.allCommandsMap);
       finished = finished || inconsistentFixedIndex.isPresent();
       if (inconsistentFixedIndex.isPresent()) {
-        LOGGER.info("finished as not matching commands:" +
+        LOGGER.info("finished as not matching results:" +
             "\n\t" + trexEngine1.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
             + "\n\t" + trexEngine2.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
             + "\n\t" + trexEngine3.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")));
-        throw new AssertionError("commands not matching");
+        throw new AssertionError("results not matching");
       }
       boolean fixedLengthNotEqualToCommandLength =
           trexEngine1.allCommandsMap.size() != trexEngine1.trexNode.progress.highestFixedIndex() ||
@@ -344,12 +343,12 @@ class Simulation {
     });
   }
 
-  class SimulationPaxosEngine extends TestablePaxosEngine {
+  class SimulationPaxosEngine<RESULT> extends TestablePaxosEngine<RESULT> {
 
     public SimulationPaxosEngine(short nodeIdentifier,
                                  QuorumStrategy quorumStrategy,
                                  TransparentJournal transparentJournal,
-                                 BiConsumer<Long, Command> commitHandler
+                                 BiFunction<Long, Command, RESULT> commitHandler
     ) {
       super(nodeIdentifier, quorumStrategy, transparentJournal, commitHandler);
     }
@@ -380,8 +379,7 @@ class Simulation {
         quorumStrategy,
         new TransparentJournal(nodeIdentifier),
         // Here we have no application callback as we are simply testing that the logs match
-        (_, _) -> {
-        }
+        (_, _) -> null
     );
   }
 }

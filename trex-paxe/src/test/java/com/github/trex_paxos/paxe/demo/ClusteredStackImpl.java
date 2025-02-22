@@ -85,7 +85,7 @@ public class ClusteredStackImpl implements AutoCloseable {
     validateMinimumNodes();
 
     // Reconstruct stack state
-    // FIXME this is junk. we should be recording if it was a push or a pop or whatever. we have searalised commands in the journal that we can apply and log here.
+    // FIXME this is junk. we should be recording if it was a push or a pop or whatever. we have searalised results in the journal that we can apply and log here.
     // come to think of it we can simply just read the log from the journal and replay it from the beginning no need to have some other way of storing the state of the stack
     if (!stackMap.isEmpty()) {
       var maxKey = stackMap.lastKey();

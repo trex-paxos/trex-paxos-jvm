@@ -6,7 +6,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
@@ -14,17 +14,6 @@ import java.util.logging.Logger;
 
 import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
 import static com.github.trex_paxos.network.SystemChannel.PROXY;
-
-sealed interface StackCommand {
-  record Push(String value) implements StackCommand {
-  }
-
-  record Pop() implements StackCommand {
-  }
-
-  record Peek() implements StackCommand {
-  }
-}
 
 public class StackClusterImpl implements StackService {
   static final Logger LOGGER = Logger.getLogger(StackClusterImpl.class.getName());
@@ -67,20 +56,20 @@ public class StackClusterImpl implements StackService {
 
       final Pickler<Value> valuePickler = PermitsRecordsPickler.createPickler(Value.class);
 
-      // Callback to apply committed commands to the stack
-      BiConsumer<Long, Command> callback = (slot, cmd) -> {
+      // Callback to apply committed results to the stack
+      BiFunction<Long, Command, Response> callback = (slot, cmd) -> {
         final var value = valuePickler.deserialize(cmd.operationBytes());
         LOGGER.fine(() -> "Node " + index + " processing command: " + value.getClass().getSimpleName());
         synchronized (stack) {
           try {
-            switch (value) {
+            return switch (value) {
               case Push p -> {
                 LOGGER.fine(() -> String.format("Node %d pushing: %s, current size: %d",
                     index, p.item(), stack.size()));
                 stack.push(p.item());
                 LOGGER.fine(() -> String.format("Node %d push complete, new size: %d",
                     index, stack.size()));
-                //yield new Response(Optional.empty());
+                yield new Response(Optional.empty());
               }
               case Pop _ -> {
                 if (stack.isEmpty()) {
@@ -90,7 +79,7 @@ public class StackClusterImpl implements StackService {
                 var item = stack.pop();
                 LOGGER.fine(() -> String.format("Node %d popped: %s, new size: %d",
                     index, item, stack.size()));
-                //yield new Response(Optional.of(item));
+                yield new Response(Optional.of(item));
               }
               case Peek _ -> {
                 if (stack.isEmpty()) {
@@ -100,19 +89,19 @@ public class StackClusterImpl implements StackService {
                 var item = stack.peek();
                 LOGGER.fine(() -> String.format("Node %d peeked: %s, size: %d",
                     index, item, stack.size()));
-                //yield new Response(Optional.of(item));
+                yield new Response(Optional.of(item));
               }
             }
-            ;
+                ;
           } catch (EmptyStackException e) {
             LOGGER.warning(() -> String.format("Node %d slot %d stack operation failed: %s",
                 index, slot, e.getMessage()));
-            //return new Response(Optional.of("Stack is empty"));
+            return new Response(Optional.of("Stack is empty"));
           }
         }
       };
 
-      var engine = getTrexEngine(index, callback);
+      TrexEngine<Response> engine = getTrexEngine(index, callback);
       Supplier<ClusterMembership> members = () -> new ClusterMembership(
           Map.of(new NodeId((short) 1), new NetworkAddress.HostName("localhost", 5000),
               new NodeId((short) 2), new NetworkAddress.HostName("localhost", 5001)));
@@ -120,7 +109,7 @@ public class StackClusterImpl implements StackService {
           Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), Pickle.instance)
       );
 
-      var app = new TrexApp<>(
+      var app = new TrexApp<Value, Response>(
           members,
           engine,
           networkLayer,
@@ -241,7 +230,7 @@ public class StackClusterImpl implements StackService {
   }
 
   // Rest of existing implementation remains unchanged
-  private static TrexEngine getTrexEngine(short i, BiConsumer<Long, Command> callback) {
+  private static TrexEngine<Response> getTrexEngine(short i, BiFunction<Long, Command, Response> callback) {
     var journal = new TransparentJournal(i);
     QuorumStrategy quorum = new SimpleMajority(2);
     var node = new TrexNode(Level.INFO, i, quorum, journal);
@@ -250,7 +239,7 @@ public class StackClusterImpl implements StackService {
       node.setLeader();
     }
 
-    return new TrexEngine(node, callback);
+    return new TrexEngine<Response>(node, callback);
   }
 
   record ChannelAndSubscriber(Channel channel, NamedSubscriber subscriber) {

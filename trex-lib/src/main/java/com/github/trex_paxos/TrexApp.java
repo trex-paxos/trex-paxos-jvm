@@ -65,7 +65,7 @@ public class TrexApp<COMMAND, RESULT> {
     }
   }
 
-  protected final TrexEngine engine;
+  protected final TrexEngine<RESULT> engine;
   protected final NetworkLayer networkLayer;
   protected final Function<COMMAND, RESULT> serverFunction;
   protected final Supplier<ClusterMembership> clusterMembershipSupplier;
@@ -76,7 +76,7 @@ public class TrexApp<COMMAND, RESULT> {
 
   public TrexApp(
       Supplier<ClusterMembership> clusterMembershipSupplier,
-      TrexEngine engine,
+      TrexEngine<RESULT> engine,
       NetworkLayer networkLayer,
       Pickler<COMMAND> valuePickler,
       Function<COMMAND, RESULT> serverFunction) {
@@ -182,9 +182,9 @@ public class TrexApp<COMMAND, RESULT> {
   List<TrexMessage> paxosThenUpCall(List<TrexMessage> messages) {
     LOGGER.finer(() -> engine.nodeIdentifier() + " paxosThenUpCall input: " + messages);
     var result = engine.paxos(messages);
-    if (!result.commands().isEmpty()) {
-      LOGGER.fine(() -> engine.nodeIdentifier() + " fixed " + result.commands());
-      result.commands().entrySet().stream()
+    if (!result.results().isEmpty()) {
+      LOGGER.fine(() -> engine.nodeIdentifier() + " fixed " + result.results());
+      result.results().entrySet().stream()
           .filter(entry -> entry.getValue() instanceof Command)
           .forEach(entry -> upCall(entry.getKey(), (Command) entry.getValue()));
     }
