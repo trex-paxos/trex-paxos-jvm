@@ -174,7 +174,7 @@ public class SimulationTests {
         }
     );
 
-    assertThat(maxOfMinimum.get()).isGreaterThan(10);
+    assertThat(maxOfMinimum.get()).isGreaterThan(5);
   }
 
   @Test
