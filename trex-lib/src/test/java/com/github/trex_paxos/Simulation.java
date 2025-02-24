@@ -354,7 +354,7 @@ class Simulation {
     }
 
     @Override
-    public TrexResult paxos(List<TrexMessage> trexMessages) {
+    public EngineResult<RESULT> paxos(List<TrexMessage> trexMessages) {
       final var fixed = trexMessages.stream()
           .filter(m -> m instanceof Fixed)
           .map(m -> (Fixed) m)
@@ -373,7 +373,7 @@ class Simulation {
       return result;
     }
   }
-
+  
   SimulationPaxosEngine makeTrexEngine(short nodeIdentifier, QuorumStrategy quorumStrategy) {
     return new SimulationPaxosEngine(nodeIdentifier,
         quorumStrategy,

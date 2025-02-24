@@ -164,30 +164,13 @@ public class TrexApp<COMMAND, RESULT> {
     }
   }
 
-  void upCall(Long slot, Command cmd) {
-    try {
-      COMMAND value = valuePickler.deserialize(cmd.operationBytes());
-      RESULT result = serverFunction.apply(value);
-      LOGGER.fine(() -> String.format("[Node %d] upCall for UUID: %s, value: %s, result: %s",
-          nodeId.id(), cmd.uuid(), value, result));
-      responseTracker.complete(cmd.uuid(), result);
-    } catch (Exception e) {
-      LOGGER.warning(() -> "Failed to process command at slot " + slot + " due to : " + e.getMessage());
-      responseTracker.fail(cmd.uuid(), e);
-    } finally {
-      responseTracker.remove(cmd.uuid());
-    }
-  }
-
   List<TrexMessage> paxosThenUpCall(List<TrexMessage> messages) {
     LOGGER.finer(() -> engine.nodeIdentifier() + " paxosThenUpCall input: " + messages);
-    var result = engine.paxos(messages);
-    if (!result.results().isEmpty()) {
-      LOGGER.fine(() -> engine.nodeIdentifier() + " fixed " + result.results());
-      result.results().entrySet().stream()
-          .filter(entry -> entry.getValue() instanceof Command)
-          .forEach(entry -> upCall(entry.getKey(), (Command) entry.getValue()));
-    }
+    EngineResult<RESULT> result = engine.paxos(messages);
+    result.results().forEach(hostResult -> {
+      LOGGER.fine(() -> engine.nodeIdentifier() + " paxosThenUpCall completing callback for " + hostResult.uuid());
+      responseTracker.complete(hostResult.uuid(), hostResult.result());
+    });
     final var response = result.messages();
     LOGGER.finer(() -> engine.nodeIdentifier() + " paxosThenUpCall output: " + response);
     return response;

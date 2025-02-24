@@ -14,9 +14,9 @@ abstract class TestablePaxosEngine<RESULT> extends TrexEngine<RESULT> {
 
   final TransparentJournal journal;
 
-  final TreeMap<Long, AbstractCommand> allCommandsMap = new TreeMap<>();
+  final TreeMap<Long, RESULT> allCommandsMap = new TreeMap<>();
 
-  public List<AbstractCommand> allCommands() {
+  public List<RESULT> allCommands() {
     return new ArrayList<>(allCommandsMap.values());
   }
 
@@ -32,9 +32,8 @@ abstract class TestablePaxosEngine<RESULT> extends TrexEngine<RESULT> {
     this.journal = journal;
   }
 
-
   @Override
-  public TrexResult paxos(List<TrexMessage> input) {
+  public EngineResult<RESULT> paxos(List<TrexMessage> input) {
     LOGGER.finer(() -> trexNode.nodeIdentifier + " <~ " + input);
     final var oldRole = trexNode.getRole();
     final var result = super.paxos(input);
@@ -42,9 +41,9 @@ abstract class TestablePaxosEngine<RESULT> extends TrexEngine<RESULT> {
     if (oldRole != newRole) {
       LOGGER.info(() -> "Node has changed role:" + trexNode.nodeIdentifier() + " == " + newRole);
     }
-    if (!result.results().isEmpty()) {
-      allCommandsMap.putAll(result.results());
-    }
+    result.results().forEach(hostResult -> {
+      allCommandsMap.put(hostResult.slot(), hostResult.result());
+    });
     return result;
   }
 

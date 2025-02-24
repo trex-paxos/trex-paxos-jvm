@@ -6,8 +6,8 @@ import com.github.trex_paxos.msg.TrexMessage;
 import com.github.trex_paxos.network.NodeId;
 import org.jetbrains.annotations.TestOnly;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
@@ -51,29 +51,34 @@ public class TrexEngine<RESULT> implements AutoCloseable {
   /// 8. The mutex will be released.
   ///
   /// @param trexMessages The batch of messages to process.
-  /// @return A list of messages to send out to the cluster and/or a list of selected Commands.
-  public TrexResult paxos(List<TrexMessage> trexMessages) {
+  /// @return A list of messages to send out to the cluster and the results of the host callback by the client command uuid.
+  public EngineResult<RESULT> paxos(List<TrexMessage> trexMessages) {
     try {
       mutex.acquire();
       try {
-        final var chosen = trexMessages
-            .stream()
-            .filter(m -> m.from() != trexNode.nodeIdentifier())
-            .map(this::paxosNotThreadSafe)
-            .toList();
+        final var hostResults = new ArrayList<HostResult<RESULT>>();
+        final var combinedMessages = new ArrayList<TrexMessage>();
 
-        var combined = TrexResult.merge(chosen);
-
-        // Apply results under mutex protection to ensure that identical primary ordering is maintained on all nodes.
-        for (Map.Entry<Long, AbstractCommand> entry : combined.results().entrySet()) {
-          if (entry.getValue() instanceof Command cmd) {
-            final var host = upCallUnderMutex.apply(entry.getKey(), cmd);
+        for (var msg : trexMessages) {
+          final var result = paxosNotThreadSafe(msg);
+          combinedMessages.addAll(result.messages());
+          // Process any fixed commands and get host results
+          for (var entry : result.results().entrySet()) {
+            long slot = entry.getKey();
+            AbstractCommand cmd = entry.getValue();
+            if (cmd instanceof Command command) {
+              final var host = upCallUnderMutex.apply(entry.getKey(), command);
+              final var hostResult = new HostResult<>(slot, command.uuid(), host);
+              hostResults.add(hostResult);
+            }
           }
         }
+
         // Here we call sync which is intended to make the journal crash durable.
         // If you are using a framework like spring or JEE this method might do nothing as you are using a transaction manager.
         trexNode.journal.sync();
-        return combined;
+        // return the combined messages and the host results
+        return new EngineResult<>(combinedMessages, hostResults);
       } finally {
         mutex.release();
       }
@@ -81,7 +86,7 @@ public class TrexEngine<RESULT> implements AutoCloseable {
       Thread.currentThread().interrupt();
       LOGGER.warning("TrexEngine was interrupted awaiting the mutex probably to shutdown while under load.");
       trexNode.crash();
-      return TrexResult.noResult();
+      throw new RuntimeException(e);
     }
   }
 

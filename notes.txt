@@ -1,6 +1,11 @@
 # tests
 mvn clean package
 
+# compiler warnings:
+
+mvn clean compile -Dmaven.compiler.showWarnings=true -Dmaven.compiler.compilerArgs=-Xlint:all
+
+
 # run just one test
 mvn -DskipTests clean package && \
     mvn test -Dtest=PickleHandshakeTest -pl trex-paxe
