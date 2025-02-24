@@ -26,8 +26,17 @@ import java.util.stream.LongStream;
 
 import static com.github.trex_paxos.TrexNode.TrexRole.*;
 
-/// A TrexNode is a single node in a Paxos cluster. It runs the part-time parliament algorithm. It requires
-/// the following collaborating classes:
+/// A TrexNode is a single node in a Paxos cluster. It runs the part-time parliament algorithm implementation handling:
+/// - Ballot number management
+/// - Accept/Vote message processing
+/// - Journal persistence of progress
+/// - Leader election state transitions
+/// Does NOT handle:
+/// - Thread safety (managed by TrexEngine)
+/// - Network communication (handled by TrexApp)
+/// - Application callbacks (managed by TrexEngine)
+///
+/// It requires the following collaborating classes:
 ///
 /// * One [Journal] which must be crash durable storage.
 /// * One [QuorumStrategy] which may be a simple majority, in the future FPaxos or UPaxos.
@@ -35,8 +44,6 @@ import static com.github.trex_paxos.TrexNode.TrexRole.*;
 /// This class logs to JUL logging as severe. You can configure JUL logging to
 /// bridge to your chosen logging framework. This class is not thread safe. The [TrexEngine] will wrap this class and
 /// use a virtual thread friendly mutex to ensure that only one thread is calling the algorithm method at a time.
-///
-/// The wrapping [TrexEngine] will call {@link Journal#sync()} unless it has be constructed with `hostManagedTransactions=true`.
 ///
 /// This class will mark itself as crashed if it has exceptions due to journal IO errors or if it reads corrupt data.
 /// After it has logged to JUL and stderr it will throw the original Exception if any. After that it will always throw an
@@ -124,7 +131,7 @@ public class TrexNode {
   /// node automatically if it is crashed. See {@link #algorithm(TrexMessage, List, TreeMap)} for the main logic.
   /// this method is not thread safe. When this method returns the journal must
   /// be made crash durable before sending out any messages.The [TrexEngine] will wrap this class and use a virtual thread friendly mutex to
-  /// and flush the journal if it is not using host managed transactions. This method will throw an IllegalStateException
+  /// and sync the journal. This method will throw an IllegalStateException
   /// if the node is crashed for all future calls. The operator must reboot the node. If the journal is corrupt then the
   /// operator must restore the journal from a backup possibly or clone another node by change the `nodeIdentifier` in the
   /// [Journal].
@@ -155,9 +162,9 @@ public class TrexNode {
       // The most probable reason to throw is an IOError from the journal else it returned corrupt data we cannot process. .
       crashed = true;
       // Log that we are crashing and log the reason.
-      LOGGER.log(Level.SEVERE, CRASHING + e, e);
+      LOGGER.log(Level.SEVERE, CRASHED + e, e);
       // In case the application developer has not correctly configured logging JUL logging we log to stderr.
-      System.err.println(CRASHING + e);
+      System.err.println(CRASHED + e);
       //noinspection CallToPrintStackTrace
       e.printStackTrace();
       // We throw yet the finally block will also run and may also log errors about invariants being violated before
@@ -400,7 +407,6 @@ public class TrexNode {
   static final String PROTOCOL_VIOLATION_INDEX = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the fixed slot index has decreased.";
   static final String PROTOCOL_VIOLATION_SLOT_FIXING = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the promise has been changed when the message is not a LearningMessage type.";
   static final String CRASHED = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted) is now the only source of truth.";
-  static final String CRASHING = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted) is now the only source of truth to to throwable: ";
   static final String COMMAND_INDEXES = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued results that do not align to its committed slot index: ";
   static final String COMMAND_GAPS = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued results that are not sequential in commited slot index: ";
 

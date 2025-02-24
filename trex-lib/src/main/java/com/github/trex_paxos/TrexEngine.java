@@ -10,14 +10,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.function.BiFunction;
+import java.util.logging.Level;
 import java.util.stream.Stream;
 
 import static com.github.trex_paxos.TrexLogger.LOGGER;
+import static com.github.trex_paxos.TrexNode.CRASHED;
 
-/// TrexEngine manages consensus ordering and application state updates under mutex protection.
-/// It is closable to use try-with-resources to ensure that the TrexNode is closed properly on exceptions due to bad
+/// Manages thread safety and coordinates between the network layer, TrexNode consensus core algorithm,
+/// and application callbacks. Ensures:
+/// - Single-threaded access to TrexNode via mutex
+/// - Ordered application of committed commands via upCallUnderMutex
+/// - Crash durability through Journal synchronization
+/// - Leader proxy handling and message transmission
+/// It is closable to use try-with-resources to ensure that both the TrexNode and the network layer is closed properly on exceptions due to bad
 /// data or journal write exceptions.
-/// The core paxos algorithm is implemented in the TrexNode class that is wrapped by this class.
 public class TrexEngine<RESULT> implements AutoCloseable {
   /// The underlying TrexNode that is the actual Part-time Parliament algorithm implementation guarded by this class.
   final protected TrexNode trexNode;
@@ -35,6 +41,10 @@ public class TrexEngine<RESULT> implements AutoCloseable {
     this.upCallUnderMutex = upCall;
   }
 
+  /// The Semaphore acts as a mutex with:
+  /// - Non-reentrant locking
+  /// - Fair queuing of threads
+  /// - Automatic release on close/crash
   private final Semaphore mutex = new Semaphore(1);
 
   /// The main entry point for the Trex paxos algorithm. This method is thread safe and allows only one thread at a
@@ -55,38 +65,46 @@ public class TrexEngine<RESULT> implements AutoCloseable {
   public EngineResult<RESULT> paxos(List<TrexMessage> trexMessages) {
     try {
       mutex.acquire();
-      try {
-        final var hostResults = new ArrayList<HostResult<RESULT>>();
-        final var combinedMessages = new ArrayList<TrexMessage>();
+      final var hostResults = new ArrayList<HostResult<RESULT>>();
+      final var combinedMessages = new ArrayList<TrexMessage>();
 
-        for (var msg : trexMessages) {
-          final var result = paxosNotThreadSafe(msg);
-          combinedMessages.addAll(result.messages());
-          // Process any fixed commands and get host results
-          for (var entry : result.results().entrySet()) {
-            long slot = entry.getKey();
-            AbstractCommand cmd = entry.getValue();
-            if (cmd instanceof Command command) {
-              final var host = upCallUnderMutex.apply(entry.getKey(), command);
-              final var hostResult = new HostResult<>(slot, command.uuid(), host);
-              hostResults.add(hostResult);
-            }
+      for (var msg : trexMessages) {
+        final var result = paxosNotThreadSafe(msg);
+        combinedMessages.addAll(result.messages());
+        // Process any fixed commands and get host results
+        for (var entry : result.results().entrySet()) {
+          long slot = entry.getKey();
+          AbstractCommand cmd = entry.getValue();
+          if (cmd instanceof Command command) {
+            final var host = upCallUnderMutex.apply(entry.getKey(), command);
+            final var hostResult = new HostResult<>(slot, command.uuid(), host);
+            hostResults.add(hostResult);
           }
         }
-
-        // Here we call sync which is intended to make the journal crash durable.
-        // If you are using a framework like spring or JEE this method might do nothing as you are using a transaction manager.
-        trexNode.journal.sync();
-        // return the combined messages and the host results
-        return new EngineResult<>(combinedMessages, hostResults);
-      } finally {
-        mutex.release();
       }
+
+      try {
+        // Here we call sync which is intended to make the journal crash durable.
+        // If you are using a framework like spring or JEE this method might do nothing when you are using a transaction manager.
+        trexNode.journal.sync();
+      } catch (Exception e) {
+        // Log that we are crashing and log the reason.
+        LOGGER.log(Level.SEVERE, CRASHED + e, e);
+        // In case the application developer has not correctly configured logging JUL logging we log to stderr.
+        System.err.println(CRASHED + e);
+        //noinspection CallToPrintStackTrace
+        e.printStackTrace();
+        throw e;
+      }
+      // return the combined messages and the host results
+      return new EngineResult<>(combinedMessages, hostResults);
     } catch (InterruptedException e) {
+      // FIXME i am not sure what do to in this case
       Thread.currentThread().interrupt();
       LOGGER.warning("TrexEngine was interrupted awaiting the mutex probably to shutdown while under load.");
-      trexNode.crash();
       throw new RuntimeException(e);
+    } finally {
+      mutex.release();
     }
   }
 
@@ -151,6 +169,10 @@ public class TrexEngine<RESULT> implements AutoCloseable {
     trexNode.close();
   }
 
+  /// Marks this node as crashed. The node must be restarted to re reinitialise state from the Journal.
+  /// This should be called if there were any exceptions thrown by the Journal. It should also be called
+  /// if there were any none recoverable errors thrown from the host application callback.
+  ///   /// node as crashed.
   public void crash() {
     LOGGER.severe("Crashing TrexEngine. We are marking TrexNode as crashed.");
     trexNode.crash();

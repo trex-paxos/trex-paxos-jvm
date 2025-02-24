@@ -1,10 +1,9 @@
 # tests
 mvn clean package
 
-# compiler warnings:
+npx repomix@latest --include "README.md,trex-lib/src/main/**"
 
-mvn clean compile -Dmaven.compiler.showWarnings=true -Dmaven.compiler.compilerArgs=-Xlint:all
-
+npx repomix@latest
 
 # run just one test
 mvn -DskipTests clean package && \

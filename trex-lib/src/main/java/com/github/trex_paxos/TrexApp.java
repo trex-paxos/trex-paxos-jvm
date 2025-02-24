@@ -164,6 +164,11 @@ public class TrexApp<COMMAND, RESULT> {
     }
   }
 
+  /// Runs the Paxos algorithm over a list of messages then transmits any resulting messages.
+  /// This method will side effect by updating the journal as necessary and also calling the host application
+  /// callback if any commands are fixed.
+  /// @param messages The input TrexMessages to process
+  /// @return List of outbound TrexMessages to be sent to other nodes
   List<TrexMessage> paxosThenUpCall(List<TrexMessage> messages) {
     LOGGER.finer(() -> engine.nodeIdentifier() + " paxosThenUpCall input: " + messages);
     EngineResult<RESULT> result = engine.paxos(messages);
@@ -176,6 +181,11 @@ public class TrexApp<COMMAND, RESULT> {
     return response;
   }
 
+  /// Transmits a list of Trex messages across the network to their respective destinations.
+  /// DirectMessage instances are sent to specific nodes while other messages are broadcast.
+  /// Delegates to the NetworkLayer to handle actual transmission and ClusterMembership for broadcasts.
+  ///
+  /// @param messages The list of Trex messages to be transmitted
   private void transmitTrexMessages(List<TrexMessage> messages) {
     messages.forEach(message -> {
       if (message instanceof DirectMessage directMessage) {

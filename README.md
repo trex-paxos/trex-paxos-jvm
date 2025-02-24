@@ -1,5 +1,50 @@
 ## Trex2: Paxos Algorithm Strong consistency for cluster replication on the Java JVM
 
+### Library Overview
+
+The core components of the library are:
+
+- `TrexApp<COMMAND,RESULT>`: Main entry point that runs Paxos consensus on commands across a cluster and transforms
+  chosen commands into results locally at each node.
+- `TrexNode`: Implements the core Paxos algorithm, processing messages and maintaining consistency.
+- `TrexEngine`: Manages timeouts and heartbeats around the core algorithm.
+- `Journal`: Interface for crash-durable storage of protocol state and commands.
+- `Progress`: Tracks the highest promised ballot number and fixed log index per node.
+- `BallotNumber`: Orders proposals by combining a counter with node identifier.
+- `QuorumStrategy`: Defines how voting quorums are calculated.
+
+To use the library, applications need to provide:
+
+1. A `Journal` implementation backed by the application's database
+2. A `Pickler` implementation to serialize commands
+3. A network layer for message transport
+4. A function to process chosen commands into results
+
+The library focuses on correctness and performance while remaining agnostic to application specifics. All consensus
+state and application state can be committed atomically through the journal interface.
+
+```mermaid
+graph LR
+    N[Network] --> TA[TrexApp]
+    TA --> TE[TrexEngine]
+    TE --> TN[TrexNode]
+    TN -- "sync callback" --> App[Application]
+    
+    style TA fill:#f9f,stroke:#333
+    style TE fill:#bbf,stroke:#333
+    style TN fill:#bfb,stroke:#333
+    
+    subgraph "Lock Protected"
+        TE
+        TN
+        App
+    end
+    
+    %% Add labels
+    classDef default fill:#fff,stroke:#333,stroke-width:2px
+    linkStyle default stroke-width:2px
+```
+
 ### TL;DR
 
 This repository contains a Java library that implements the Paxos algorithm as described in Leslie Lamport's 2001

@@ -25,4 +25,7 @@
 /// utility pickler classes [com.github.trex_paxos.RecordPickler] and [com.github.trex_paxos.PermitsRecordsPickler].
 ///
 /// The library focuses on correctness and performance while remaining agnostic to application specifics.
+/// Architecture Note:
+/// TrexApp handles network -> TrexEngine manages threading -> TrexNode implements core algo
+/// Application callbacks happen synchronously during paxos() call while holding mutex
 package com.github.trex_paxos;
