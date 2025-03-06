@@ -150,15 +150,16 @@ class Simulation {
         LOGGER.info("finished as empty iteration: " + iteration);
       }
       final var inconsistentFixedIndex = inconsistentFixedIndex(
-          trexEngine1.allCommandsMap,
-          trexEngine2.allCommandsMap,
-          trexEngine3.allCommandsMap);
+          allCommandsMap.get(trexEngine1.nodeIdentifier()),
+          allCommandsMap.get(trexEngine2.nodeIdentifier()),
+          allCommandsMap.get(trexEngine3.nodeIdentifier())
+      );
       finished = finished || inconsistentFixedIndex.isPresent();
       if (inconsistentFixedIndex.isPresent()) {
         LOGGER.info("finished as not matching results:" +
-            "\n\t" + trexEngine1.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
-            + "\n\t" + trexEngine2.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
-            + "\n\t" + trexEngine3.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")));
+            "\n\t" + allCommandsMap.get(trexEngine1.nodeIdentifier()).values().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
+            + "\n\t" + allCommandsMap.get(trexEngine2.nodeIdentifier()).values().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
+            + "\n\t" + allCommandsMap.get(trexEngine3.nodeIdentifier()).values().stream().map(Objects::toString).collect(Collectors.joining(",")));
         throw new AssertionError("results not matching");
       }
       engines.values().forEach(
@@ -286,6 +287,19 @@ class Simulation {
 
   final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
 
+  final Map<Short, TreeMap<Long, AbstractCommand>> allCommandsMap = commandMaps();
+
+  private Map<Short, TreeMap<Long, AbstractCommand>> commandMaps() {
+    final var c1 = new TreeMap<Long, AbstractCommand>();
+    final var c2 = new TreeMap<Long, AbstractCommand>();
+    final var c3 = new TreeMap<Long, AbstractCommand>();
+    return Map.of(
+        (short) 1, c1,
+        (short) 2, c2,
+        (short) 3, c3
+    );
+  }
+
   final SimulationPaxosEngine<AbstractCommand> trexEngine1 = makeTrexEngine((short) 1, threeNodeQuorum);
   final SimulationPaxosEngine<AbstractCommand> trexEngine2 = makeTrexEngine((short) 2, threeNodeQuorum);
   final SimulationPaxosEngine<AbstractCommand> trexEngine3 = makeTrexEngine((short) 3, threeNodeQuorum);
@@ -362,11 +376,16 @@ class Simulation {
   }
 
   <T> SimulationPaxosEngine<T> makeTrexEngine(short nodeIdentifier, QuorumStrategy quorumStrategy) {
+    final Map<Long, Command> allCommands = new TreeMap<>();
     return new SimulationPaxosEngine<>(nodeIdentifier,
         quorumStrategy,
         new TransparentJournal(nodeIdentifier),
         // Here we have no application callback as we are simply testing that the logs match
-        (_, _) -> null
+        (i, c) -> {
+          LOGGER.fine(() -> "i=" + i + " c=" + c);
+          allCommands.put(i, c);
+          return null;
+        }
     );
   }
 }

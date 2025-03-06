@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
@@ -134,17 +135,17 @@ public class SimulationTests {
     simulation.run(15, true);
 
     final var badCommandIndex = inconsistentFixedIndex(
-        simulation.trexEngine1.allCommandsMap,
-        simulation.trexEngine2.allCommandsMap,
-        simulation.trexEngine3.allCommandsMap
+        simulation.allCommandsMap.get(simulation.trexEngine1.nodeIdentifier()),
+        simulation.allCommandsMap.get(simulation.trexEngine2.nodeIdentifier()),
+        simulation.allCommandsMap.get(simulation.trexEngine3.nodeIdentifier())
     );
 
     assertThat(badCommandIndex.isEmpty()).isTrue();
 
     assertThat(consistentFixed(
-        simulation.trexEngine1,
-        simulation.trexEngine2,
-        simulation.trexEngine3
+        simulation.allCommandsMap.get(simulation.trexEngine1.nodeIdentifier()),
+        simulation.allCommandsMap.get(simulation.trexEngine2.nodeIdentifier()),
+        simulation.allCommandsMap.get(simulation.trexEngine3.nodeIdentifier())
     )).isTrue();
 
     // then we should have a single leader and the rest followers
@@ -206,22 +207,22 @@ public class SimulationTests {
     simulation.run(runLength, true, nemesis);
 
     assertThat(inconsistentFixedIndex(
-        simulation.trexEngine1.allCommandsMap,
-        simulation.trexEngine2.allCommandsMap,
-        simulation.trexEngine3.allCommandsMap
+        simulation.allCommandsMap.get(simulation.trexEngine1.nodeIdentifier()),
+        simulation.allCommandsMap.get(simulation.trexEngine2.nodeIdentifier()),
+        simulation.allCommandsMap.get(simulation.trexEngine3.nodeIdentifier())
     ).isEmpty()).isTrue();
 
     assertThat(consistentFixed(
-        simulation.trexEngine1,
-        simulation.trexEngine2,
-        simulation.trexEngine3
+        simulation.allCommandsMap.get(simulation.trexEngine1.nodeIdentifier()),
+        simulation.allCommandsMap.get(simulation.trexEngine2.nodeIdentifier()),
+        simulation.allCommandsMap.get(simulation.trexEngine3.nodeIdentifier())
     )).isTrue();
 
     return Math.min(
-        simulation.trexEngine1.allCommandsMap.size(),
+        simulation.allCommandsMap.get(simulation.trexEngine1.nodeIdentifier()).size(),
         Math.min(
-            simulation.trexEngine2.allCommandsMap.size(),
-            simulation.trexEngine3.allCommandsMap.size()
+            simulation.allCommandsMap.get(simulation.trexEngine2.nodeIdentifier()).size(),
+            simulation.allCommandsMap.get(simulation.trexEngine3.nodeIdentifier()).size()
         ));
   }
 
@@ -263,38 +264,43 @@ public class SimulationTests {
 
     LOGGER.info("\n\nEMD ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ END\n\n");
     LOGGER.info(simulation.trexEngine1.role() + " " + simulation.trexEngine2.role() + " " + simulation.trexEngine3.role());
-    LOGGER.info("command sizes: " + simulation.trexEngine1.allCommands().size() + " "
-        + simulation.trexEngine2.allCommands().size() + " "
-        + simulation.trexEngine3.allCommands().size());
+//    LOGGER.info("command sizes: " + simulation.trexEngine1.allCommands().size() + " "
+//        + simulation.trexEngine2.allCommands().size() + " "
+//        + simulation.trexEngine3.allCommands().size());
     LOGGER.info("journal sizes: " + simulation.trexEngine1.journal.fakeJournal.size() +
         " " + simulation.trexEngine2.journal.fakeJournal.size() +
         " " + simulation.trexEngine3.journal.fakeJournal.size());
 
     assertThat(consistentFixed(
-        simulation.trexEngine1,
-        simulation.trexEngine2,
-        simulation.trexEngine3
+        simulation.allCommandsMap.get(simulation.trexEngine1.nodeIdentifier()),
+        simulation.allCommandsMap.get(simulation.trexEngine2.nodeIdentifier()),
+        simulation.allCommandsMap.get(simulation.trexEngine3.nodeIdentifier())
     )).isTrue();
 
     return Math.min(
-        simulation.trexEngine1.allCommands().size(), Math.min(
-            simulation.trexEngine2.allCommands().size(),
-            simulation.trexEngine3.allCommands().size()
+        simulation.allCommandsMap.get(simulation.trexEngine1.nodeIdentifier()).size(),
+        Math.min(
+            simulation.allCommandsMap.get(simulation.trexEngine2.nodeIdentifier()).size(),
+            simulation.allCommandsMap.get(simulation.trexEngine3.nodeIdentifier()).size()
         )
     );
   }
 
   private boolean consistentFixed(
-      TestablePaxosEngine<AbstractCommand> engine1,
-      TestablePaxosEngine<AbstractCommand> engine2,
-      TestablePaxosEngine<AbstractCommand> engine3) {
+      TreeMap<Long, AbstractCommand> engine1,
+      TreeMap<Long, AbstractCommand> engine2,
+      TreeMap<Long, AbstractCommand> engine3) {
     final var maxLength =
-        Math.max(engine1.allCommands().size(), Math.max(
-            engine2.allCommands().size(), engine3.allCommands().size()));
+        Math.max(
+            engine1.size(),
+            Math.max(
+                engine2.size(),
+                engine3.size())
+        );
     return IntStream.range(0, maxLength).allMatch(index -> {
-      final Optional<AbstractCommand> optional1 = engine1.allCommands().stream().skip(index).findFirst();
-      final Optional<AbstractCommand> optional2 = engine2.allCommands().stream().skip(index).findFirst();
-      final Optional<AbstractCommand> optional3 = engine3.allCommands().stream().skip(index).findFirst();
+      final Optional<AbstractCommand> optional1 = engine1.values().stream().skip(index).findFirst();
+      final Optional<AbstractCommand> optional2 = engine2.values().stream().skip(index).findFirst();
+      final Optional<AbstractCommand> optional3 = engine3.values().stream().skip(index).findFirst();
       // Check if all non-empty values are equal
       //noinspection UnnecessaryLocalVariable
       final var result =

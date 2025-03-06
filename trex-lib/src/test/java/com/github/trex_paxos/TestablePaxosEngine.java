@@ -2,9 +2,7 @@ package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.TrexMessage;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.TreeMap;
 import java.util.function.BiFunction;
 import java.util.logging.Level;
 
@@ -13,12 +11,6 @@ import static com.github.trex_paxos.TrexLogger.LOGGER;
 abstract class TestablePaxosEngine<RESULT> extends TrexEngine<RESULT> {
 
   final TransparentJournal journal;
-
-  final TreeMap<Long, RESULT> allCommandsMap = new TreeMap<>();
-
-  public List<RESULT> allCommands() {
-    return new ArrayList<>(allCommandsMap.values());
-  }
 
   public TestablePaxosEngine(
       short nodeIdentifier,
@@ -40,9 +32,6 @@ abstract class TestablePaxosEngine<RESULT> extends TrexEngine<RESULT> {
     if (oldRole != newRole) {
       LOGGER.info(() -> "Node has changed role:" + trexNode.nodeIdentifier() + " == " + newRole);
     }
-    result.results().forEach(hostResult -> {
-      allCommandsMap.put(hostResult.slot(), hostResult.result());
-    });
     return result;
   }
 
