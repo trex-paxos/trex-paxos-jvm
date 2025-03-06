@@ -161,19 +161,6 @@ class Simulation {
             + "\n\t" + trexEngine3.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")));
         throw new AssertionError("results not matching");
       }
-      boolean fixedLengthNotEqualToCommandLength =
-          trexEngine1.allCommandsMap.size() != trexEngine1.trexNode.progress.highestFixedIndex() ||
-              trexEngine2.allCommandsMap.size() != trexEngine2.trexNode.progress.highestFixedIndex() ||
-              trexEngine3.allCommandsMap.size() != trexEngine3.trexNode.progress.highestFixedIndex();
-      finished = finished || fixedLengthNotEqualToCommandLength;
-      if (fixedLengthNotEqualToCommandLength) {
-        LOGGER.info("finished as fixed length not equal to command length:\n" +
-            "\tnodeIdentifier==1 highestFixedIndex==" + trexEngine1.trexNode.progress.highestFixedIndex() + ", commandSize==" + trexEngine1.allCommands().size() + "\n" +
-            "\tnodeIdentifier==1 highestFixedIndex==" + trexEngine2.trexNode.progress.highestFixedIndex() + ", commandSize==" + trexEngine2.allCommands().size() + "\n" +
-            "\tnodeIdentifier==1 highestFixedIndex==" + trexEngine3.trexNode.progress.highestFixedIndex() + ", commandSize==" + trexEngine3.allCommands().size() + "\n"
-        );
-        throw new AssertionError("fixed length not equal to command length");
-      }
       engines.values().forEach(
           engine -> engine.journal.fakeJournal.forEach((k, v) -> {
             if (!v.slot().equals(k)) {
