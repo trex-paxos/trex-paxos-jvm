@@ -264,9 +264,15 @@ public class SimulationTests {
 
     LOGGER.info("\n\nEMD ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ END\n\n");
     LOGGER.info(simulation.trexEngine1.role() + " " + simulation.trexEngine2.role() + " " + simulation.trexEngine3.role());
-//    LOGGER.info("command sizes: " + simulation.trexEngine1.allCommands().size() + " "
-//        + simulation.trexEngine2.allCommands().size() + " "
-//        + simulation.trexEngine3.allCommands().size());
+
+    final var c1 = simulation.allCommandsMap.get(simulation.trexEngine1.nodeIdentifier());
+    final var c2 = simulation.allCommandsMap.get(simulation.trexEngine2.nodeIdentifier());
+    final var c3 = simulation.allCommandsMap.get(simulation.trexEngine3.nodeIdentifier());
+
+    LOGGER.info("command sizes: " + c1.size() + " "
+        + c2.size() + " "
+        + c2.size());
+
     LOGGER.info("journal sizes: " + simulation.trexEngine1.journal.fakeJournal.size() +
         " " + simulation.trexEngine2.journal.fakeJournal.size() +
         " " + simulation.trexEngine3.journal.fakeJournal.size());
