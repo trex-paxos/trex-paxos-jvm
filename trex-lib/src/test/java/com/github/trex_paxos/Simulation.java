@@ -123,7 +123,7 @@ class Simulation {
                           final var data = now + ":" + e.getKey() + i;
                           return new Command(data.getBytes());
                         }).toList();
-                        final var engine = e.getValue();
+                        final TrexEngine<?> engine = e.getValue();
                         return engine.isLeader() ? engine.nextLeaderBatchOfMessages(commands).stream()
                             : Stream.empty();
                       });
@@ -194,9 +194,9 @@ class Simulation {
     return result;
   }
 
-  static OptionalLong inconsistentFixedIndex(TreeMap<Long, AbstractCommand> c1,
-                                             TreeMap<Long, AbstractCommand> c2,
-                                             TreeMap<Long, AbstractCommand> c3) {
+  static OptionalLong inconsistentFixedIndex(TreeMap<Long, Command> c1,
+                                             TreeMap<Long, Command> c2,
+                                             TreeMap<Long, Command> c3) {
     final var c1last = !c1.isEmpty() ? c1.lastKey() : 0;
     final var c2last = !c2.isEmpty() ? c2.lastKey() : 0;
     final var c3last = !c3.isEmpty() ? c3.lastKey() : 0;
@@ -229,8 +229,8 @@ class Simulation {
     }).findFirst();
   }
 
-  public void run(int i, boolean b) {
-    run(i, b, DEFAULT_NETWORK_SIMULATION);
+  public void run(int iterations, boolean makeClientMessages) {
+    run(iterations, makeClientMessages, DEFAULT_NETWORK_SIMULATION);
   }
 
   sealed interface Event permits Heartbeat, Send, Timeout, ClientCommand {
@@ -299,11 +299,11 @@ class Simulation {
 
   final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
 
-  final SimulationPaxosEngine trexEngine1 = makeTrexEngine((short) 1, threeNodeQuorum);
-  final SimulationPaxosEngine trexEngine2 = makeTrexEngine((short) 2, threeNodeQuorum);
-  final SimulationPaxosEngine trexEngine3 = makeTrexEngine((short) 3, threeNodeQuorum);
+  final SimulationPaxosEngine<Command> trexEngine1 = makeTrexEngine((short) 1, threeNodeQuorum);
+  final SimulationPaxosEngine<Command> trexEngine2 = makeTrexEngine((short) 2, threeNodeQuorum);
+  final SimulationPaxosEngine<Command> trexEngine3 = makeTrexEngine((short) 3, threeNodeQuorum);
 
-  final Map<Short, SimulationPaxosEngine> engines = Map.of(
+  final Map<Short, SimulationPaxosEngine<Command>> engines = Map.of(
       (short) 1, trexEngine1,
       (short) 2, trexEngine2,
       (short) 3, trexEngine3
@@ -373,9 +373,9 @@ class Simulation {
       return result;
     }
   }
-  
-  SimulationPaxosEngine makeTrexEngine(short nodeIdentifier, QuorumStrategy quorumStrategy) {
-    return new SimulationPaxosEngine(nodeIdentifier,
+
+  <T> SimulationPaxosEngine<T> makeTrexEngine(short nodeIdentifier, QuorumStrategy quorumStrategy) {
+    return new SimulationPaxosEngine<>(nodeIdentifier,
         quorumStrategy,
         new TransparentJournal(nodeIdentifier),
         // Here we have no application callback as we are simply testing that the logs match

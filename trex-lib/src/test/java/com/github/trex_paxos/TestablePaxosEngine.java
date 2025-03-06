@@ -20,7 +20,6 @@ abstract class TestablePaxosEngine<RESULT> extends TrexEngine<RESULT> {
     return new ArrayList<>(allCommandsMap.values());
   }
 
-
   public TestablePaxosEngine(
       short nodeIdentifier,
       QuorumStrategy quorumStrategy,

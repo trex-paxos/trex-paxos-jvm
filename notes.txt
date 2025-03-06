@@ -1,7 +1,10 @@
+
 # tests
 mvn clean package
 
 npx repomix@latest --include "README.md,trex-lib/src/main/**"
+
+npx repomix@latest --include "README.md,trex-lib/src/**"
 
 npx repomix@latest
 
@@ -21,14 +24,6 @@ clear ; mvn test -Dtest=com.github.trex_paxos.paxe.PaxeNetworkTest#testStartup -
 
 # run just one test class fine logging
 clear ; mvn test -pl trex-paxe -Dtest=com.github.trex_paxos.paxe.PaxeNetworkTest -Djava.util.logging.ConsoleHandler.level=FINEST
-
-# Grab the files for LLM
-
-rm all.java;
-find trex-lib/src trex-paxe/src -name \*.java | while read JAVA ; do echo "" >> all.java; \
-    echo $JAVA >> all.java; \
-    cat $JAVA >> all.java ;\
-    done;
 
 # jshell
 
