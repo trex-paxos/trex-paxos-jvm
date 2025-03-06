@@ -182,9 +182,9 @@ class Simulation {
     return result;
   }
 
-  static OptionalLong inconsistentFixedIndex(TreeMap<Long, AbstractCommand> c1,
-                                             TreeMap<Long, AbstractCommand> c2,
-                                             TreeMap<Long, AbstractCommand> c3) {
+  static OptionalLong inconsistentFixedIndex(TreeMap<Long, Command> c1,
+                                             TreeMap<Long, Command> c2,
+                                             TreeMap<Long, Command> c3) {
     final var c1last = !c1.isEmpty() ? c1.lastKey() : 0;
     final var c2last = !c2.isEmpty() ? c2.lastKey() : 0;
     final var c3last = !c3.isEmpty() ? c3.lastKey() : 0;
@@ -287,12 +287,12 @@ class Simulation {
 
   final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
 
-  final Map<Short, TreeMap<Long, AbstractCommand>> allCommandsMap = commandMaps();
+  final Map<Short, TreeMap<Long, Command>> allCommandsMap = commandMaps();
 
-  private Map<Short, TreeMap<Long, AbstractCommand>> commandMaps() {
-    final var c1 = new TreeMap<Long, AbstractCommand>();
-    final var c2 = new TreeMap<Long, AbstractCommand>();
-    final var c3 = new TreeMap<Long, AbstractCommand>();
+  private Map<Short, TreeMap<Long, Command>> commandMaps() {
+    final var c1 = new TreeMap<Long, Command>();
+    final var c2 = new TreeMap<Long, Command>();
+    final var c3 = new TreeMap<Long, Command>();
     return Map.of(
         (short) 1, c1,
         (short) 2, c2,
@@ -300,11 +300,11 @@ class Simulation {
     );
   }
 
-  final SimulationPaxosEngine<AbstractCommand> trexEngine1 = makeTrexEngine((short) 1, threeNodeQuorum);
-  final SimulationPaxosEngine<AbstractCommand> trexEngine2 = makeTrexEngine((short) 2, threeNodeQuorum);
-  final SimulationPaxosEngine<AbstractCommand> trexEngine3 = makeTrexEngine((short) 3, threeNodeQuorum);
+  final SimulationPaxosEngine<Command> trexEngine1 = makeTrexEngine((short) 1, threeNodeQuorum, allCommandsMap.get((short) 1));
+  final SimulationPaxosEngine<Command> trexEngine2 = makeTrexEngine((short) 2, threeNodeQuorum, allCommandsMap.get((short) 2));
+  final SimulationPaxosEngine<Command> trexEngine3 = makeTrexEngine((short) 3, threeNodeQuorum, allCommandsMap.get((short) 3));
 
-  final Map<Short, SimulationPaxosEngine<AbstractCommand>> engines = Map.of(
+  final Map<Short, SimulationPaxosEngine<Command>> engines = Map.of(
       (short) 1, trexEngine1,
       (short) 2, trexEngine2,
       (short) 3, trexEngine3
@@ -375,8 +375,7 @@ class Simulation {
     }
   }
 
-  <T> SimulationPaxosEngine<T> makeTrexEngine(short nodeIdentifier, QuorumStrategy quorumStrategy) {
-    final Map<Long, Command> allCommands = new TreeMap<>();
+  <T> SimulationPaxosEngine<T> makeTrexEngine(short nodeIdentifier, QuorumStrategy quorumStrategy, final TreeMap<Long, Command> allCommands) {
     return new SimulationPaxosEngine<>(nodeIdentifier,
         quorumStrategy,
         new TransparentJournal(nodeIdentifier),

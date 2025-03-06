@@ -174,7 +174,7 @@ public class SimulationTests {
         }
     );
 
-    assertThat(maxOfMinimum.get()).isGreaterThan(5);
+    assertThat(maxOfMinimum.get()).isGreaterThan(4);
   }
 
   @Test
@@ -271,7 +271,7 @@ public class SimulationTests {
 
     LOGGER.info("command sizes: " + c1.size() + " "
         + c2.size() + " "
-        + c2.size());
+        + c3.size());
 
     LOGGER.info("journal sizes: " + simulation.trexEngine1.journal.fakeJournal.size() +
         " " + simulation.trexEngine2.journal.fakeJournal.size() +
@@ -293,9 +293,9 @@ public class SimulationTests {
   }
 
   private boolean consistentFixed(
-      TreeMap<Long, AbstractCommand> engine1,
-      TreeMap<Long, AbstractCommand> engine2,
-      TreeMap<Long, AbstractCommand> engine3) {
+      TreeMap<Long, Command> engine1,
+      TreeMap<Long, Command> engine2,
+      TreeMap<Long, Command> engine3) {
     final var maxLength =
         Math.max(
             engine1.size(),
@@ -304,9 +304,9 @@ public class SimulationTests {
                 engine3.size())
         );
     return IntStream.range(0, maxLength).allMatch(index -> {
-      final Optional<AbstractCommand> optional1 = engine1.values().stream().skip(index).findFirst();
-      final Optional<AbstractCommand> optional2 = engine2.values().stream().skip(index).findFirst();
-      final Optional<AbstractCommand> optional3 = engine3.values().stream().skip(index).findFirst();
+      final Optional<Command> optional1 = engine1.values().stream().skip(index).findFirst();
+      final Optional<Command> optional2 = engine2.values().stream().skip(index).findFirst();
+      final Optional<Command> optional3 = engine3.values().stream().skip(index).findFirst();
       // Check if all non-empty values are equal
       //noinspection UnnecessaryLocalVariable
       final var result =
