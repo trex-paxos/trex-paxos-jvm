@@ -41,7 +41,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class SimulationTests {
 
-
   @BeforeAll
   static void setupLogging() {
 
@@ -286,9 +285,9 @@ public class SimulationTests {
   }
 
   private boolean consistentFixed(
-      TestablePaxosEngine engine1,
-      TestablePaxosEngine engine2,
-      TestablePaxosEngine engine3) {
+      TestablePaxosEngine<AbstractCommand> engine1,
+      TestablePaxosEngine<AbstractCommand> engine2,
+      TestablePaxosEngine<AbstractCommand> engine3) {
     final var maxLength =
         Math.max(engine1.allCommands().size(), Math.max(
             engine2.allCommands().size(), engine3.allCommands().size()));

@@ -181,9 +181,9 @@ class Simulation {
     return result;
   }
 
-  static OptionalLong inconsistentFixedIndex(TreeMap<Long, Command> c1,
-                                             TreeMap<Long, Command> c2,
-                                             TreeMap<Long, Command> c3) {
+  static OptionalLong inconsistentFixedIndex(TreeMap<Long, AbstractCommand> c1,
+                                             TreeMap<Long, AbstractCommand> c2,
+                                             TreeMap<Long, AbstractCommand> c3) {
     final var c1last = !c1.isEmpty() ? c1.lastKey() : 0;
     final var c2last = !c2.isEmpty() ? c2.lastKey() : 0;
     final var c3last = !c3.isEmpty() ? c3.lastKey() : 0;
@@ -286,11 +286,11 @@ class Simulation {
 
   final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
 
-  final SimulationPaxosEngine<Command> trexEngine1 = makeTrexEngine((short) 1, threeNodeQuorum);
-  final SimulationPaxosEngine<Command> trexEngine2 = makeTrexEngine((short) 2, threeNodeQuorum);
-  final SimulationPaxosEngine<Command> trexEngine3 = makeTrexEngine((short) 3, threeNodeQuorum);
+  final SimulationPaxosEngine<AbstractCommand> trexEngine1 = makeTrexEngine((short) 1, threeNodeQuorum);
+  final SimulationPaxosEngine<AbstractCommand> trexEngine2 = makeTrexEngine((short) 2, threeNodeQuorum);
+  final SimulationPaxosEngine<AbstractCommand> trexEngine3 = makeTrexEngine((short) 3, threeNodeQuorum);
 
-  final Map<Short, SimulationPaxosEngine<Command>> engines = Map.of(
+  final Map<Short, SimulationPaxosEngine<AbstractCommand>> engines = Map.of(
       (short) 1, trexEngine1,
       (short) 2, trexEngine2,
       (short) 3, trexEngine3
