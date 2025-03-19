@@ -29,8 +29,6 @@ class PaxeStackClusterTest {
   StackServiceImpl stackService1;
   StackServiceImpl stackService2;
 
-  private final AtomicInteger nodeToggle = new AtomicInteger(0);
-
   @BeforeAll
   static void setupLogging() {
     final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
@@ -68,12 +66,6 @@ class PaxeStackClusterTest {
     LOGGER.fine("Test setup complete");
   }
 
-  void toggleNode() {
-    int oldNode = nodeToggle.get() % 2;
-    int newNode = nodeToggle.incrementAndGet() % 2;
-    LOGGER.info(() -> String.format("Toggling active node: %d -> %d", oldNode, newNode));
-  }
-
   @Test
   void testBasicStackOperations() throws Exception {
     LOGGER.info("Testing basic stack operations");
@@ -83,9 +75,6 @@ class PaxeStackClusterTest {
     LOGGER.info("Pushing 'first' to stack");
     stackService1.app().submitValue(new StackService.Push("first"), future);
     future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-
-    // Toggle to second node
-    toggleNode();
 
     // Push "second"
     future = new CompletableFuture<>();
@@ -126,7 +115,6 @@ class PaxeStackClusterTest {
     // Close network and verify operations fail
     LOGGER.info("Simulating network failure");
     harness.close();
-    toggleNode();
 
     CompletableFuture<StackService.Response> future2 = new CompletableFuture<>();
     LOGGER.info("Attempting operation on failed network");
