@@ -12,7 +12,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <maven.compiler.release>23</maven.compiler.release>
+        <maven.compiler.release>24</maven.compiler.release>
     </properties>
     <description>This is an implementation of the Paxos Logarithm as written in Paxos Made Simple by Leslie Lamport
     </description>
@@ -46,7 +46,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.13.0</version>
+                <version>3.14.0</version>
                 <configuration>
                     <compilerArgs>
                         <arg>-Werror</arg>

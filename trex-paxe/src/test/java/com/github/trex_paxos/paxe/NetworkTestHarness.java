@@ -50,8 +50,7 @@ public class NetworkTestHarness implements AutoCloseable {
     this.srpConstants = srpConstants;
   }
 
-
-  public NetworkWithTempPort createNetwork(short nodeId) throws Exception {
+  NetworkWithTempPort createNetwork(short nodeId) throws Exception {
     if (closed) {
       LOGGER.warning("Attempt to create network after harness closed");
       throw new IllegalStateException("Harness is closed");
