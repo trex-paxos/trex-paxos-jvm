@@ -779,10 +779,6 @@ public class TrexNode {
     }
   }
 
-  public int clusterSize() {
-    return quorumStrategy.clusterSize();
-  }
-
   /// This node must no longer run as it is an unknown state due to an exception. You must set this to step any more
   /// results getting picked and sent to clients. If you are running host managed transactions then you should call
   /// this if you ever get any exceptions you do not recover your state from the data store. `TrexEngine` will call this

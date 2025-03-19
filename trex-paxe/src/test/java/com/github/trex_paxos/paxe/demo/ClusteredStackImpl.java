@@ -147,7 +147,6 @@ public class ClusteredStackImpl implements AutoCloseable {
   protected Supplier<ClusterMembership> currentMembership = () -> new ClusterMembership(loadNetworkAddresses());
 
   private TrexApp<StackCommand, StackResponse> createApp(PaxeNetwork network) {
-    var scheduler = new TimeoutScheduler(identity.nodeId());
     return new TrexApp<>(
         currentMembership,
         new TrexEngine(

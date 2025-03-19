@@ -11,7 +11,6 @@ import org.jetbrains.annotations.TestOnly;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static com.github.trex_paxos.TrexLogger.LOGGER;

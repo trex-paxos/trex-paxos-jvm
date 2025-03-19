@@ -32,7 +32,7 @@ public class StackApp implements StackService, AutoCloseable {
 
     var stack = new Stack<String>();
     var network = createPaxeNetwork(identity, port, store, membership);
-    var engine = createEngine(identity.nodeId(), store, membership, network);
+    var engine = createEngine(identity.nodeId(), store, membership);
 
     var app = new TrexApp<>(
         membership,
@@ -95,10 +95,8 @@ public class StackApp implements StackService, AutoCloseable {
   private static TrexEngine createEngine(
       short nodeId,
       MVStore store,
-      Supplier<ClusterMembership> membership,
-      PaxeNetwork network) {
+      Supplier<ClusterMembership> membership) {
 
-    var scheduler = new TimeoutScheduler(nodeId);
     var node = new TrexNode(
         Level.INFO,
         nodeId,

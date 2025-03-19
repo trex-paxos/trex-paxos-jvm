@@ -19,7 +19,6 @@ import com.github.trex_paxos.msg.TrexMessage;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -39,33 +38,6 @@ public record TrexResult(List<TrexMessage> messages, TreeMap<Long, AbstractComma
 
   static TrexResult noResult() {
     return new TrexResult(List.of(), new TreeMap<>());
-  }
-
-  /// In oder to support the batching of many messages into network packet this method is provided to merge the results.
-  static TrexResult merge(List<TrexResult> results) {
-    if (results.isEmpty()) {
-      return noResult();
-    } else if (results.size() == 1) {
-      return results.getFirst();
-    }
-    final var allMessages = results.stream().flatMap(r -> r.messages().stream()).toList();
-    final var allCommands = results.stream()
-        .flatMap(r -> r.results().entrySet().stream())
-        .collect(Collectors.toMap(
-            Map.Entry::getKey,
-            Map.Entry::getValue,
-            // paxos gives unique results at each slot we assert that is the case below.
-            (v, _) -> v,
-            TreeMap::new // Use TreeMap as the map supplier
-        ));
-
-    // Check that the size of unique key-id pairs of the inputs matches the size of allCommands
-    // If this is not the case then we manged to fix different results at the same slot.
-    assert allCommands.size() == results.stream()
-        .flatMap(r -> r.results().entrySet().stream())
-        .collect(Collectors.toSet()).size();
-
-    return new TrexResult(allMessages, allCommands);
   }
 
   public Collection<Object> fixed() {
