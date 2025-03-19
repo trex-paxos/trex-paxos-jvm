@@ -47,16 +47,13 @@ public class StackServiceImplTest {
     stackService1.push("first");
     stackService1.push("second");
 
-    // when we toggle to second node
-    stackService1.toggleNode();
-
-    // then we can still peek and pop correctly
-    assertEquals("second", stackService1.peek().value().orElseThrow());
-    assertEquals("second", stackService1.pop().value().orElseThrow());
-    assertEquals("first", stackService1.pop().value().orElseThrow());
+    // then we can still peek and pop correctly from the second node
+    assertEquals("second", stackService2.peek().value().orElseThrow());
+    assertEquals("second", stackService2.pop().value().orElseThrow());
+    assertEquals("first", stackService2.pop().value().orElseThrow());
 
     // and empty stack returns expected message
-    assertEquals("Stack is empty", stackService1.pop().value().orElseThrow());
+    assertEquals("Stack is empty", stackService2.pop().value().orElseThrow());
   }
 
   @Test
@@ -66,7 +63,6 @@ public class StackServiceImplTest {
 
     // when network fails messages from Node 2
     TestNetworkLayer.network.close();
-    stackService1.toggleNode();
 
     // then operations timeout
     var future = new CompletableFuture<StackService.Response>();

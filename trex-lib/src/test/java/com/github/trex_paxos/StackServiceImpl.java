@@ -18,9 +18,6 @@ import java.util.logging.Logger;
 public class StackServiceImpl implements StackService {
   static final Logger LOGGER = Logger.getLogger(StackServiceImpl.class.getName());
 
-  // TODO not sure if I buy into this toggle node idea
-  final static List<TrexApp<Value, Response>> nodes = new ArrayList<>();
-
   final TrexApp<Value, Response> app;
 
   public TrexApp<Value, Response> app() {
@@ -110,27 +107,15 @@ public class StackServiceImpl implements StackService {
         networkLayer,
         valuePickler
     );
-
-    nodes.add(app);
     app.setLeader((short) 1);
     app.start();
     LOGGER.fine(() -> "Node " + index + " started successfully");
   }
 
-  public AtomicInteger nodeToggle = new AtomicInteger(0);
-
-  public void toggleNode() {
-    int oldNode = nodeToggle.get() % nodes.size();
-    int newNode = nodeToggle.incrementAndGet() % nodes.size();
-    LOGGER.fine(() -> String.format("Toggling active node: %d -> %d", oldNode, newNode));
-  }
-
   @Override
   public Response push(String item) {
-    LOGGER.fine(() -> String.format("Push requested: item=%s, targetNode=%d",
-        item, nodeToggle.get() % nodes.size()));
     var future = new CompletableFuture<Response>();
-    nodes.get(nodeToggle.get() % nodes.size()).submitValue(new Push(item), future);
+    app.submitValue(new Push(item), future);
     try {
       var response = future.get(1, TimeUnit.SECONDS);
       LOGGER.fine(() -> "Push completed successfully");
@@ -143,9 +128,8 @@ public class StackServiceImpl implements StackService {
 
   @Override
   public Response pop() {
-    LOGGER.fine(() -> String.format("Pop requested: targetNode=%d", nodeToggle.get() % nodes.size()));
     var future = new CompletableFuture<Response>();
-    nodes.get(nodeToggle.get() % nodes.size()).submitValue(new Pop(), future);
+    app.submitValue(new Pop(), future);
     try {
       var response = future.get(1, TimeUnit.SECONDS);
       LOGGER.fine(() -> String.format("Pop completed: %s", response.value().orElse("empty")));
@@ -158,9 +142,8 @@ public class StackServiceImpl implements StackService {
 
   @Override
   public Response peek() {
-    LOGGER.fine(() -> String.format("Peek requested: targetNode=%d", nodeToggle.get() % nodes.size()));
     var future = new CompletableFuture<Response>();
-    nodes.get(nodeToggle.get() % nodes.size()).submitValue(new Peek(), future);
+    app.submitValue(new Peek(), future);
     try {
       var response = future.get(1, TimeUnit.SECONDS);
       LOGGER.fine(() -> String.format("Peek completed: %s", response.value().orElse("empty")));
