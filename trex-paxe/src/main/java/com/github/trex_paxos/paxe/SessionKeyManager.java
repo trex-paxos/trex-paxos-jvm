@@ -169,7 +169,6 @@ public class SessionKeyManager {
   }
 }
 
-// Package-private serialization class inside SessionKeyManager.java
 class PickleHandshake {
 
   public static Pickler<SessionKeyManager.KeyMessage> instance = new Pickler<>() {
