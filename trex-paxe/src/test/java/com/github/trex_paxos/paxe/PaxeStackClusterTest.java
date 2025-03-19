@@ -90,8 +90,7 @@ class PaxeStackClusterTest {
         network.membership,
         engine,
         network,
-        PermitsRecordsPickler.createPickler(StackService.Command.class),
-        processor
+        PermitsRecordsPickler.createPickler(StackService.Command.class)
     ) {{
       setLeader(leader);
     }};

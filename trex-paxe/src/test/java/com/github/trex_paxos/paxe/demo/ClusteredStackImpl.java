@@ -157,8 +157,7 @@ public class ClusteredStackImpl implements AutoCloseable {
             }
         ),
         network,
-        PermitsRecordsPickler.createPickler(StackCommand.class),
-        this::processCommand
+        PermitsRecordsPickler.createPickler(StackCommand.class)
     );
   }
 

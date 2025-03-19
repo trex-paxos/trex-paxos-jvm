@@ -38,8 +38,7 @@ public class StackApp implements StackService, AutoCloseable {
         membership,
         engine,
         network,
-        PermitsRecordsPickler.createPickler(StackWireProtocol.Command.class),
-        cmd -> processCommand(stack, cmd)
+        PermitsRecordsPickler.createPickler(StackWireProtocol.Command.class)
     );
 
     return new StackApp(stack, app);

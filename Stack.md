@@ -60,7 +60,7 @@ jshell> pop()
 hello
 
 jshell> pop()
-Dec 27, 2024 3:28:17 PM com.github.trex_paxos.StackClusterImpl lambda$new$4
+Dec 27, 2024 3:28:17 PM com.github.trex_paxos.StackServiceImpl lambda$new$4
 WARNING: Attempted operation on empty stack
 Stack is empty
 ```

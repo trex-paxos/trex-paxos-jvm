@@ -12,12 +12,11 @@ import java.util.function.Supplier;
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 class TestNetworkLayer implements NetworkLayer {
-  private final InMemoryNetwork network;
+  static final InMemoryNetwork network = new InMemoryNetwork();
   private final Map<Channel, Pickler<?>> picklers;
   private final NodeId nodeId;
 
-  TestNetworkLayer(NodeId nodeId, InMemoryNetwork network, Map<Channel, Pickler<?>> picklers) {
-    this.network = Objects.requireNonNull(network, "network cannot be null");
+  TestNetworkLayer(NodeId nodeId, Map<Channel, Pickler<?>> picklers) {
     this.picklers = Map.copyOf(picklers);
     this.nodeId = nodeId;
   }

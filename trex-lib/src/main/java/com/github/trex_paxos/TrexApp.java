@@ -67,7 +67,6 @@ public class TrexApp<COMMAND, RESULT> {
 
   protected final TrexEngine<RESULT> engine;
   protected final NetworkLayer networkLayer;
-  protected final Function<COMMAND, RESULT> serverFunction;
   protected final Supplier<ClusterMembership> clusterMembershipSupplier;
   final protected LeaderTracker leaderTracker = new LeaderTracker();
   final ResponseTracker<RESULT> responseTracker = new ResponseTracker<>();
@@ -78,11 +77,9 @@ public class TrexApp<COMMAND, RESULT> {
       Supplier<ClusterMembership> clusterMembershipSupplier,
       TrexEngine<RESULT> engine,
       NetworkLayer networkLayer,
-      Pickler<COMMAND> valuePickler,
-      Function<COMMAND, RESULT> serverFunction) {
+      Pickler<COMMAND> valuePickler) {
     this.engine = engine;
     this.networkLayer = networkLayer;
-    this.serverFunction = serverFunction;
     this.clusterMembershipSupplier = clusterMembershipSupplier;
     this.valuePickler = valuePickler;
     this.nodeId = new NodeId(engine.nodeIdentifier());
