@@ -5,7 +5,6 @@ import com.github.trex_paxos.network.*;
 import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 

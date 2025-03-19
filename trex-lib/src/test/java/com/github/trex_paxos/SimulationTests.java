@@ -355,11 +355,11 @@ public class SimulationTests {
     );
   }
 
-  private static BiFunction<Simulation.Send, Long, Stream<TrexMessage>> makeNemesis(
+  static <R> BiFunction<Simulation.Send, Long, Stream<TrexMessage>> makeNemesis(
       Function<Long, Byte> timeToPartitionedNode,
-      TestablePaxosEngine engine1,
-      TestablePaxosEngine engine2,
-      TestablePaxosEngine engine3) {
+      TestablePaxosEngine<R> engine1,
+      TestablePaxosEngine<R> engine2,
+      TestablePaxosEngine<R> engine3) {
 
     final var enginesAsList = List.of(engine1, engine2, engine3);
 

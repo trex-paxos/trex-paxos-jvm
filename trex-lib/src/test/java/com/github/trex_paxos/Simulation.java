@@ -289,6 +289,7 @@ class Simulation {
 
   final Map<Short, TreeMap<Long, Command>> allCommandsMap = commandMaps();
 
+  @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
   private Map<Short, TreeMap<Long, Command>> commandMaps() {
     final var c1 = new TreeMap<Long, Command>();
     final var c2 = new TreeMap<Long, Command>();

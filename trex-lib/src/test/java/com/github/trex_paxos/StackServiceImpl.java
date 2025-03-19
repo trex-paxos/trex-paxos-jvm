@@ -111,8 +111,6 @@ public class StackServiceImpl implements StackService {
         valuePickler
     );
 
-
-
     nodes.add(app);
     app.setLeader((short) 1);
     app.start();
@@ -171,18 +169,6 @@ public class StackServiceImpl implements StackService {
       LOGGER.warning(() -> String.format("Peek failed: %s", e.getMessage()));
       return new Response(Optional.of("Error: " + e.getMessage()));
     }
-  }
-
-  public void shutdown() {
-    LOGGER.fine("Initiating StackServiceImpl shutdown");
-    nodes.forEach(n -> {
-      try {
-        n.stop();
-      } catch (Exception e) {
-        LOGGER.warning(() -> "Error during node shutdown: " + e.getMessage());
-      }
-    });
-    LOGGER.fine("StackServiceImpl shutdown complete");
   }
 
   private static TrexEngine<Response> getTrexEngine(short i, BiFunction<Long, Command, Response> callback) {
