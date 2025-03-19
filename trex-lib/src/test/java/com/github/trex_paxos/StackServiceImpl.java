@@ -1,6 +1,9 @@
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.network.*;
+import com.github.trex_paxos.network.Channel;
+import com.github.trex_paxos.network.ClusterMembership;
+import com.github.trex_paxos.network.NamedSubscriber;
+import com.github.trex_paxos.network.NetworkLayer;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -12,13 +15,18 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
-import static com.github.trex_paxos.network.SystemChannel.PROXY;
-
 public class StackServiceImpl implements StackService {
   static final Logger LOGGER = Logger.getLogger(StackServiceImpl.class.getName());
 
+  // TODO not sure if I buy into this toggle node idea
   final static List<TrexApp<Value, Response>> nodes = new ArrayList<>();
+
+  final TrexApp<Value, Response> app;
+
+  public TrexApp<Value, Response> app() {
+    return app;
+  }
+
   final Stack<String> stack = new Stack<>();
 
   public static void setLogLevel(Level level) {
@@ -44,7 +52,7 @@ public class StackServiceImpl implements StackService {
     }
   }
 
-  StackServiceImpl(short index, Supplier<ClusterMembership> members, NetworkLayer networkLayer) {
+  public StackServiceImpl(short index, Supplier<ClusterMembership> members, NetworkLayer networkLayer) {
     LOGGER.fine(() -> "Creating node " + index);
 
     final Pickler<Value> valuePickler = PermitsRecordsPickler.createPickler(Value.class);
@@ -96,12 +104,15 @@ public class StackServiceImpl implements StackService {
 
     TrexEngine<Response> engine = getTrexEngine(index, callback);
 
-    var app = new TrexApp<>(
+    app = new TrexApp<>(
         members,
         engine,
         networkLayer,
         valuePickler
     );
+
+
+
     nodes.add(app);
     app.setLeader((short) 1);
     app.start();

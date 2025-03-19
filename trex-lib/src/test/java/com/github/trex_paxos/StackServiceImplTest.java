@@ -22,7 +22,9 @@ public class StackServiceImplTest {
 
   @BeforeEach
   void setup() {
-    StackServiceImpl.setLogLevel(Level.INFO);
+    final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
+
+    StackServiceImpl.setLogLevel(Level.parse(logLevel));
 
     Supplier<ClusterMembership> members = () -> new ClusterMembership(
         Map.of(new NodeId((short) 1), new NetworkAddress.HostName("localhost", 5000),
