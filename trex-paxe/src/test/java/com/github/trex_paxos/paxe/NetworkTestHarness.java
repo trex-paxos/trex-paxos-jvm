@@ -19,6 +19,9 @@ import java.util.function.Supplier;
 import static com.github.trex_paxos.network.SystemChannel.KEY_EXCHANGE;
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
+record NetworkWithTempPort(PaxeNetwork network, int port) {
+}
+
 public class NetworkTestHarness implements AutoCloseable {
   private static final Duration KEY_EXCHANGE_TIMEOUT = Duration.ofSeconds(1);
   private static final Duration CHANNEL_SELECT_TIMEOUT = Duration.ofMillis(100);
@@ -47,7 +50,8 @@ public class NetworkTestHarness implements AutoCloseable {
     this.srpConstants = srpConstants;
   }
 
-  public PaxeNetwork createNetwork(short nodeId) throws Exception {
+
+  public NetworkWithTempPort createNetwork(short nodeId) throws Exception {
     if (closed) {
       LOGGER.warning("Attempt to create network after harness closed");
       throw new IllegalStateException("Harness is closed");
@@ -61,7 +65,7 @@ public class NetworkTestHarness implements AutoCloseable {
     LOGGER.fine(() -> String.format("Allocated port %d for node %d", port, nodeId));
 
     NodeId id = new NodeId(nodeId);
-    NetworkAddress address = new NetworkAddress.InetAddress("127.0.0.1", port);
+    NetworkAddress address = new NetworkAddress("127.0.0.1", port);
     addressMap.put(id, address);
 
     NodeClientSecret nodeSecret = new NodeClientSecret(
@@ -90,7 +94,7 @@ public class NetworkTestHarness implements AutoCloseable {
     PaxeNetwork network = new PaxeNetwork.Builder(keyManager, port, id, membershipSupplier).build();
     networks.add(network);
     LOGGER.fine(() -> String.format("Network node %d created successfully", nodeId));
-    return network;
+    return new NetworkWithTempPort(network, port);
   }
 
   public void waitForNetworkEstablishment() throws Exception {

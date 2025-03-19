@@ -27,8 +27,8 @@ public class StackServiceImplTest {
     StackServiceImpl.setLogLevel(Level.parse(logLevel));
 
     Supplier<ClusterMembership> members = () -> new ClusterMembership(
-        Map.of(new NodeId((short) 1), new NetworkAddress.HostName("localhost", 5000),
-            new NodeId((short) 2), new NetworkAddress.HostName("localhost", 5001)));
+        Map.of(new NodeId((short) 1), new NetworkAddress("localhost", 5000),
+            new NodeId((short) 2), new NetworkAddress("localhost", 5001)));
 
     NetworkLayer networkLayer1 = new TestNetworkLayer(new NodeId((short) 1),
         Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), Pickle.instance)

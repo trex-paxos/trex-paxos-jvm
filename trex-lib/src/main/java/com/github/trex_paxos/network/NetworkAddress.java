@@ -1,26 +1,12 @@
 package com.github.trex_paxos.network;
 
-public sealed interface NetworkAddress {
-    String hostString();
-    int port();
-    
-    record InetAddress(String host, int port) implements NetworkAddress {
-        public InetAddress {
-            if (port < 0 || port > 65535) {
-                throw new IllegalArgumentException("Invalid port: " + port);
-            }
-        }
-        
-        @Override public String hostString() { return host; }
+public record NetworkAddress(String host, int port) {
+  public NetworkAddress {
+    if (port < 0 || port > 65535) {
+      throw new IllegalArgumentException("Invalid port: " + port);
     }
-    
-    record HostName(String hostname, int port) implements NetworkAddress {
-        public HostName {
-            if (port < 0 || port > 65535) {
-                throw new IllegalArgumentException("Invalid port: " + port);
-            }
-        }
-        
-        @Override public String hostString() { return hostname; }
-    }
+  }
+  public NetworkAddress(int port) {
+    this("localhost", port);
+  }
 }

@@ -47,23 +47,19 @@ class PaxeStackClusterTest {
     LOGGER.fine("Setting up test harness");
     harness = new NetworkTestHarness();
 
-    final short leader = 2;
-    LOGGER.info(() -> "Creating test network with leader node " + leader);
-
-    PaxeNetwork network1 = harness.createNetwork((short) 1);
-    PaxeNetwork network2 = harness.createNetwork((short) 2);
+    NetworkWithTempPort network1 = harness.createNetwork((short) 1);
+    NetworkWithTempPort network2 = harness.createNetwork((short) 2);
 
     LOGGER.fine("Waiting for network establishment");
     harness.waitForNetworkEstablishment();
     LOGGER.fine("Network established successfully");
 
     Supplier<ClusterMembership> members = () -> new ClusterMembership(
-        Map.of(new NodeId((short) 1), new NetworkAddress.HostName("localhost", 5000),
-            new NodeId((short) 2), new NetworkAddress.HostName("localhost", 5001)));
+        Map.of(new NodeId((short) 1), new NetworkAddress(network1.port()),
+            new NodeId((short) 2), new NetworkAddress(network2.port())));
 
-    stackService1 = new StackServiceImpl((short)1, members, network1);
-
-    stackService2 = new StackServiceImpl((short)2, members, network2);
+    stackService1 = new StackServiceImpl((short)1, members, network1.network());
+    stackService2 = new StackServiceImpl((short)2, members, network2.network());
 
     LOGGER.info("Starting applications");
 

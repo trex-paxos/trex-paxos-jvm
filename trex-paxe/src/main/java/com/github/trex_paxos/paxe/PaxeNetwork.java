@@ -437,7 +437,7 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
   private SocketAddress resolveAddress(NodeId to) {
     NetworkAddress address = membership.get().addressFor(to)
         .orElseThrow(() -> new IllegalStateException("No address for " + to));
-    return new InetSocketAddress(address.hostString(), address.port());
+    return new InetSocketAddress(address.host(), address.port());
   }
 
   @Override

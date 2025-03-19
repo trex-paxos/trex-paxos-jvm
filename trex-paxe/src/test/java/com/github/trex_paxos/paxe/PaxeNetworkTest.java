@@ -51,8 +51,8 @@ class PaxeNetworkTest {
     @SuppressWarnings("resource")
     NetworkTestHarness harness = new NetworkTestHarness(new ClusterId("test"), CONSTANTS);
 
-    network1 = harness.createNetwork((short) 1);
-    network2 = harness.createNetwork((short) 2);
+    network1 = harness.createNetwork((short) 1).network();
+    network2 = harness.createNetwork((short) 2).network();
 
     network1.start();
     network2.start();
