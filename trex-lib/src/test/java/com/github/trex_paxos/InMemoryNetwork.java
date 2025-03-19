@@ -10,14 +10,12 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 class InMemoryNetwork {
-  private final List<StackClusterImpl.ChannelAndSubscriber> handlers = new ArrayList<>();
+  private final List<StackServiceImpl.ChannelAndSubscriber> handlers = new ArrayList<>();
   private final LinkedBlockingQueue<NetworkMessage> messageQueue = new LinkedBlockingQueue<>();
   private volatile boolean running = true;
-  private final String networkId;
 
-  public InMemoryNetwork(String networkId) {
-    this.networkId = networkId;
-    StackClusterImpl.LOGGER.fine(() -> "Created InMemoryNetwork: " + networkId);
+  public InMemoryNetwork() {
+    StackServiceImpl.LOGGER.fine(() -> "Created InMemoryNetwork");
   }
 
   private record NetworkMessage(short nodeId, Channel channel, ByteBuffer data) {
@@ -30,12 +28,12 @@ class InMemoryNetwork {
   }
 
   public void subscribe(Channel channel, NamedSubscriber handler) {
-    StackClusterImpl.ChannelAndSubscriber channelAndSubscriber = new StackClusterImpl.ChannelAndSubscriber(channel, handler);
+    StackServiceImpl.ChannelAndSubscriber channelAndSubscriber = new StackServiceImpl.ChannelAndSubscriber(channel, handler);
     handlers.add(channelAndSubscriber);
   }
 
   public void start() {
-    Thread.ofVirtual().name("network-" + networkId).start(() -> {
+    Thread.ofVirtual().name("network").start(() -> {
       while (running) {
         try {
           NetworkMessage msg = messageQueue.poll(100, TimeUnit.MILLISECONDS);
@@ -43,23 +41,23 @@ class InMemoryNetwork {
           if (msg != null) {
             handlers.forEach(h -> {
               if (h.channel().equals(msg.channel)) {
-                StackClusterImpl.LOGGER.fine(() -> networkId + " received message on channel " + msg.channel + " from " + msg.nodeId + " delivering to " + h.subscriber().name());
+                StackServiceImpl.LOGGER.fine(() -> InMemoryNetwork.class.getSimpleName() + " received message on channel " + msg.channel + " from " + msg.nodeId + " delivering to " + h.subscriber().name());
                 h.subscriber().accept(msg.data);
               }
             });
           }
         } catch (InterruptedException e) {
           if (running) {
-            StackClusterImpl.LOGGER.warning(networkId + " message processor interrupted: " + e.getMessage());
+            StackServiceImpl.LOGGER.warning(InMemoryNetwork.class.getSimpleName() + " message processor interrupted: " + e.getMessage());
           }
         }
       }
     });
-    StackClusterImpl.LOGGER.info(() -> networkId + " network started with subscribers " + handlers);
+    StackServiceImpl.LOGGER.info(() -> InMemoryNetwork.class.getSimpleName() + " network started with subscribers " + handlers);
   }
 
   public void close() {
-    StackClusterImpl.LOGGER.fine(() -> networkId + " network stopping");
+    StackServiceImpl.LOGGER.fine(() -> InMemoryNetwork.class.getSimpleName() + " network stopping");
     running = false;
   }
 }

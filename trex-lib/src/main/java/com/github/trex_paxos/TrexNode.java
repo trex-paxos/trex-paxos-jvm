@@ -26,8 +26,17 @@ import java.util.stream.LongStream;
 
 import static com.github.trex_paxos.TrexNode.TrexRole.*;
 
-/// A TrexNode is a single node in a Paxos cluster. It runs the part-time parliament algorithm. It requires
-/// the following collaborating classes:
+/// A TrexNode is a single node in a Paxos cluster. It runs the part-time parliament algorithm implementation handling:
+/// - Ballot number management
+/// - Accept/Vote message processing
+/// - Journal persistence of progress
+/// - Leader election state transitions
+/// Does NOT handle:
+/// - Thread safety (managed by TrexEngine)
+/// - Network communication (handled by TrexApp)
+/// - Application callbacks (managed by TrexEngine)
+///
+/// It requires the following collaborating classes:
 ///
 /// * One [Journal] which must be crash durable storage.
 /// * One [QuorumStrategy] which may be a simple majority, in the future FPaxos or UPaxos.
@@ -35,8 +44,6 @@ import static com.github.trex_paxos.TrexNode.TrexRole.*;
 /// This class logs to JUL logging as severe. You can configure JUL logging to
 /// bridge to your chosen logging framework. This class is not thread safe. The [TrexEngine] will wrap this class and
 /// use a virtual thread friendly mutex to ensure that only one thread is calling the algorithm method at a time.
-///
-/// The wrapping [TrexEngine] will call {@link Journal#sync()} unless it has be constructed with `hostManagedTransactions=true`.
 ///
 /// This class will mark itself as crashed if it has exceptions due to journal IO errors or if it reads corrupt data.
 /// After it has logged to JUL and stderr it will throw the original Exception if any. After that it will always throw an
@@ -75,7 +82,7 @@ public class TrexNode {
 
   /// Create a new TrexNode that will load the current progress from the journal. The journal must have been pre-initialised.
   ///
-  /// @param logAtLevel     The level to log when values are known to be chosen which is logged as "WIN" and when are know to be sequentially fixed with is logged as "FIXED".
+  /// @param logAtLevel     The level to log when values are known to be chosen which is logged as "WIN" and when are know to be sequentially logFixed with is logged as "FIXED".
   /// @param nodeIdentifier The unique node identifier. This must be unique across the cluster and across enough time for prior messages to have been forgotten.
   /// @param quorumStrategy The quorum strategy that may be a simple majority, else things like FPaxos or UPaxos
   /// @param journal        The durable storage and durable log. This must be pre-initialised.
@@ -124,13 +131,13 @@ public class TrexNode {
   /// node automatically if it is crashed. See {@link #algorithm(TrexMessage, List, TreeMap)} for the main logic.
   /// this method is not thread safe. When this method returns the journal must
   /// be made crash durable before sending out any messages.The [TrexEngine] will wrap this class and use a virtual thread friendly mutex to
-  /// and flush the journal if it is not using host managed transactions. This method will throw an IllegalStateException
+  /// and sync the journal. This method will throw an IllegalStateException
   /// if the node is crashed for all future calls. The operator must reboot the node. If the journal is corrupt then the
   /// operator must restore the journal from a backup possibly or clone another node by change the `nodeIdentifier` in the
   /// [Journal].
   ///
   /// @param input The message to process.
-  /// @return A possibly empty list of messages to send out to the cluster plus a possibly empty list of chosen commands to up-call to the host
+  /// @return A possibly empty list of messages to send out to the cluster plus a possibly empty list of chosen results to up-call to the host
   /// application. The journal state must be made crash durable before sending out any messages.
   /// @throws IllegalStateException If the node has been marked as crashed it will always throw an exception and will
   /// need rebooting. See {@link #isCrashed()}.
@@ -144,7 +151,7 @@ public class TrexNode {
     }
     // This will hold any outbound message that must only be sent after the journal has been flushed to durable storage.
     List<TrexMessage> messages = new ArrayList<>();
-    // This will hold any fixed commands. These may be written to the data store under the same translation as the journal.stat.
+    // This will hold any logFixed results. These may be written to the data store under the same translation as the journal.stat.
     TreeMap<Long, AbstractCommand> commands = new TreeMap<>();
     // This tracks what our old state was so that we can crash if we change the state for the wrong message types.
     final var priorProgress = progress;
@@ -155,9 +162,9 @@ public class TrexNode {
       // The most probable reason to throw is an IOError from the journal else it returned corrupt data we cannot process. .
       crashed = true;
       // Log that we are crashing and log the reason.
-      LOGGER.log(Level.SEVERE, CRASHING + e, e);
+      LOGGER.log(Level.SEVERE, CRASHED + e, e);
       // In case the application developer has not correctly configured logging JUL logging we log to stderr.
-      System.err.println(CRASHING + e);
+      System.err.println(CRASHED + e);
       //noinspection CallToPrintStackTrace
       e.printStackTrace();
       // We throw yet the finally block will also run and may also log errors about invariants being violated before
@@ -173,7 +180,7 @@ public class TrexNode {
         }
         if (!commands.isEmpty()) {
           // The general advice is not to throw. In this case the general advice is wrong.
-          // We must throw if the journal gives us weird commands as that is a fatal error.
+          // We must throw if the journal gives us weird results as that is a fatal error.
           validateCommandIndexes(input, commands, priorProgress);
         }
       }
@@ -201,7 +208,7 @@ public class TrexNode {
         final var logIndex = accept.slotTerm().logIndex();
         if (lowerAccept(accept) || fixedSlot(accept.slot())) {
           messages.add(nack(accept.slotTerm()));
-          // if the other node is behind tell them that the slot is fixed. this will force them to catchup.
+          // if the other node is behind tell them that the slot is logFixed. this will force them to catchup.
           sendFixedToBehindNode(accept.slot(), messages);
         } else if (equalOrHigherAccept(accept)) {
           // always journal first
@@ -244,9 +251,9 @@ public class TrexNode {
       case Prepare prepare -> {
         final var number = prepare.slotTerm().number();
         if (number.lessThan(progress.highestPromised()) || fixedSlot(prepare.slot())) {
-          // nack a low nextPrepareMessage else any nextPrepareMessage for a fixed slot sending any accepts they are missing
+          // nack a low nextPrepareMessage else any nextPrepareMessage for a logFixed slot sending any accepts they are missing
           messages.add(nack(prepare));
-          // if the other node is behind tell them that the slot is fixed. this will force them to catchup.
+          // if the other node is behind tell them that the slot is logFixed. this will force them to catchup.
           sendFixedToBehindNode(prepare.slot(), messages);
         } else if (number.greaterThan(progress.highestPromised())) {
           // ack a higher nextPrepareMessage
@@ -294,7 +301,7 @@ public class TrexNode {
 
           // make the callback to the main application
           Optional.ofNullable(fixedAccept).ifPresent(accept -> {
-            fixed(accept, commands);
+            logFixed(accept, commands);
             progress = progress.withHighestFixed(fixedSlot);
             journal.writeProgress(progress);
             if (!role.equals(FOLLOW)) {
@@ -304,7 +311,7 @@ public class TrexNode {
           });
         }
 
-        // if we have not fixed the slot then we must catch up
+        // if we have not logFixed the slot then we must catch up
         final var highestFixedIndex = progress.highestFixedIndex();
 
         if (fixedSlot > highestFixedIndex) {
@@ -348,13 +355,13 @@ public class TrexNode {
         final var highestContiguous = catchup.stream()
             .map(Accept::slot)
             .reduce((a, b) -> (a + 1 == b) ? b : a)
-            // if we have nothing in the list we return the zero slot which must always be fixed as NOOP
+            // if we have nothing in the list we return the zero slot which must always be logFixed as NOOP
             .orElse(0L);
 
         final var priorProgress = progress;
 
         // here we do not check our promise as we trust that the leader knows that the
-        // values are fixed so it does not matter if we have a higher promise as it
+        // values are logFixed so it does not matter if we have a higher promise as it
         // a majority of the nodes have accepted the that message.
         catchup.stream()
             .dropWhile(a -> fixedSlot(a.slot()))
@@ -362,7 +369,7 @@ public class TrexNode {
             .forEach(accept -> {
               journal.writeAccept(accept);
               progress = progress.withHighestFixed(accept.slot());
-              fixed(accept, commands);
+              logFixed(accept, commands);
             });
 
         if (progress != priorProgress) {
@@ -397,12 +404,11 @@ public class TrexNode {
 
   static final String PROTOCOL_VIOLATION_PROMISES = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED Paxos Protocol Violation the promise has been changed when the message is not a PaxosMessage type.";
   static final String PROTOCOL_VIOLATION_NUMBER = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the promise has decreased.";
-  static final String PROTOCOL_VIOLATION_INDEX = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the fixed slot index has decreased.";
+  static final String PROTOCOL_VIOLATION_INDEX = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the logFixed slot index has decreased.";
   static final String PROTOCOL_VIOLATION_SLOT_FIXING = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the promise has been changed when the message is not a LearningMessage type.";
   static final String CRASHED = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted) is now the only source of truth.";
-  static final String CRASHING = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted) is now the only source of truth to to throwable: ";
-  static final String COMMAND_INDEXES = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued commands that do not align to its committed slot index: ";
-  static final String COMMAND_GAPS = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued commands that are not sequential in commited slot index: ";
+  static final String COMMAND_INDEXES = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued results that do not align to its committed slot index: ";
+  static final String COMMAND_GAPS = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued results that are not sequential in commited slot index: ";
 
   /// Here we check that we have not violated the Paxos algorithm invariants. If we have then we lock then mark the node as crashed.
   private void validateProtocolInvariants(TrexMessage input, Progress priorProgress) {
@@ -424,7 +430,7 @@ public class TrexNode {
       LOGGER.severe(message);
     }
 
-    // the fixed slot index must only ever increase
+    // the logFixed slot index must only ever increase
     if (priorProgress.highestFixedIndex() > progress.highestFixedIndex()) {
       this.crashed = true;
       final var message = PROTOCOL_VIOLATION_INDEX + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
@@ -450,7 +456,7 @@ public class TrexNode {
     // "Returns the second number (b) if it follows the first (a+1), Otherwise keeps the first number (a)"
     final var highestContiguous = commands.keySet().stream()
         .reduce((a, b) -> (a + 1 == b) ? b : a)
-        // if we have nothing in the list we return the zero slot which must always be fixed as NOOP
+        // if we have nothing in the list we return the zero slot which must always be logFixed as NOOP
         .orElse(0L);
 
     if (highestContiguous != progress.highestFixedIndex()) {
@@ -494,15 +500,16 @@ public class TrexNode {
                 .toList();
 
             if (!fixed.isEmpty()) {
-              // run the callback
+              // record any fixed commands and remove the state tracking of accept responses
               for (var slotTerm : fixed) {
                 final var accept = journal.readAccept(slotTerm.logIndex()).orElseThrow();
-                fixed(accept, commands);
+                // log and record the chosen command which may be either a NOOP or a true client command.
+                logFixed(accept, commands);
                 // free the memory and stop heartbeating out the accepts
                 acceptVotesByLogIndex.remove(slotTerm.logIndex());
               }
 
-              // we have fixed slots
+              // we have logFixed slots
               this.progress = progress.withHighestFixed(fixed.getLast().logIndex());
               this.journal.writeProgress(progress);
 
@@ -521,7 +528,7 @@ public class TrexNode {
     });
   }
 
-  private void fixed(Accept accept, Map<Long, AbstractCommand> commands) {
+  private void logFixed(Accept accept, Map<Long, AbstractCommand> commands) {
     final var cmd = accept.command();
     final var logIndex = accept.slot();
     LOGGER.log(logAtLevel, () ->
@@ -772,12 +779,8 @@ public class TrexNode {
     }
   }
 
-  public int clusterSize() {
-    return quorumStrategy.clusterSize();
-  }
-
   /// This node must no longer run as it is an unknown state due to an exception. You must set this to step any more
-  /// commands getting picked and sent to clients. If you are running host managed transactions then you should call
+  /// results getting picked and sent to clients. If you are running host managed transactions then you should call
   /// this if you ever get any exceptions you do not recover your state from the data store. `TrexEngine` will call this
   /// when it has a thread interrupted which is assumes is due to the whole application shutting down.
   public void crash() {

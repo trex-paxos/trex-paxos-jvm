@@ -11,14 +11,13 @@ import org.jetbrains.annotations.TestOnly;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
 import static com.github.trex_paxos.network.SystemChannel.PROXY;
 
-public class TrexApp<VALUE, RESULT> {
+public class TrexApp<COMMAND, RESULT> {
 
   protected class LeaderTracker {
     volatile NodeId estimatedLeader = null;
@@ -65,24 +64,21 @@ public class TrexApp<VALUE, RESULT> {
     }
   }
 
-  protected final TrexEngine engine;
+  protected final TrexEngine<RESULT> engine;
   protected final NetworkLayer networkLayer;
-  protected final Function<VALUE, RESULT> serverFunction;
   protected final Supplier<ClusterMembership> clusterMembershipSupplier;
   final protected LeaderTracker leaderTracker = new LeaderTracker();
   final ResponseTracker<RESULT> responseTracker = new ResponseTracker<>();
-  protected final Pickler<VALUE> valuePickler;
+  protected final Pickler<COMMAND> valuePickler;
   public final NodeId nodeId;
 
   public TrexApp(
       Supplier<ClusterMembership> clusterMembershipSupplier,
-      TrexEngine engine,
+      TrexEngine<RESULT> engine,
       NetworkLayer networkLayer,
-      Pickler<VALUE> valuePickler,
-      Function<VALUE, RESULT> serverFunction) {
+      Pickler<COMMAND> valuePickler) {
     this.engine = engine;
     this.networkLayer = networkLayer;
-    this.serverFunction = serverFunction;
     this.clusterMembershipSupplier = clusterMembershipSupplier;
     this.valuePickler = valuePickler;
     this.nodeId = new NodeId(engine.nodeIdentifier());
@@ -92,7 +88,6 @@ public class TrexApp<VALUE, RESULT> {
     if (engine.isLeader()) {
       leaderTracker.updateFromFixed(new Fixed(engine.nodeIdentifier(), 0L, BallotNumber.MIN));
     }
-    engine.start();
     networkLayer.subscribe(CONSENSUS.value(), this::handleConsensusMessage, "consensus-" + engine.nodeIdentifier());
     networkLayer.subscribe(PROXY.value(), this::handleProxyMessage, "proxy-" + engine.nodeIdentifier());
     networkLayer.start();
@@ -132,7 +127,7 @@ public class TrexApp<VALUE, RESULT> {
     }
   }
 
-  public void submitValue(VALUE value, CompletableFuture<RESULT> future) {
+  public void submitValue(COMMAND value, CompletableFuture<RESULT> future) {
     final var uuid = UUIDGenerator.generateUUID();
     try {
       responseTracker.track(uuid, future);
@@ -165,35 +160,28 @@ public class TrexApp<VALUE, RESULT> {
     }
   }
 
-  void upCall(Long slot, Command cmd) {
-    try {
-      VALUE value = valuePickler.deserialize(cmd.operationBytes());
-      RESULT result = serverFunction.apply(value);
-      LOGGER.fine(() -> String.format("[Node %d] upCall for UUID: %s, value: %s, result: %s",
-          nodeId.id(), cmd.uuid(), value, result));
-      responseTracker.complete(cmd.uuid(), result);
-    } catch (Exception e) {
-      LOGGER.warning(() -> "Failed to process command at slot " + slot + " due to : " + e.getMessage());
-      responseTracker.fail(cmd.uuid(), e);
-    } finally {
-      responseTracker.remove(cmd.uuid());
-    }
-  }
-
+  /// Runs the Paxos algorithm over a list of messages then transmits any resulting messages.
+  /// This method will side effect by updating the journal as necessary and also calling the host application
+  /// callback if any commands are fixed.
+  /// @param messages The input TrexMessages to process
+  /// @return List of outbound TrexMessages to be sent to other nodes
   List<TrexMessage> paxosThenUpCall(List<TrexMessage> messages) {
     LOGGER.finer(() -> engine.nodeIdentifier() + " paxosThenUpCall input: " + messages);
-    var result = engine.paxos(messages);
-    if (!result.commands().isEmpty()) {
-      LOGGER.fine(() -> engine.nodeIdentifier() + " fixed " + result.commands());
-      result.commands().entrySet().stream()
-          .filter(entry -> entry.getValue() instanceof Command)
-          .forEach(entry -> upCall(entry.getKey(), (Command) entry.getValue()));
-    }
+    EngineResult<RESULT> result = engine.paxos(messages);
+    result.results().forEach(hostResult -> {
+      LOGGER.fine(() -> engine.nodeIdentifier() + " paxosThenUpCall completing callback for " + hostResult.uuid());
+      responseTracker.complete(hostResult.uuid(), hostResult.result());
+    });
     final var response = result.messages();
     LOGGER.finer(() -> engine.nodeIdentifier() + " paxosThenUpCall output: " + response);
     return response;
   }
 
+  /// Transmits a list of Trex messages across the network to their respective destinations.
+  /// DirectMessage instances are sent to specific nodes while other messages are broadcast.
+  /// Delegates to the NetworkLayer to handle actual transmission and ClusterMembership for broadcasts.
+  ///
+  /// @param messages The list of Trex messages to be transmitted
   private void transmitTrexMessages(List<TrexMessage> messages) {
     messages.forEach(message -> {
       if (message instanceof DirectMessage directMessage) {

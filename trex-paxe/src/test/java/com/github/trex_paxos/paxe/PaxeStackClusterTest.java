@@ -1,17 +1,20 @@
 package com.github.trex_paxos.paxe;
 
 import com.github.trex_paxos.*;
+import com.github.trex_paxos.network.ClusterMembership;
+import com.github.trex_paxos.network.NetworkAddress;
+import com.github.trex_paxos.network.NodeId;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.util.Stack;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 
@@ -23,10 +26,9 @@ class PaxeStackClusterTest {
   private static final Duration TEST_TIMEOUT = Duration.ofMillis(200);
 
   private NetworkTestHarness harness;
-  private TrexApp<StackService.Command, StackService.Response> app1;
-  private TrexApp<StackService.Command, StackService.Response> app2;
-  private final Function<StackService.Command, StackService.Response> processor =
-      new StackProcessor();
+  StackServiceImpl stackService1;
+  StackServiceImpl stackService2;
+
   private final AtomicInteger nodeToggle = new AtomicInteger(0);
 
   @BeforeAll
@@ -55,60 +57,19 @@ class PaxeStackClusterTest {
     harness.waitForNetworkEstablishment();
     LOGGER.fine("Network established successfully");
 
-    app1 = createApp(network1, leader);
-    app2 = createApp(network2, leader);
+    Supplier<ClusterMembership> members = () -> new ClusterMembership(
+        Map.of(new NodeId((short) 1), new NetworkAddress.HostName("localhost", 5000),
+            new NodeId((short) 2), new NetworkAddress.HostName("localhost", 5001)));
+
+    stackService1 = new StackServiceImpl((short)1, members, network1);
+
+    stackService2 = new StackServiceImpl((short)2, members, network2);
 
     LOGGER.info("Starting applications");
-    app1.start();
-    app2.start();
 
     // Allow time for leader election and initialization
     Thread.sleep(50);
     LOGGER.fine("Test setup complete");
-  }
-
-  private TrexApp<StackService.Command, StackService.Response> createApp(
-      PaxeNetwork network,
-      final short leader) {
-    LOGGER.fine(() -> String.format("Creating app for node %d, leader=%d",
-        network.localNode.id(), leader));
-
-    TrexNode node = createNode(network.localNode.id());
-    TrexEngine engine = new TrexEngine(node) {
-      @Override
-      protected void setRandomTimeout() {
-      }
-
-      @Override
-      protected void clearTimeout() {
-      }
-
-      @Override
-      protected void setNextHeartbeat() {
-      }
-
-      {
-        if (leader == trexNode.nodeIdentifier()) {
-          LOGGER.info(() -> "Setting node " + leader + " as leader");
-          setLeader();
-        }
-      }
-    };
-
-    return new TrexApp<>(
-        network.membership,
-        engine,
-        network,
-        PermitsRecordsPickler.createPickler(StackService.Command.class),
-        processor
-    ) {{
-      setLeader(leader);
-    }};
-  }
-
-  private TrexNode createNode(short nodeId) {
-    QuorumStrategy quorum = new SimpleMajority(2);
-    return new TrexNode(Level.INFO, nodeId, quorum, new TransparentJournal(nodeId));
   }
 
   void toggleNode() {
@@ -124,7 +85,7 @@ class PaxeStackClusterTest {
     // Push "first"
     CompletableFuture<StackService.Response> future = new CompletableFuture<>();
     LOGGER.info("Pushing 'first' to stack");
-    app1.submitValue(new StackService.Push("first"), future);
+    stackService1.app().submitValue(new StackService.Push("first"), future);
     future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
 
     // Toggle to second node
@@ -133,24 +94,24 @@ class PaxeStackClusterTest {
     // Push "second"
     future = new CompletableFuture<>();
     LOGGER.info("Pushing 'second' to stack from alternate node");
-    app2.submitValue(new StackService.Push("second"), future);
+    stackService2.app().submitValue(new StackService.Push("second"), future);
     future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
 
     // Peek - should see "second"
     future = new CompletableFuture<>();
     LOGGER.info("Testing peek operation");
-    app2.submitValue(new StackService.Peek(), future);
+    stackService2.app().submitValue(new StackService.Peek(), future);
     assertEquals("second", future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).value().orElse(null));
 
     // Pop twice and verify ordering
     future = new CompletableFuture<>();
     LOGGER.info("Testing first pop operation");
-    app2.submitValue(new StackService.Pop(), future);
+    stackService2.app().submitValue(new StackService.Pop(), future);
     assertEquals("second", future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).value().orElse(null));
 
     future = new CompletableFuture<>();
     LOGGER.info("Testing second pop operation");
-    app2.submitValue(new StackService.Pop(), future);
+    stackService2.app().submitValue(new StackService.Pop(), future);
     assertEquals("first", future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).value().orElse(null));
 
     LOGGER.info("Basic stack operations test completed successfully");
@@ -163,7 +124,7 @@ class PaxeStackClusterTest {
     // Push initial value
     CompletableFuture<StackService.Response> future1 = new CompletableFuture<>();
     LOGGER.info("Pushing test value before network failure");
-    app1.submitValue(new StackService.Push("persistent"), future1);
+    stackService1.app().submitValue(new StackService.Push("persistent"), future1);
     future1.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
 
     // Close network and verify operations fail
@@ -173,7 +134,7 @@ class PaxeStackClusterTest {
 
     CompletableFuture<StackService.Response> future2 = new CompletableFuture<>();
     LOGGER.info("Attempting operation on failed network");
-    app2.submitValue(new StackService.Push("should-fail"), future2);
+    stackService2.app().submitValue(new StackService.Push("should-fail"), future2);
 
     assertThrows(Exception.class, () ->
         future2.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS));
@@ -183,40 +144,10 @@ class PaxeStackClusterTest {
   @AfterEach
   void tearDown() {
     LOGGER.fine("Test tear down starting");
-    if (app1 != null) app1.stop();
-    if (app2 != null) app2.stop();
+    if (stackService1.app() != null) stackService1.app().stop();
+    if (stackService2.app() != null) stackService2.app().stop();
     if (harness != null) harness.close();
     LOGGER.fine("Test tear down complete");
   }
 
-  static class StackProcessor implements Function<StackService.Command, StackService.Response> {
-    private final Stack<String> stack = new Stack<>();
-
-    @Override
-    public synchronized StackService.Response apply(StackService.Command cmd) {
-      return switch (cmd) {
-        case StackService.Push p -> {
-          LOGGER.info(() -> "Processing push command: " + p.item());
-          stack.push(p.item());
-          yield new StackService.Response(java.util.Optional.empty());
-        }
-        case StackService.Pop _ -> {
-          LOGGER.info("Processing pop command");
-          var result = new StackService.Response(
-              java.util.Optional.of(stack.isEmpty() ? "Stack is empty" : stack.pop())
-          );
-          LOGGER.info(() -> "Pop result: " + result.value().orElse("null"));
-          yield result;
-        }
-        case StackService.Peek _ -> {
-          LOGGER.info("Processing peek command");
-          var result = new StackService.Response(
-              java.util.Optional.of(stack.isEmpty() ? "Stack is empty" : stack.peek())
-          );
-          LOGGER.info(() -> "Peek result: " + result.value().orElse("null"));
-          yield result;
-        }
-      };
-    }
-  }
 }

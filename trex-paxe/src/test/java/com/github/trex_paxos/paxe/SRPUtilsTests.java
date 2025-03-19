@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /// Using the Secure Remote Password (SRP) Protocol for TLS Authentication
 /// This directly follows RFC 5054 at [rfc5054.txt](https://www.ietf.org/rfc/rfc5054.txt)
 /// This test case verifies SRPUtils.java using the test vectors in the RFC.
+@SuppressWarnings("SpellCheckingInspection")
 class SRPUtilsTests {
 
   static {

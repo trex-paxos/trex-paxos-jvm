@@ -2,45 +2,35 @@ package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.TrexMessage;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.TreeMap;
+import java.util.function.BiFunction;
 import java.util.logging.Level;
+
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 
-abstract class TestablePaxosEngine extends TrexEngine {
+abstract class TestablePaxosEngine<RESULT> extends TrexEngine<RESULT> {
 
   final TransparentJournal journal;
 
-  final TreeMap<Long, AbstractCommand> allCommandsMap = new TreeMap<>();
-
-  public List<AbstractCommand> allCommands() {
-    return new ArrayList<>(allCommandsMap.values());
-  }
-
-  public TestablePaxosEngine(short nodeIdentifier,
-                             QuorumStrategy quorumStrategy,
-                             TransparentJournal journal
+  public TestablePaxosEngine(
+      short nodeIdentifier,
+      QuorumStrategy quorumStrategy,
+      TransparentJournal journal,
+      BiFunction<Long, Command, RESULT> commitCallback
   ) {
-    super(
-        new TrexNode(Level.INFO, nodeIdentifier, quorumStrategy, journal)
-    );
+    // Pass commitCallback to super constructor
+    super(new TrexNode(Level.INFO, nodeIdentifier, quorumStrategy, journal), commitCallback);
     this.journal = journal;
   }
 
-  TrexResult paxos(TrexMessage input) {
-    if (input.from() == trexNode.nodeIdentifier()) {
-      return TrexResult.noResult();
-    }
+  @Override
+  public EngineResult<RESULT> paxos(List<TrexMessage> input) {
     LOGGER.finer(() -> trexNode.nodeIdentifier + " <~ " + input);
     final var oldRole = trexNode.getRole();
-    final var result = super.paxos(List.of(input));
+    final var result = super.paxos(input);
     final var newRole = trexNode.getRole();
     if (oldRole != newRole) {
       LOGGER.info(() -> "Node has changed role:" + trexNode.nodeIdentifier() + " == " + newRole);
-    }
-    if (!result.commands().isEmpty()) {
-      allCommandsMap.putAll(result.commands());
     }
     return result;
   }

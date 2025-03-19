@@ -15,9 +15,7 @@
  */
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.msg.BroadcastMessage;
-import com.github.trex_paxos.msg.DirectMessage;
-import com.github.trex_paxos.msg.TrexMessage;
+import com.github.trex_paxos.msg.*;
 
 import java.util.*;
 import java.util.function.BiFunction;
@@ -27,6 +25,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
+
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 class Simulation {
@@ -52,6 +51,15 @@ class Simulation {
   }
 
   Map<Short, Long> nodeTimeouts = new HashMap<>();
+
+  Optional<Prepare> timeout(TrexNode trexNode) {
+    var result = trexNode.timeout();
+    if (result.isPresent()) {
+      LOGGER.fine(() -> "Timeout: " + trexNode.nodeIdentifier() + " " + trexNode.getRole());
+      setRandomTimeout(trexNode.nodeIdentifier());
+    }
+    return result;
+  }
 
   public void run(
       int iterations,
@@ -84,25 +92,25 @@ class Simulation {
                 case Timeout timeout -> {
                   // if it is a timeout collect the prepare messages if the node is still a follower at this time
                   final var prepare = switch (timeout.nodeIdentifier) {
-                    case 1 -> trexEngine1.timeout();
-                    case 2 -> trexEngine2.timeout();
-                    case 3 -> trexEngine3.timeout();
+                    case 1 -> timeout(trexEngine1.trexNode());
+                    case 2 -> timeout(trexEngine2.trexNode());
+                    case 3 -> timeout(trexEngine3.trexNode());
                     default ->
                         throw new IllegalArgumentException("Unexpected node identifier for timeout: " + timeout.nodeIdentifier);
                   };
                   return prepare.stream();
                 }
 
-                // if it is a messages that has arrived run paxos
+                // if it is a messages that has arrived run paxos after we have reset timeouts
                 case Send send -> {
                   return networkSimulation(send, now, nemesis);
                 }
                 case Heartbeat heartbeat -> {
                   // if it is a timeout collect the prepare messages if the node is still a follower at this time
                   final var fixedWithAccepts = switch (heartbeat.nodeIdentifier) {
-                    case 1 -> trexEngine1.createHeartbeatMessagesAndReschedule();
-                    case 2 -> trexEngine2.createHeartbeatMessagesAndReschedule();
-                    case 3 -> trexEngine3.createHeartbeatMessagesAndReschedule();
+                    case 1 -> createHeartbeatMessagesAndReschedule(trexEngine1.trexNode());
+                    case 2 -> createHeartbeatMessagesAndReschedule(trexEngine2.trexNode());
+                    case 3 -> createHeartbeatMessagesAndReschedule(trexEngine3.trexNode());
                     default ->
                         throw new IllegalArgumentException("Unexpected node identifier for heartbeat: " + heartbeat.nodeIdentifier);
                   };
@@ -113,9 +121,9 @@ class Simulation {
                       .flatMap(e -> {
                         final var commands = IntStream.range(0, 3).mapToObj(i -> {
                           final var data = now + ":" + e.getKey() + i;
-                          return new Command( data.getBytes());
+                          return new Command(data.getBytes());
                         }).toList();
-                        final var engine = e.getValue();
+                        final TrexEngine<?> engine = e.getValue();
                         return engine.isLeader() ? engine.nextLeaderBatchOfMessages(commands).stream()
                             : Stream.empty();
                       });
@@ -142,29 +150,17 @@ class Simulation {
         LOGGER.info("finished as empty iteration: " + iteration);
       }
       final var inconsistentFixedIndex = inconsistentFixedIndex(
-          trexEngine1.allCommandsMap,
-          trexEngine2.allCommandsMap,
-          trexEngine3.allCommandsMap);
+          allCommandsMap.get(trexEngine1.nodeIdentifier()),
+          allCommandsMap.get(trexEngine2.nodeIdentifier()),
+          allCommandsMap.get(trexEngine3.nodeIdentifier())
+      );
       finished = finished || inconsistentFixedIndex.isPresent();
       if (inconsistentFixedIndex.isPresent()) {
-        LOGGER.info("finished as not matching commands:" +
-            "\n\t" + trexEngine1.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
-            + "\n\t" + trexEngine2.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
-            + "\n\t" + trexEngine3.allCommands().stream().map(Objects::toString).collect(Collectors.joining(",")));
-        throw new AssertionError("commands not matching");
-      }
-      boolean fixedLengthNotEqualToCommandLength =
-          trexEngine1.allCommandsMap.size() != trexEngine1.trexNode.progress.highestFixedIndex() ||
-              trexEngine2.allCommandsMap.size() != trexEngine2.trexNode.progress.highestFixedIndex() ||
-              trexEngine3.allCommandsMap.size() != trexEngine3.trexNode.progress.highestFixedIndex();
-      finished = finished || fixedLengthNotEqualToCommandLength;
-      if (fixedLengthNotEqualToCommandLength) {
-        LOGGER.info("finished as fixed length not equal to command length:\n" +
-            "\tnodeIdentifier==1 highestFixedIndex==" + trexEngine1.trexNode.progress.highestFixedIndex() + ", commandSize==" + trexEngine1.allCommands().size() + "\n" +
-            "\tnodeIdentifier==1 highestFixedIndex==" + trexEngine2.trexNode.progress.highestFixedIndex() + ", commandSize==" + trexEngine2.allCommands().size() + "\n" +
-            "\tnodeIdentifier==1 highestFixedIndex==" + trexEngine3.trexNode.progress.highestFixedIndex() + ", commandSize==" + trexEngine3.allCommands().size() + "\n"
-        );
-        throw new AssertionError("fixed length not equal to command length");
+        LOGGER.info("finished as not matching results:" +
+            "\n\t" + allCommandsMap.get(trexEngine1.nodeIdentifier()).values().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
+            + "\n\t" + allCommandsMap.get(trexEngine2.nodeIdentifier()).values().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
+            + "\n\t" + allCommandsMap.get(trexEngine3.nodeIdentifier()).values().stream().map(Objects::toString).collect(Collectors.joining(",")));
+        throw new AssertionError("results not matching");
       }
       engines.values().forEach(
           engine -> engine.journal.fakeJournal.forEach((k, v) -> {
@@ -177,9 +173,18 @@ class Simulation {
     });
   }
 
-  static OptionalLong inconsistentFixedIndex(TreeMap<Long, AbstractCommand> c1,
-                                             TreeMap<Long, AbstractCommand> c2,
-                                             TreeMap<Long, AbstractCommand> c3) {
+  List<TrexMessage> createHeartbeatMessagesAndReschedule(TrexNode trexNode) {
+    var result = trexNode.createHeartbeatMessages();
+    if (!result.isEmpty()) {
+      setHeartbeat(trexNode.nodeIdentifier());
+      LOGGER.finer(() -> "Heartbeat: " + trexNode.nodeIdentifier() + " " + trexNode.getRole() + " " + result);
+    }
+    return result;
+  }
+
+  static OptionalLong inconsistentFixedIndex(TreeMap<Long, Command> c1,
+                                             TreeMap<Long, Command> c2,
+                                             TreeMap<Long, Command> c3) {
     final var c1last = !c1.isEmpty() ? c1.lastKey() : 0;
     final var c2last = !c2.isEmpty() ? c2.lastKey() : 0;
     final var c3last = !c3.isEmpty() ? c3.lastKey() : 0;
@@ -212,8 +217,8 @@ class Simulation {
     }).findFirst();
   }
 
-  public void run(int i, boolean b) {
-    run(i, b, DEFAULT_NETWORK_SIMULATION);
+  public void run(int iterations, boolean makeClientMessages) {
+    run(iterations, makeClientMessages, DEFAULT_NETWORK_SIMULATION);
   }
 
   sealed interface Event permits Heartbeat, Send, Timeout, ClientCommand {
@@ -241,7 +246,7 @@ class Simulation {
     this.now = now;
   }
 
-  void setTimeout(short nodeIdentifier) {
+  void setRandomTimeout(short nodeIdentifier) {
     final var oldTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
     final var timeout = rng.nextInt((int) shortMaxTimeout + 1, (int) longMaxTimeout);
     final var when = Math.max(lastNow, now) + timeout;
@@ -252,7 +257,7 @@ class Simulation {
     nodeTimeouts.put(nodeIdentifier, when);
     events.add(new Timeout(nodeIdentifier));
     final var newTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
-    LOGGER.fine(() -> "\tsetTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier + "+=" + timeout);
+    LOGGER.fine(() -> "\tsetRandomTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier + "+=" + timeout);
   }
 
   void clearTimeout(short nodeIdentifier) {
@@ -282,11 +287,25 @@ class Simulation {
 
   final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
 
-  final TestablePaxosEngine trexEngine1 = makeTrexEngine((short) 1, threeNodeQuorum);
-  final TestablePaxosEngine trexEngine2 = makeTrexEngine((short) 2, threeNodeQuorum);
-  final TestablePaxosEngine trexEngine3 = makeTrexEngine((short) 3, threeNodeQuorum);
+  final Map<Short, TreeMap<Long, Command>> allCommandsMap = commandMaps();
 
-  final Map<Short, TestablePaxosEngine> engines = Map.of(
+  @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
+  private Map<Short, TreeMap<Long, Command>> commandMaps() {
+    final var c1 = new TreeMap<Long, Command>();
+    final var c2 = new TreeMap<Long, Command>();
+    final var c3 = new TreeMap<Long, Command>();
+    return Map.of(
+        (short) 1, c1,
+        (short) 2, c2,
+        (short) 3, c3
+    );
+  }
+
+  final SimulationPaxosEngine<Command> trexEngine1 = makeTrexEngine((short) 1, threeNodeQuorum, allCommandsMap.get((short) 1));
+  final SimulationPaxosEngine<Command> trexEngine2 = makeTrexEngine((short) 2, threeNodeQuorum, allCommandsMap.get((short) 2));
+  final SimulationPaxosEngine<Command> trexEngine3 = makeTrexEngine((short) 3, threeNodeQuorum, allCommandsMap.get((short) 3));
+
+  final Map<Short, SimulationPaxosEngine<Command>> engines = Map.of(
       (short) 1, trexEngine1,
       (short) 2, trexEngine2,
       (short) 3, trexEngine3
@@ -294,9 +313,9 @@ class Simulation {
 
   // start will launch some timeouts into the event queue
   void coldStart() {
-    trexEngine1.start();
-    trexEngine2.start();
-    trexEngine3.start();
+    setRandomTimeout(trexEngine1.nodeIdentifier());
+    setRandomTimeout(trexEngine2.nodeIdentifier());
+    setRandomTimeout(trexEngine3.nodeIdentifier());
   }
 
   /// This is how we can inject network failures into the simulation. The default implementation is to pass the messages
@@ -313,8 +332,9 @@ class Simulation {
   final BiFunction<Send, Long, Stream<TrexMessage>> DEFAULT_NETWORK_SIMULATION =
       (send, _) ->
           send.messages.stream().flatMap(x -> switch (x) {
-            case BroadcastMessage m -> engines.values().stream().flatMap(engine -> engine.paxos(m).messages().stream());
-            case DirectMessage m -> engines.get(m.to()).paxos(m).messages().stream();
+            case BroadcastMessage m ->
+                engines.values().stream().flatMap(engine -> engine.paxos(List.of(m)).messages().stream());
+            case DirectMessage m -> engines.get(m.to()).paxos(List.of(m)).messages().stream();
           });
 
   private void makeClientDataEvents(int iterations, NavigableMap<Long, List<Event>> eventQueue) {
@@ -325,35 +345,47 @@ class Simulation {
     });
   }
 
-  class SimulationPaxosEngine extends TestablePaxosEngine {
+  class SimulationPaxosEngine<RESULT> extends TestablePaxosEngine<RESULT> {
 
     public SimulationPaxosEngine(short nodeIdentifier,
                                  QuorumStrategy quorumStrategy,
-                                 TransparentJournal transparentJournal
+                                 TransparentJournal transparentJournal,
+                                 BiFunction<Long, Command, RESULT> commitHandler
     ) {
-      super(nodeIdentifier, quorumStrategy, transparentJournal);
+      super(nodeIdentifier, quorumStrategy, transparentJournal, commitHandler);
     }
 
     @Override
-    protected void setRandomTimeout() {
-      Simulation.this.setTimeout(trexNode.nodeIdentifier());
-    }
-
-    @Override
-    protected void clearTimeout() {
-      Simulation.this.clearTimeout(trexNode.nodeIdentifier());
-    }
-
-    @Override
-    protected void setNextHeartbeat() {
-      Simulation.this.setHeartbeat(trexNode.nodeIdentifier());
+    public EngineResult<RESULT> paxos(List<TrexMessage> trexMessages) {
+      final var fixed = trexMessages.stream()
+          .filter(m -> m instanceof Fixed)
+          .map(m -> (Fixed) m)
+          .toList();
+      if (!fixed.isEmpty()) {
+        LOGGER.finer(() -> "Fixed so setRandomTimeout : " + trexNode.nodeIdentifier() + " " + trexNode.getRole() + " " + fixed);
+        setRandomTimeout(trexNode.nodeIdentifier());
+      }
+      final var oldRole = trexNode.getRole();
+      final var result = super.paxos(trexMessages);
+      final var newRole = trexNode.getRole();
+      if (oldRole != newRole && newRole == TrexNode.TrexRole.LEAD) {
+        LOGGER.info(() -> "Node has become leader " + trexNode.nodeIdentifier());
+        Simulation.this.setHeartbeat(trexNode.nodeIdentifier());
+      }
+      return result;
     }
   }
 
-  TestablePaxosEngine makeTrexEngine(short nodeIdentifier, QuorumStrategy quorumStrategy) {
-    return new SimulationPaxosEngine(nodeIdentifier,
+  <T> SimulationPaxosEngine<T> makeTrexEngine(short nodeIdentifier, QuorumStrategy quorumStrategy, final TreeMap<Long, Command> allCommands) {
+    return new SimulationPaxosEngine<>(nodeIdentifier,
         quorumStrategy,
-        new TransparentJournal(nodeIdentifier)
+        new TransparentJournal(nodeIdentifier),
+        // Here we have no application callback as we are simply testing that the logs match
+        (i, c) -> {
+          LOGGER.fine(() -> "i=" + i + " c=" + c);
+          allCommands.put(i, c);
+          return null;
+        }
     );
   }
 }

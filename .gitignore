@@ -1,3 +1,4 @@
+.continue/
 .jqwik-database
 .metals/
 target/
@@ -5,3 +6,9 @@ trex2-lib/target/
 .idea/
 */.jqwik-database
 all.java
+*.db
+all.md
+all.java
+my.chatllm
+.aider*
+repomix-output.txt

@@ -29,6 +29,8 @@ At this the time:
 
 The library is therefore at the stage where the bold and brave could try it out.
 
+See the Architecture section for a more detailed explanation of how to use the library.
+
 ### Introduction
 
 The ambition of this documentation is to:
@@ -339,11 +341,11 @@ public interface Journal {
 ```
 
 Journal writes must be crash-proof (disk flush or equivalent). The journal's `sync()` is intended to flush any
-commands into their slots and only then flush the `progress`. The idea is that your application 
-already has a database; it is almost trivial to implement this interface in our main application database. 
-You can specify that your application code will manage transactions. When you configure this library to 
-say that you will handle the transactions in your command value up-call callback then the `sync()` method 
-will not be invoked. 
+commands into their slots and only then flush the `progress`. The idea is that your application
+already has a database; it is almost trivial to implement this interface in our main application database.
+You can specify that your application code will manage transactions. When you configure this library to
+say that you will handle the transactions in your command value up-call callback then the `sync()` method
+will not be invoked.
 
 See the Java doc on the `Journal` interface for more details.
 
@@ -354,12 +356,12 @@ This implementation enforces the following invariants at each node:
 1. The fixed index increases sequentially.
 2. The promise number only increases (yet it may jump forward).
 3. The promised ballot number can only change when processing a `prepare` or `accept` message.
-4. The fixed index can only change when a leader sees a majority `AcceptReponse` message, a 
-follower node sees a `Fixed`message, or any node learns about a fixed messages due to a 
-`CatchupResponse` message.
+4. The fixed index can only change when a leader sees a majority `AcceptReponse` message, a
+   follower node sees a `Fixed`message, or any node learns about a fixed messages due to a
+   `CatchupResponse` message.
 
-The core of the algorithm is written as inequalities comparing integer types. We can exhaustively 
-test all permutations as a `TrexNode`: 
+The core of the algorithm is written as inequalities comparing integer types. We can exhaustively
+test all permutations as a `TrexNode`:
 
 * Can only see messages that are less than, greater than, or equal to its promise.
 * Can only see messages from another node with a node identifier that is less than, greater than, or equal to its
@@ -371,8 +373,10 @@ test all permutations as a `TrexNode`:
 * The outcome of any majority vote can only be WIN, LOSE, or WAIT.
 * The node can be in one of three TrexStates: `FOLLOW`, `RECOVER`, or `LEAD`.
 
-In addition to exhaustive property-based tests, the tests run simulations of randomised rolling network partitions that step through
-hundreds of in-memory message exchanges between a three-node cluster. These randomised simulation tests are run a thousand times and 
+In addition to exhaustive property-based tests, the tests run simulations of randomised rolling network partitions that
+step through
+hundreds of in-memory message exchanges between a three-node cluster. These randomised simulation tests are run a
+thousand times and
 check that the journal at all three nodes matches and the list of fixed commands is the same across all three nodes.
 
 ### Seventh, Leader Duels
@@ -392,12 +396,13 @@ Yet there is also the other scenario where the first node to timeout has the hig
 node to timeout does not interrupt. If you were to set things up so that you had a 50% probability of two nodes
 timing out within the time it takes them to complete a full slot recovery, you have great odds.
 
-For every timeout you have two chances of success: that the first node to timeout has the highest node identifier, and if
+For every timeout you have two chances of success: that the first node to timeout has the highest node identifier, and
+if
 not
 that the lower node is not interrupted before it can complete a full cycle. The odds of success each attempt to elect
 a leader are 75%, 94%, 99%, ...
 
-This implementation separates the core algorithm into TrexNode and the timeout logic into TrexEngine. It will allow you
+This implementation separates the core algorithm into TrexNode and the timeout logic is external. It will allow you
 to use your own node failure detection or election mechanism if you do not like those odds.
 
 See the wiki for a more detailed explanation of this topic.
@@ -408,9 +413,50 @@ See the wiki for a more detailed explanation of this topic.
 ./setup-hooks.sh
 ```
 
-# Releases
+# Architecture
 
-TBD
+The core components of the library are:
+
+- `TrexApp<COMMAND,RESULT>`: Main entry point that runs Paxos consensus on commands across a cluster and transforms
+  chosen commands into results locally at each node.
+- `TrexNode`: Implements the core Paxos algorithm, processing messages and maintaining consistency.
+- `TrexEngine`: Manages timeouts and heartbeats around the core algorithm.
+- `Journal`: Interface for crash-durable storage of protocol state and commands.
+- `Progress`: Tracks the highest promised ballot number and fixed log index per node.
+- `BallotNumber`: Orders proposals by combining a counter with node identifier.
+- `QuorumStrategy`: Defines how voting quorums are calculated.
+
+To use the library, applications need to provide:
+
+1. A `Journal` implementation backed by the application's database
+2. A `Pickler` implementation to serialize commands
+3. A network layer for message transport
+4. A function to process chosen commands into results
+
+The library focuses on correctness and performance while remaining agnostic to application specifics. All consensus
+state and application state can be committed atomically through the journal interface.
+
+```mermaid
+graph LR
+    N[Network] --> TA[TrexApp]
+    TA --> TE[TrexEngine]
+    TE --> TN[TrexNode]
+    TN -- "sync callback" --> App[Application]
+    
+    style TA fill:#f9f,stroke:#333
+    style TE fill:#bbf,stroke:#333
+    style TN fill:#bfb,stroke:#333
+    
+    subgraph "Lock Protected"
+        TE
+        TN
+        App
+    end
+    
+    %% Add labels
+    classDef default fill:#fff,stroke:#333,stroke-width:2px
+    linkStyle default stroke-width:2px
+```
 
 ## Tentative Roadmap
 
@@ -420,10 +466,11 @@ The list of tasks:
 - [x] Write a test harness that injects rolling network partitions.
 - [x] Write property-based tests exhaustively to verify correctness.
 - [x] Write extensive documentation, including detailed JavaDoc.
-- [ ] Write a `Network` for a demo. As Kwik does not support connection fail-over, we will start with something QUIC-like over UDP.
+- [x] Write a `Network` for a demo. Kwik does not support connection fail-over. So will make something QUIC-like over
+  UDP.
 - [ ] Implement distributed advisor lock service as a full demo.
 - [ ] Implement cluster membership changes as UPaxos.
-- [ ] Add optionality so that randomized timeouts can be replaced by some other leader failure detection (e.g. JGroups).
+- [ ] Add in phi acculmulator for leader failure detection.
 
 ## Attribution
 
