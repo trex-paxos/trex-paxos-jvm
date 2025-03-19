@@ -127,8 +127,8 @@ class PaxeStackClusterTest {
   @AfterEach
   void tearDown() {
     LOGGER.fine("Test tear down starting");
-    if (stackService1.app() != null) stackService1.app().stop();
-    if (stackService2.app() != null) stackService2.app().stop();
+    if (stackService1 != null && stackService1.app() != null) stackService1.app().stop();
+    if (stackService2 != null && stackService2.app() != null) stackService2.app().stop();
     if (harness != null) harness.close();
     LOGGER.fine("Test tear down complete");
   }
