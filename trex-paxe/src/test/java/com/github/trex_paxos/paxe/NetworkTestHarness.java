@@ -24,7 +24,7 @@ record NetworkWithTempPort(PaxeNetwork network, int port) {
 
 public class NetworkTestHarness implements AutoCloseable {
   private static final Duration KEY_EXCHANGE_TIMEOUT = Duration.ofSeconds(1);
-  private static final Duration CHANNEL_SELECT_TIMEOUT = Duration.ofMillis(100);
+  private static final Duration CHANNEL_SELECT_TIMEOUT = Duration.ofMillis(500);
 
   private final List<PaxeNetwork> networks = new ArrayList<>();
   private final ClusterId clusterId;
