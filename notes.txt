@@ -1,43 +1,1446 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files, combined into a single document by Repomix.
 
-# tests
-mvn clean package
+<file_summary>
+This section contains a summary of this file.
 
-npx repomix@latest --include "README.md,trex-lib/src/main/**"
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
 
-npx repomix@latest --include "README.md,trex-lib/src/**"
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
 
-npx repomix@latest
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
 
-# run just one test
-mvn -DskipTests clean package && \
-    mvn test -Dtest=PickleHandshakeTest -pl trex-paxe
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: trex-paxe/src/test/java
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
 
-# just run subpackage tests
-mvn -DskipTests clean install && \
-    mvn test -pl trex-paxe
+<additional_info>
 
-# run just one test method
-mvn test -pl trex-paxe -Dtest=com.github.trex_paxos.paxe.PaxeNetworkTest#testStartup
+</additional_info>
 
-# run just one test fine logging
-clear ; mvn test -Dtest=com.github.trex_paxos.paxe.PaxeNetworkTest#testStartup -Djava.util.logging.ConsoleHandler.level=FINEST
+</file_summary>
 
-# run just one test class fine logging
-clear ; mvn test -pl trex-paxe -Dtest=com.github.trex_paxos.paxe.PaxeNetworkTest -Djava.util.logging.ConsoleHandler.level=FINEST
+<directory_structure>
+trex-paxe/
+  src/
+    test/
+      java/
+        com/
+          github/
+            trex_paxos/
+              paxe/
+                demo/
+                  ClusterStackAdmin.java
+                CryptoTest.java
+                NetworkTestHarness.java
+                PaxeNetworkTest.java
+                PaxePacketTest.java
+                PaxeStackClusterTest.java
+                PickleHandshakeTest.java
+                SRPUtilsTests.java
+</directory_structure>
 
-# jshell
+<files>
+This section contains the contents of the repository's files.
 
-jshell --enable-preview --class-path ./trex-locks/target/classes:./trex-locks/target/test-classes:./trex-lib/target/classes:./trex-lib/target/test-classes
+<file path="trex-paxe/src/test/java/com/github/trex_paxos/paxe/demo/ClusterStackAdmin.java">
+package com.github.trex_paxos.paxe.demo;
 
-```
-jshell> import com.github.trex_paxos.*
-jshell> var stack = new StackClusterImpl() // Give it a moment to elect a leader
-jshell> stack.push("hello") 
-jshell> stack.push("world")
-jshell> stack.peek()
-jshell> stack.peek()
-jshell> stack.pop()
-jshell> stack.pop()
-jshell> stack.pop()
-jshell> stack.shutdown()
-```
+import com.github.trex_paxos.paxe.Identity;
+import com.github.trex_paxos.paxe.SRPUtils;
+import org.h2.mvstore.MVMap;
+import org.h2.mvstore.MVStore;
+
+import java.util.List;
+
+public class ClusterStackAdmin implements AutoCloseable {
+  static final String SECRET_MAP = "secret";
+  static final String PASSWORD_FILE_MAP = "password_file";
+  static final String NETWORK_MAP = "network";
+
+  // RFC 5054 3072-bit parameters
+  @SuppressWarnings("SpellCheckingInspection")
+  static final String DEFAULT_N = """
+      FFFFFFFF FFFFFFFF C90FDAA2 2168C234 C4C6628B 80DC1CD1 29024E08\
+      8A67CC74 020BBEA6 3B139B22 514A0879 8E3404DD EF9519B3 CD3A431B\
+      302B0A6D F25F1437 4FE1356D 6D51C245 E485B576 625E7EC6 F44C42E9\
+      A637ED6B 0BFF5CB6 F406B7ED EE386BFB 5A899FA5 AE9F2411 7C4B1FE6\
+      49286651 ECE45B3D C2007CB8 A163BF05 98DA4836 1C55D39A 69163FA8\
+      FD24CF5F 83655D23 DCA3AD96 1C62F356 208552BB 9ED52907 7096966D\
+      670C354E 4ABC9804 F1746C08 CA18217C 32905E46 2E36CE3B E39E772C\
+      180E8603 9B2783A2 EC07A28F B5C55DF0 6F4C52C9 DE2BCBF6 95581718\
+      3995497C EA956AE5 15D22618 98FA0510 15728E5A 8AAAC42D AD33170D\
+      04507A33 A85521AB DF1CBA64 ECFB8504 58DBEF0A 8AEA7157 5D060C7D\
+      B3970F85 A6E1E4C7 ABF5AE8C DB0933D7 1E8C94E0 4A25619D CEE3D226\
+      1AD2EE6B F12FFA06 D98A0864 D8760273 3EC86A64 521F2B18 177B200C\
+      BBE11757 7A615D6C 770988C0 BAD946E2 08E24FA0 74E5AB31 43DB5BFC\
+      E0FD108E 4B82D120 A93AD2CA FFFFFFFF FFFFFFFF""".replaceAll("\\s+", "");
+
+  static final String DEFAULT_G = "5";
+  private static final String USAGE = """
+      Update cluster membership and RFC 5054 SRP verifiers.
+      Usage: ClusterStackAdmin -i <id@cluster> <command> [args...]
+      Options:
+        -i/--identity <id@cluster>  Cluster node to modify (required)
+                                    | Example: 1@us.west.test
+      Commands:
+        init [N] [g]          Initialize a new node
+                                    | N: RFC 5054 N parameter (default 3072-bit)
+                                    | g: RFC 5054 g parameter (default 5)
+        add <remote> <params>       Add verifier for another node
+                                    | remote: id@cluster (example 2@us.west.test)
+                                    | params: N,g,s,v
+        update <remote> <address>   Set network address for another node
+                                    | remote: id@cluster (example 2@us.west.test)
+                                    | address: host:port (example 192.0.2.0:8080)
+        print                       Print local node verifier details
+        verifiers                   List all configured verifiers
+        list                        List all configured network addresses
+      """;
+
+  private final MVStore store;
+  private final MVMap<String, String> secretMap;
+  private final MVMap<String, String> passwordFileMap;
+  private final MVMap<String, String> networkMap;
+  private final Identity identity;
+
+  private ClusterStackAdmin(Identity identity) {
+    this.identity = identity;
+    String dbPath = "%s_%s.db".formatted(identity.nodeId(), identity.cluster());
+    this.store = new MVStore.Builder().fileName(dbPath).open();
+    this.secretMap = store.openMap(SECRET_MAP);
+    this.passwordFileMap = store.openMap(PASSWORD_FILE_MAP);
+    this.networkMap = store.openMap(NETWORK_MAP);
+  }
+
+  void init(String N, String g) {
+    if (!secretMap.isEmpty()) {
+      var existingId = Identity.from(secretMap.keySet().iterator().next());
+      if (!identity.full().equals(existingId.full())) {
+        throw new IllegalStateException(
+            "Store already initialized with different identity: " + existingId.full());
+      }
+      System.out.println("Store already initialized for " + identity.full());
+      return;
+    }
+
+    var salt = SRPUtils.generateSalt();
+    var password = SRPUtils.generatedPrivateKey(DEFAULT_N);
+    var secret = "%s,%s".formatted(SRPUtils.toHex(salt), password);
+    secretMap.put(identity.full(), secret);
+
+    var v = SRPUtils.generateVerifier(
+        new SRPUtils.Constants(N, g),
+        identity.full(),
+        password,
+        salt
+    ).toString(16).toUpperCase();
+
+    // Store own verifier details
+    var selfVerifierDetails = String.format("%s,%s,%s,%s", N, g, SRPUtils.toHex(salt), v);
+    passwordFileMap.put(identity.full(), selfVerifierDetails);
+
+    store.commit();
+
+    System.out.printf("Node initialized. Add to other nodes with:%n" +
+            "add %s %s,%s,%s,%s%n",
+        identity.full(), N, g, SRPUtils.toHex(salt), v);
+  }
+
+
+  void addNodeVerifier(String targetId, String params) {
+    var target = Identity.from(targetId);
+    validateTarget(target);
+    passwordFileMap.put(target.full(), params);
+    store.commit();
+    System.out.println("Added verifier for " + target.full());
+  }
+
+
+  public boolean isSameCluster(Identity other, Identity self) {
+    return other.cluster().equals(self.cluster());
+  }
+
+  private void validateTarget(Identity target) {
+    if (target.full().equals(identity.full())) {
+      throw new IllegalArgumentException("Cannot operate on self");
+    }
+    if (!isSameCluster(target, identity)) {
+      throw new IllegalArgumentException(
+          "Target cluster " + target.cluster() +
+              " doesn't match store cluster " + identity.cluster());
+    }
+  }
+
+  void setNodeAddress(String targetId, String address) {
+    var target = Identity.from(targetId);
+    validateTarget(target);
+    if (!passwordFileMap.containsKey(target.full())) {
+      throw new IllegalStateException("No verifier found for " + target.full());
+    }
+
+    networkMap.put(target.full(), address);
+    store.commit();
+    System.out.println("Set address for " + target.full() + " to " + address);
+  }
+
+  void listVerifiers() {
+    if (passwordFileMap.isEmpty()) {
+      System.out.println("No verifiers configured");
+      return;
+    }
+    System.out.println("Configured verifiers:");
+    passwordFileMap.forEach((id, params) ->
+        System.out.printf("%s -> %s%n", id, params));
+  }
+
+  void listAddresses() {
+    if (networkMap.isEmpty()) {
+      System.out.println("No addresses configured");
+      return;
+    }
+    System.out.println("Network addresses:");
+    networkMap.forEach((id, address) ->
+        System.out.printf("%s -> %s%n", id, address));
+  }
+
+  @Override
+  public void close() {
+    store.close();
+  }
+
+  public static void main(String[] args) {
+    if (args.length < 3 || (!args[0].equals("-i") && !args[0].equals("--identity"))) {
+      System.err.println(USAGE);
+      System.exit(1);
+    }
+
+    try {
+      var identity = Identity.from(args[1]);
+      var command = args[2];
+      var cmdArgs = List.of(args).subList(3, args.length);
+
+      try (var admin = new ClusterStackAdmin(identity)) {
+        switch (command) {
+          case "init" -> {
+            var N = cmdArgs.isEmpty() ? DEFAULT_N : cmdArgs.get(0);
+            var g = cmdArgs.size() > 1 ? cmdArgs.get(1) : DEFAULT_G;
+            admin.init(N, g);
+          }
+          case "add" -> {
+            if (cmdArgs.size() != 2) {
+              throw new IllegalArgumentException(
+                  "add requires target and N,g,s,v");
+            }
+            admin.addNodeVerifier(cmdArgs.get(0), cmdArgs.get(1));
+          }
+          case "update" -> {
+            if (cmdArgs.size() != 2) {
+              throw new IllegalArgumentException(
+                  "update requires target and host:port");
+            }
+            admin.setNodeAddress(cmdArgs.get(0), cmdArgs.get(1));
+          }
+          case "print" -> {
+            var verifier = admin.passwordFileMap.get(admin.identity.full());
+            if (verifier == null) {
+              throw new IllegalStateException("No verifier found for self. Has node been initialized?");
+            }
+            System.out.printf("add %s %s%n", admin.identity.full(), verifier);
+          }
+          case "verifiers" -> admin.listVerifiers();
+          case "list" -> admin.listAddresses();
+          default -> throw new IllegalArgumentException("Unknown command: " + command);
+        }
+      }
+    } catch (Exception e) {
+      System.err.println("Error: " + e.getMessage());
+      System.exit(1);
+    }
+  }
+}
+</file>
+
+<file path="trex-paxe/src/test/java/com/github/trex_paxos/paxe/CryptoTest.java">
+package com.github.trex_paxos.paxe;
+
+import org.junit.jupiter.api.*;
+import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Level;
+
+import static com.github.trex_paxos.paxe.Crypto.dumpBuffer;
+import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
+import static com.github.trex_paxos.paxe.PaxeProtocol.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+class CryptoTest {
+  static final int REUSED_BUFFER_COUNT = 4;
+  private final ByteBuffer[] recycledBuffers = new ByteBuffer[REUSED_BUFFER_COUNT];
+  private final byte[] sessionKey = new byte[32];
+  private final SecureRandom random = new SecureRandom();
+
+  @BeforeAll
+  static void setupLogging() {
+    final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
+    final Level level = Level.parse(logLevel);
+    ConsoleHandler handler = new ConsoleHandler();
+    handler.setLevel(level);
+    LOGGER.addHandler(handler);
+    LOGGER.setLevel(level);
+    LOGGER.setUseParentHandlers(false);
+  }
+
+  @BeforeEach
+  void setup() {
+    LOGGER.finest(() -> "Setting up test");
+
+    // Initialize test key
+    for (int i = 0; i < sessionKey.length; i++) {
+      sessionKey[i] = (byte)i;
+    }
+
+    // Initialize buffers with random content
+    for (int i = 0; i < REUSED_BUFFER_COUNT; i++) {
+      recycledBuffers[i] = ByteBuffer.allocateDirect(MAX_UDP_SIZE);
+      byte[] junk = new byte[MAX_UDP_SIZE];
+      random.nextBytes(junk);
+      recycledBuffers[i].put(junk);
+      int finalI = i;
+      LOGGER.finest(() -> String.format("Initialized buffer[%d] position=%d limit=%d",
+          finalI, recycledBuffers[finalI].position(), recycledBuffers[finalI].limit()));
+    }
+  }
+
+  @Test
+  void testStandardEncryption() {
+    byte[] payload = new byte[32];
+    random.nextBytes(payload);
+
+    ByteBuffer encrypt = getBuffer();
+    ByteBuffer buffer = ByteBuffer.allocateDirect(payload.length);
+    buffer.put(payload).flip();
+
+    LOGGER.finest(() -> String.format("Original buffer: %s",
+        dumpBuffer(encrypt, 0, 16)));
+
+    Crypto.encryptStandard(encrypt, buffer, sessionKey);
+    encrypt.flip();  // Prepare for reading
+
+    LOGGER.finest(() -> String.format("Flipped encrypted buffer: pos=%d limit=%d remaining=%d",
+        encrypt.position(), encrypt.limit(), encrypt.remaining()));
+    LOGGER.finest(() -> String.format("Buffer content: %s",
+        dumpBuffer(encrypt, 0, Math.min(16, encrypt.remaining()))));
+
+    byte[] decrypted = Crypto.decrypt(encrypt, sessionKey);
+    assertArrayEquals(payload, decrypted, "Decrypted payload should match original");
+  }
+
+  @Test
+  void testDekEncryption() throws GeneralSecurityException {
+    byte[] payload = new byte[1024];
+    random.nextBytes(payload);
+
+    final var dekPayload = Crypto.dekInner(payload);
+    ByteBuffer encrypt = getBuffer();
+
+    Crypto.encryptDek(encrypt, dekPayload, sessionKey);
+    encrypt.flip();
+
+    byte[] decrypted = Crypto.decryptDek(encrypt, sessionKey);
+    assertArrayEquals(payload, decrypted, "DEK decrypted payload should match");
+  }
+
+  @Test
+  void testDecryptionFailsWithWrongKey() {
+    LOGGER.finest(() -> "Starting testDecryptionFailsWithWrongKey");
+    byte[] payload = new byte[32];
+    random.nextBytes(payload);
+    byte[] wrongKey = new byte[32];
+    random.nextBytes(wrongKey);
+
+    ByteBuffer encrypt = getBuffer();
+    ByteBuffer buffer = ByteBuffer.allocateDirect(payload.length);
+    buffer.put(payload).flip();
+    Crypto.encryptStandard(encrypt, buffer, sessionKey);
+    encrypt.flip();
+    LOGGER.finest(() -> String.format("testDecryptionFailsWithWrongKey: after encrypt position=%d remaining=%d",
+        encrypt.position(), encrypt.remaining()));
+
+    assertThrows(SecurityException.class, () ->
+            Crypto.decrypt(encrypt, wrongKey),
+        "Decryption with wrong key should fail with SecurityException");
+  }
+
+  @Test
+  void testDecryptionFailsWithCorruptedData() {
+    LOGGER.finest(() -> "Starting testDecryptionFailsWithCorruptedData");
+    byte[] payload = new byte[32];
+    random.nextBytes(payload);
+
+    ByteBuffer encrypt = getBuffer();
+    ByteBuffer buffer = ByteBuffer.allocateDirect(payload.length);
+    buffer.put(payload).flip();
+    Crypto.encryptStandard(encrypt, buffer, sessionKey);
+
+    // Get encrypted data as bytes
+    encrypt.flip();
+    byte[] corruptMe = new byte[encrypt.remaining()];
+    encrypt.get(corruptMe);
+    LOGGER.finest(() -> String.format("testDecryptionFailsWithCorruptedData: corruptMe.length=%d", corruptMe.length));
+
+    // Corrupt a byte in the encrypted data (not the header)
+    corruptMe[GCM_NONCE_LENGTH + 2] ^= 1;
+
+    // Put corrupted data back
+    ByteBuffer corrupted = getBuffer();
+    corrupted.put(corruptMe).flip();
+    LOGGER.finest(() -> String.format("testDecryptionFailsWithCorruptedData: corrupted buffer position=%d remaining=%d",
+        corrupted.position(), corrupted.remaining()));
+
+    assertThrows(SecurityException.class, () ->
+            Crypto.decrypt(corrupted, sessionKey),
+        "Decryption of corrupted data should fail with SecurityException");
+  }
+
+  @Test
+  void testDecryptionFailsWithTruncatedMessage() {
+    LOGGER.finest(() -> "Starting testDecryptionFailsWithTruncatedMessage");
+    byte[] payload = new byte[32];
+    random.nextBytes(payload);
+
+    ByteBuffer encrypt = getBuffer();
+    ByteBuffer buffer1 = ByteBuffer.allocateDirect(payload.length);
+    buffer1.put(payload).flip();
+    Crypto.encryptStandard(encrypt, buffer1, sessionKey);
+    encrypt.flip();
+    LOGGER.finest(() -> String.format("testDecryptionFailsWithTruncatedMessage: encrypted length=%d",
+        encrypt.remaining()));
+
+    // Create truncated buffer
+    byte[] data = new byte[encrypt.remaining() - GCM_NONCE_LENGTH]; // Remove nonce
+    encrypt.get(data);
+    LOGGER.finest(() -> String.format("testDecryptionFailsWithTruncatedMessage: truncated data length=%d",
+        data.length));
+
+    ByteBuffer buffer = ByteBuffer.allocateDirect(data.length);
+    buffer.put(data).flip();
+    assertThrows(SecurityException.class, () ->
+            Crypto.decrypt(buffer, sessionKey),
+        "Decryption of truncated message should fail with SecurityException");
+  }
+
+  private ByteBuffer getBuffer() {
+    ByteBuffer buffer = recycledBuffers[random.nextInt(REUSED_BUFFER_COUNT)];
+    buffer.clear();
+    LOGGER.finest(() -> String.format("getBuffer: position=%d limit=%d capacity=%d",
+        buffer.position(), buffer.limit(), buffer.capacity()));
+    return buffer;
+  }
+}
+</file>
+
+<file path="trex-paxe/src/test/java/com/github/trex_paxos/paxe/PickleHandshakeTest.java">
+package com.github.trex_paxos.paxe;
+
+import com.github.trex_paxos.network.NodeId;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class PickleHandshakeTest {
+  static {
+    System.setProperty(SRPUtils.class.getName() + ".useHash", "SHA-1");
+  }
+
+  @Test
+  void shouldPickleAndUnpickleRequest() {
+    NodeId from = new NodeId((short) 1);
+    byte[] publicKey = new byte[]{1, 2, 3, 4};
+    var request = new SessionKeyManager.KeyMessage.KeyHandshakeRequest(from, publicKey);
+
+    byte[] pickled = PickleHandshake.pickle(request);
+    SessionKeyManager.KeyMessage unpickled = PickleHandshake.unpickle(pickled);
+
+    assertInstanceOf(SessionKeyManager.KeyMessage.KeyHandshakeRequest.class, unpickled);
+    var unpackedRequest = (SessionKeyManager.KeyMessage.KeyHandshakeRequest) unpickled;
+    assertEquals(from, unpackedRequest.from());
+    assertArrayEquals(publicKey, unpackedRequest.publicKey());
+  }
+
+  @Test
+  void shouldPickleAndUnpickleResponse() {
+    NodeId from = new NodeId((short) 2);
+    byte[] publicKey = new byte[]{5, 6, 7, 8};
+    var response = new SessionKeyManager.KeyMessage.KeyHandshakeResponse(from, publicKey);
+
+    byte[] pickled = PickleHandshake.pickle(response);
+    SessionKeyManager.KeyMessage unpickled = PickleHandshake.unpickle(pickled);
+
+    assertInstanceOf(SessionKeyManager.KeyMessage.KeyHandshakeResponse.class, unpickled);
+    var unpackedResponse = (SessionKeyManager.KeyMessage.KeyHandshakeResponse) unpickled;
+    assertEquals(from, unpackedResponse.from());
+    assertArrayEquals(publicKey, unpackedResponse.publicKey());
+  }
+
+  @Test
+  void shouldFailOnInvalidType() {
+    byte[] invalid = new byte[]{99, 0, 1, 0, 0, 0, 1, 0}; // Invalid type 99
+    assertThrows(IllegalArgumentException.class, () -> PickleHandshake.unpickle(invalid));
+  }
+}
+</file>
+
+<file path="trex-paxe/src/test/java/com/github/trex_paxos/paxe/NetworkTestHarness.java">
+package com.github.trex_paxos.paxe;
+
+import com.github.trex_paxos.network.ClusterMembership;
+import com.github.trex_paxos.network.NetworkAddress;
+import com.github.trex_paxos.network.NodeId;
+
+import java.net.InetSocketAddress;
+import java.nio.channels.DatagramChannel;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
+
+import static com.github.trex_paxos.network.SystemChannel.KEY_EXCHANGE;
+import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
+
+record NetworkWithTempPort(PaxeNetwork network, int port) {
+}
+
+public class NetworkTestHarness implements AutoCloseable {
+  private static final Duration KEY_EXCHANGE_TIMEOUT = Duration.ofSeconds(1);
+  private static final Duration CHANNEL_SELECT_TIMEOUT = Duration.ofMillis(500);
+
+  private final List<PaxeNetwork> networks = new ArrayList<>();
+  private final ClusterId clusterId;
+  private final SRPUtils.Constants srpConstants;
+  private final Map<NodeId, NetworkAddress> addressMap = new HashMap<>();
+  private final Map<NodeId, NodeVerifier> verifierMap = new HashMap<>();
+  private volatile boolean closed;
+
+  public NetworkTestHarness() {
+    //noinspection SpellCheckingInspection
+    this(new ClusterId("test.cluster"), new SRPUtils.Constants(
+        "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" +
+            "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" +
+            "8E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29" +
+            "7BCF1885C529F566660E57EC68EDBC3C05726CC02FD4CBF4976EAA9A" +
+            "FD5138FE8376435B9FC61D2FC0EB06E3",
+        "2"
+    ));
+  }
+
+  public NetworkTestHarness(ClusterId clusterId, SRPUtils.Constants srpConstants) {
+    this.clusterId = clusterId;
+    this.srpConstants = srpConstants;
+  }
+
+  NetworkWithTempPort createNetwork(short nodeId) throws Exception {
+    if (closed) {
+      LOGGER.warning("Attempt to create network after harness closed");
+      throw new IllegalStateException("Harness is closed");
+    }
+
+    LOGGER.fine(() -> String.format("Creating network node %d", nodeId));
+    DatagramChannel tempChannel = DatagramChannel.open();
+    tempChannel.socket().bind(new InetSocketAddress(0));
+    int port = tempChannel.socket().getLocalPort();
+    tempChannel.close();
+    LOGGER.fine(() -> String.format("Allocated port %d for node %d", port, nodeId));
+
+    NodeId id = new NodeId(nodeId);
+    NetworkAddress address = new NetworkAddress("127.0.0.1", port);
+    addressMap.put(id, address);
+
+    NodeClientSecret nodeSecret = new NodeClientSecret(
+        clusterId,
+        id,
+        "password" + nodeId,
+        SRPUtils.generateSalt()
+    );
+    LOGGER.finest(() -> String.format("Created node secret for %d: %s", nodeId, nodeSecret.srpIdentity()));
+
+    NodeVerifier verifier = createVerifier(nodeSecret);
+    verifierMap.put(id, verifier);
+    LOGGER.finest(() -> String.format("Generated verifier for %d", nodeId));
+
+    Supplier<Map<NodeId, NodeVerifier>> verifierLookup = () -> verifierMap;
+    Supplier<ClusterMembership> membershipSupplier = () ->
+        new ClusterMembership(new HashMap<>(addressMap));
+
+    SessionKeyManager keyManager = new SessionKeyManager(
+        id,
+        srpConstants,
+        nodeSecret,
+        verifierLookup
+    );
+
+    PaxeNetwork network = new PaxeNetwork.Builder(keyManager, port, id, membershipSupplier).build();
+    networks.add(network);
+    LOGGER.fine(() -> String.format("Network node %d created successfully", nodeId));
+    return new NetworkWithTempPort(network, port);
+  }
+
+  public void waitForNetworkEstablishment() throws Exception {
+    LOGGER.fine("Starting network establishment wait");
+    List<CompletableFuture<Void>> startupFutures = new ArrayList<>();
+
+    for (PaxeNetwork network : networks) {
+      CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+        try {
+          LOGGER.fine(() -> String.format("Starting network node %d", network.localNode.id()));
+          network.start();
+          waitForKeyExchange(network);
+        } catch (Exception e) {
+          LOGGER.warning(() -> String.format("Network node %d startup failed: %s",
+              network.localNode.id(), e.getMessage()));
+          throw new RuntimeException(e);
+        }
+      });
+      startupFutures.add(future);
+    }
+
+    try {
+      CompletableFuture.allOf(startupFutures.toArray(new CompletableFuture[0]))
+          .get(KEY_EXCHANGE_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+      LOGGER.fine("Network establishment completed successfully");
+    } catch (Exception e) {
+      LOGGER.warning("Network establishment failed, closing networks: " + e);
+      networks.forEach(PaxeNetwork::close);
+      throw e;
+    }
+  }
+
+  private NodeVerifier createVerifier(NodeClientSecret secret) {
+    final var v = SRPUtils.generateVerifier(
+        srpConstants,
+        secret.srpIdentity(),
+        secret.password(),
+        secret.salt()
+    );
+    return new NodeVerifier(secret.srpIdentity(), v.toString(16));
+  }
+
+  private void waitForKeyExchange(PaxeNetwork network) {
+    LOGGER.fine(() -> String.format("Waiting for key exchange on node %d", network.localNode.id()));
+    long deadline = System.currentTimeMillis() + KEY_EXCHANGE_TIMEOUT.toMillis();
+    // Trigger key exchange with all other nodes
+    networks.stream()
+        .filter(n -> !n.equals(network))
+        .forEach(peer -> {
+          LOGGER.finest(() -> String.format("Node %d initiating key exchange with %d",
+              network.localNode.id(), peer.localNode.id()));
+          var msg = network.keyManager.initiateHandshake(peer.localNode);
+          msg.ifPresent(keyMessage -> network.send(KEY_EXCHANGE.value(), peer.localNode, keyMessage));
+        });
+    AtomicInteger attempts = new AtomicInteger();
+    while (System.currentTimeMillis() < deadline) {
+      LOGGER.finest(() -> String.format("Key exchange check attempt %d for node %d",
+          attempts.getAndIncrement(), network.localNode.id()));
+
+      boolean exchangeComplete = networks.stream()
+          .filter(n -> !n.equals(network))
+          .allMatch(other -> {
+            boolean hasKey = network.keyManager.sessionKeys.containsKey(other.localNode);
+            LOGGER.finest(() -> String.format("Node %d has%s key for %d",
+                network.localNode.id(), hasKey ? "" : " no", other.localNode.id()));
+            return hasKey;
+          });
+
+      if (exchangeComplete) {
+        LOGGER.fine(() -> String.format("Key exchange completed for node %d after %d attempts",
+            network.localNode.id(), attempts.getAndIncrement()));
+        return;
+      }
+
+      try {
+        //noinspection BusyWait
+        Thread.sleep(CHANNEL_SELECT_TIMEOUT.toMillis());
+      } catch (InterruptedException e) {
+        LOGGER.warning(() -> String.format("Key exchange wait interrupted for node %d",
+            network.localNode.id()));
+        Thread.currentThread().interrupt();
+        throw new RuntimeException(e);
+      }
+    }
+
+    LOGGER.warning(() -> String.format("Key exchange timed out for node %d after %d attempts",
+        network.localNode.id(), attempts.get()));
+    throw new IllegalStateException("Key exchange timed out for node: " + network.localNode);
+  }
+
+  @Override
+  public void close() {
+    LOGGER.fine("Closing test harness");
+    closed = true;
+    networks.forEach(PaxeNetwork::close);
+    networks.clear();
+    addressMap.clear();
+    verifierMap.clear();
+    LOGGER.fine("Test harness closed");
+  }
+}
+</file>
+
+<file path="trex-paxe/src/test/java/com/github/trex_paxos/paxe/PaxePacketTest.java">
+package com.github.trex_paxos.paxe;
+
+import org.junit.jupiter.api.Test;
+
+import com.github.trex_paxos.network.Channel;
+import com.github.trex_paxos.network.NodeId;
+
+import javax.crypto.SecretKey;
+import javax.crypto.KeyGenerator;
+import java.security.GeneralSecurityException;
+import java.util.Arrays;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class PaxePacketTest {
+    static {
+        System.setProperty(SRPUtils.class.getName() + ".useHash", "SHA-1");
+    }
+
+    private static final int AES_KEY_SIZE = 256;
+
+    @Test
+    void testConstructorAndGetters() {
+        NodeId from = new NodeId((short) 1);
+        NodeId to = new NodeId((short) 2);
+        Channel channel = new Channel((short) 3);
+        byte[] nonce = new byte[PaxePacket.NONCE_SIZE];
+        byte[] authTag = new byte[PaxePacket.AUTH_TAG_SIZE];
+        byte[] payload = "Test payload".getBytes();
+
+        PaxePacket packet = new PaxePacket(from, to, channel, Optional.of(nonce), Optional.of(authTag), payload);
+
+        assertEquals(from, packet.from());
+        assertEquals(to, packet.to());
+        assertEquals(channel, packet.channel());
+        assertArrayEquals(nonce, packet.nonce().orElseThrow());
+        assertArrayEquals(authTag, packet.authTag().orElseThrow());
+        assertArrayEquals(payload, packet.payload());
+    }
+
+    @Test
+    void testConstructorWithInvalidNonceSize() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new PaxePacket(new NodeId((short) 1), new NodeId((short) 2), new Channel((short) 3),
+                        Optional.of(new byte[PaxePacket.NONCE_SIZE - 1]), 
+                        Optional.of(new byte[PaxePacket.AUTH_TAG_SIZE]),
+                        new byte[0]));
+    }
+
+    @Test
+    void testConstructorWithInvalidAuthTagSize() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new PaxePacket(new NodeId((short) 1), new NodeId((short) 2), new Channel((short) 3),
+                        Optional.of(new byte[PaxePacket.NONCE_SIZE]), 
+                        Optional.of(new byte[PaxePacket.AUTH_TAG_SIZE - 1]),
+                        new byte[0]));
+    }
+
+    @Test
+    void testToBytes() {
+        NodeId from = new NodeId((short) 1);
+        NodeId to = new NodeId((short) 2);
+        Channel channel = new Channel((short) 3);
+        byte[] nonce = new byte[PaxePacket.NONCE_SIZE];
+        byte[] authTag = new byte[PaxePacket.AUTH_TAG_SIZE];
+        byte[] payload = "Test payload".getBytes();
+
+        PaxePacket packet = new PaxePacket(from, to, channel, Optional.of(nonce), Optional.of(authTag), payload);
+        byte[] bytes = packet.toBytes();
+
+        assertEquals(PaxePacket.HEADER_SIZE + PaxePacket.NONCE_SIZE + PaxePacket.AUTH_TAG_SIZE + payload.length,
+                bytes.length);
+        assertEquals(from.id(), (short) ((bytes[0] << 8) | (bytes[1] & 0xFF)));
+        assertEquals(to.id(), (short) ((bytes[2] << 8) | (bytes[3] & 0xFF)));
+        assertEquals(channel.id(), (short) ((bytes[4] << 8) | (bytes[5] & 0xFF)));
+        assertEquals(payload.length, ((bytes[6] & 0xFF) << 8) | (bytes[7] & 0xFF));
+        assertArrayEquals(nonce, Arrays.copyOfRange(bytes, 8, 8 + PaxePacket.NONCE_SIZE));
+        assertArrayEquals(authTag, Arrays.copyOfRange(bytes, 8 + PaxePacket.NONCE_SIZE,
+                8 + PaxePacket.NONCE_SIZE + PaxePacket.AUTH_TAG_SIZE));
+        assertArrayEquals(payload,
+                Arrays.copyOfRange(bytes, 8 + PaxePacket.NONCE_SIZE + PaxePacket.AUTH_TAG_SIZE, bytes.length));
+    }
+
+    @Test
+    void testFromBytes() {
+        NodeId from = new NodeId((short) 1);
+        NodeId to = new NodeId((short) 2);
+        Channel channel = new Channel((short) 3);
+        byte[] nonce = new byte[PaxePacket.NONCE_SIZE];
+        byte[] authTag = new byte[PaxePacket.AUTH_TAG_SIZE];
+        byte[] payload = "Test payload".getBytes();
+
+        PaxePacket originalPacket = new PaxePacket(from, to, channel, Optional.of(nonce), Optional.of(authTag), payload);
+        byte[] bytes = originalPacket.toBytes();
+
+        PaxePacket reconstructedPacket = PaxePacket.fromBytes(bytes);
+
+        assertEquals(originalPacket, reconstructedPacket);
+    }
+
+    @Test
+    void testAuthenticatedData() {
+        NodeId from = new NodeId((short) 1);
+        NodeId to = new NodeId((short) 2);
+        Channel channel = new Channel((short) 3);
+        PaxePacket packet = new PaxePacket(from, to, channel, Optional.empty(), Optional.empty(), new byte[0]);
+
+        byte[] authenticatedData = packet.authenticatedData();
+
+        assertEquals(PaxePacket.AUTHENTICATED_DATA_SIZE, authenticatedData.length);
+        assertEquals((byte) (from.id() >> 8), authenticatedData[0]);
+        assertEquals((byte) from.id(), authenticatedData[1]);
+        assertEquals((byte) (to.id() >> 8), authenticatedData[2]);
+        assertEquals((byte) to.id(), authenticatedData[3]);
+        assertEquals((byte) (channel.id() >> 8), authenticatedData[4]);
+        assertEquals((byte) channel.id(), authenticatedData[5]);
+    }
+
+    @Test
+    void testEncryptDecrypt() throws GeneralSecurityException {
+        KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+        keyGen.init(AES_KEY_SIZE);
+        SecretKey key = keyGen.generateKey();
+
+        NodeId from = new NodeId((short) 1);
+        PaxeMessage originalMessage = new PaxeMessage(
+                from,
+                new NodeId((short) 2),
+                new Channel((short) 1),
+                "Hello, World!".getBytes());
+
+        PaxePacket encryptedPacket = PaxePacket.encrypt(originalMessage, from, key.getEncoded());
+        PaxeMessage decryptedMessage = PaxePacket.decrypt(encryptedPacket, key.getEncoded());
+
+        assertEquals(originalMessage, decryptedMessage);
+    }
+}
+</file>
+
+<file path="trex-paxe/src/test/java/com/github/trex_paxos/paxe/SRPUtilsTests.java">
+package com.github.trex_paxos.paxe;
+
+import org.junit.jupiter.api.Test;
+
+import java.math.BigInteger;
+import java.util.stream.IntStream;
+
+import static com.github.trex_paxos.paxe.SRPUtils.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+/// Using the Secure Remote Password (SRP) Protocol for TLS Authentication
+/// This directly follows RFC 5054 at [rfc5054.txt](https://www.ietf.org/rfc/rfc5054.txt)
+/// This test case verifies SRPUtils.java using the test vectors in the RFC.
+@SuppressWarnings("SpellCheckingInspection")
+class SRPUtilsTests {
+
+  static {
+    System.setProperty(SRPUtils.class.getName() + ".useHash", "SHA-1");
+  }
+
+  @Test
+  public void testSecretKeyGeneration() {
+    String NHex = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" +
+        "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" +
+        "8E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29" +
+        "7BCF1885C529F566660E57EC68EDBC3C05726CC02FD4CBF4976EAA9A" +
+        "FD5138FE8376435B9FC61D2FC0EB06E3";
+    final var N = integer(NHex);
+    IntStream.range(0, 1000).forEach(_ -> {
+      final var r = SRPUtils.generatedPrivateKey(NHex);
+      assertNotNull(r);
+      final var secret = integer(r);
+      assertTrue(secret.compareTo(N) < 1);
+      assertTrue(secret.compareTo(BigInteger.ZERO) > 0);
+    });
+  }
+
+  @Test
+  void testAppendixB_N() {
+    String hexN = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" + //
+        "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" + //
+        "8E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29" + //
+        "7BCF1885C529F566660E57EC68EDBC3C05726CC02FD4CBF4976EAA9A" + //
+        "FD5138FE8376435B9FC61D2FC0EB06E3";
+
+    byte[] nBytes = fromHex(hexN);
+    String hexPrimaActual = toHex(nBytes);
+
+    assertEquals(hexN, hexPrimaActual, "N id does not match RFC 5054 Appendix B");
+  }
+
+  @Test
+  void testAppendixB_verifier() {
+
+    String hexN = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" + //
+        "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" + //
+        "8E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29" + //
+        "7BCF1885C529F566660E57EC68EDBC3C05726CC02FD4CBF4976EAA9A" + //
+        "FD5138FE8376435B9FC61D2FC0EB06E3";
+
+    String hexG = "2";
+
+    // Setup expected test vector values from RFC 5054 Appendix B
+    String I = "alice";
+    String P = "password123";
+    byte[] s = fromHex("BEB25379D1A8581EB5A727673A2441EE");
+
+    BigInteger expectedV = new BigInteger(
+        "7E273DE8696FFC4F4E337D05B4B375BEB0DDE1569E8FA00A9886D812" +
+            "9BADA1F1822223CA1A605B530E379BA4729FDC59F105B4787E5186F5" +
+            "C671085A1447B52A48CF1970B4FB6F8400BBF4CEBFBB168152E08AB5" +
+            "EA53D15C1AFF87B2B9DA6E04E058AD51CC72BFC9033B564E26480D78" +
+            "E955A5E29E7AB245DB2BE315E2099AFB",
+        16);
+
+    final var c = new SRPUtils.Constants(hexN, hexG);
+
+    // Test verifier generation
+    BigInteger actualV = SRPUtils.generateVerifier(c, I, P, s);
+    assertEquals(expectedV, actualV, "'v' id does not match RFC 5054 Appendix B");
+  }
+
+  @Test
+  void testAppendixB_k() {
+
+    String hexN = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" + //
+        "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" + //
+        "8E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29" + //
+        "7BCF1885C529F566660E57EC68EDBC3C05726CC02FD4CBF4976EAA9A" + //
+        "FD5138FE8376435B9FC61D2FC0EB06E3";
+
+    String hexG = "2";
+
+    String expectedK = "7556AA045AEF2CDD07ABAF0F665C3E818913186F";
+
+    String hex = SRPUtils.k(hexN, hexG);
+
+    assertEquals(expectedK, hex, "'k' id does not match RFC 5054 Appendix B");
+  }
+
+  @Test
+  void testAppendixB_B() {
+
+    String hexN = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" + //
+        "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" + //
+        "8E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29" + //
+        "7BCF1885C529F566660E57EC68EDBC3C05726CC02FD4CBF4976EAA9A" + //
+        "FD5138FE8376435B9FC61D2FC0EB06E3";
+
+    String hexG = "2";
+
+    String serverPrivateKey = "E487CB59D31AC550471E81F00F6928E01DDA08E974A004F49E61F5D105284D20";
+
+    String serverPublicKey = "BD0C61512C692C0CB6D041FA01BB152D4916A1E77AF46AE105393011" + //
+        "BAF38964DC46A0670DD125B95A981652236F99D9B681CBF87837EC99" + //
+        "6C6DA04453728610D0C6DDB58B318885D7D82C7F8DEB75CE7BD4FBAA" + //
+        "37089E6F9C6059F388838E7A00030B331EB76840910440B1B27AAEAE" + //
+        "EB4012B7D7665238A8E3FB004B117B58";
+
+    BigInteger expectedV = new BigInteger(
+        "7E273DE8696FFC4F4E337D05B4B375BEB0DDE1569E8FA00A9886D812" +
+            "9BADA1F1822223CA1A605B530E379BA4729FDC59F105B4787E5186F5" +
+            "C671085A1447B52A48CF1970B4FB6F8400BBF4CEBFBB168152E08AB5" +
+            "EA53D15C1AFF87B2B9DA6E04E058AD51CC72BFC9033B564E26480D78" +
+            "E955A5E29E7AB245DB2BE315E2099AFB",
+        16);
+
+    // BigInteger b, BigInteger v, BigInteger k, BigInteger g, BigInteger N
+    final var B = SRPUtils.B(
+        integer(serverPrivateKey),
+        expectedV,
+        integer(SRPUtils.k(hexN, hexG)),
+        integer(hexG),
+        integer(hexN));
+
+    assertEquals(integer(serverPublicKey), B, "'B' id does not match RFC 5054 Appendix B");
+
+  }
+
+  @Test
+  void testAppendixB_A() {
+    String hexN = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" + //
+        "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" + //
+        "8E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29" + //
+        "7BCF1885C529F566660E57EC68EDBC3C05726CC02FD4CBF4976EAA9A" + //
+        "FD5138FE8376435B9FC61D2FC0EB06E3";
+
+    String hexG = "2";
+
+    final var clientPrivateKey = "60975527035CF2AD1989806F0407210BC81EDC04E2762A56AFD529DDDA2D4393";
+
+    final var clientPublicKey = "61D5E490F6F1B79547B0704C436F523DD0E560F0C64115BB72557EC4" +
+        "4352E8903211C04692272D8B2D1A5358A2CF1B6E0BFCF99F921530EC" +
+        "8E39356179EAE45E42BA92AEACED825171E1E8B9AF6D9C03E1327F44" +
+        "BE087EF06530E69F66615261EEF54073CA11CF5858F0EDFDFE15EFEA" +
+        "B349EF5D76988A3672FAC47B0769447B";
+
+    final var A = SRPUtils.A(integer(clientPrivateKey), integer(hexG), integer(hexN));
+    assertEquals(integer(clientPublicKey), A, "'A' id does not match RFC 5054 Appendix B");
+  }
+
+  @Test
+  void testAppendixB_u() {
+    String hexN = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" + //
+        "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" + //
+        "8E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29" + //
+        "7BCF1885C529F566660E57EC68EDBC3C05726CC02FD4CBF4976EAA9A" + //
+        "FD5138FE8376435B9FC61D2FC0EB06E3";
+
+    final var A = "61D5E490F6F1B79547B0704C436F523DD0E560F0C64115BB72557EC4" +
+        "4352E8903211C04692272D8B2D1A5358A2CF1B6E0BFCF99F921530EC" +
+        "8E39356179EAE45E42BA92AEACED825171E1E8B9AF6D9C03E1327F44" +
+        "BE087EF06530E69F66615261EEF54073CA11CF5858F0EDFDFE15EFEA" +
+        "B349EF5D76988A3672FAC47B0769447B";
+    final var B = "BD0C61512C692C0CB6D041FA01BB152D4916A1E77AF46AE105393011" + //
+        "BAF38964DC46A0670DD125B95A981652236F99D9B681CBF87837EC99" + //
+        "6C6DA04453728610D0C6DDB58B318885D7D82C7F8DEB75CE7BD4FBAA" + //
+        "37089E6F9C6059F388838E7A00030B331EB76840910440B1B27AAEAE" + //
+        "EB4012B7D7665238A8E3FB004B117B58";
+    final var expectedU = "CE38B9593487DA98554ED47D70A7AE5F462EF019";
+    final var actualU = SRPUtils.u(hexN, A, B);
+    assertEquals(expectedU, actualU, "'u' id does not match RFC 5054 Appendix B");
+  }
+
+  @Test
+  void testAppendixB_ClientSecret() {
+
+    // Setup expected test vector values from RFC 5054 Appendix B
+    String I = "alice";
+    String P = "password123";
+    String sHex = "BEB25379D1A8581EB5A727673A2441EE";
+
+    String NHex = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" +
+        "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" +
+        "8E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29" +
+        "7BCF1885C529F566660E57EC68EDBC3C05726CC02FD4CBF4976EAA9A" +
+        "FD5138FE8376435B9FC61D2FC0EB06E3";
+
+    String gHex = "2";
+
+    Constants c = new Constants(NHex, gHex);
+
+    final var aHex = """
+        60975527 035CF2AD 1989806F 0407210B C81EDC04 E2762A56 AFD529DD
+        DA2D4393
+        """.replaceAll("\\s+", "");
+
+    final var AHex = "61D5E490F6F1B79547B0704C436F523DD0E560F0C64115BB72557EC4" +
+        "4352E8903211C04692272D8B2D1A5358A2CF1B6E0BFCF99F921530EC" +
+        "8E39356179EAE45E42BA92AEACED825171E1E8B9AF6D9C03E1327F44" +
+        "BE087EF06530E69F66615261EEF54073CA11CF5858F0EDFDFE15EFEA" +
+        "B349EF5D76988A3672FAC47B0769447B";
+
+    final var BHex = "BD0C61512C692C0CB6D041FA01BB152D4916A1E77AF46AE105393011" +
+        "BAF38964DC46A0670DD125B95A981652236F99D9B681CBF87837EC99" +
+        "6C6DA04453728610D0C6DDB58B318885D7D82C7F8DEB75CE7BD4FBAA" +
+        "37089E6F9C6059F388838E7A00030B331EB76840910440B1B27AAEAE" +
+        "EB4012B7D7665238A8E3FB004B117B58";
+
+    final var expectedPremaster = """
+        B0DC82BA BCF30674 AE450C02 87745E79 90A3381F 63B387AA F271A10D
+        233861E3 59B48220 F7C4693C 9AE12B0A 6F67809F 0876E2D0 13800D6C
+        41BB59B6 D5979B5C 00A172B4 A2A5903A 0BDCAF8A 709585EB 2AFAFA8F
+        3499B200 210DCC1F 10EB3394 3CD67FC8 8A2F39A4 BE5BEC4E C0A3212D
+        C346D7E4 74B29EDE 8A469FFE CA686E5A
+        """.replaceAll("\\s+", "");
+
+    final var premaster = SRPUtils.clientS(c, AHex, BHex, sHex, I, aHex, P);
+
+    assertEquals(expectedPremaster, premaster.toUpperCase(),
+        "Premaster secret does not match RFC 5054 Appendix B");
+
+    final var finalKey = SRPUtils.hashedSecret(NHex, premaster);
+    // sha1 hash is 20 bytes, and we will HDKF expand it to 32 bytes for AES
+    assertEquals(32, finalKey.length, "Final key length is not 33 bytes when hashed");
+  }
+
+  @Test
+  void testAppendixB_ServerSecret() {
+    String NHex = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C" +
+        "9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE4" +
+        "8E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29" +
+        "7BCF1885C529F566660E57EC68EDBC3C05726CC02FD4CBF4976EAA9A" +
+        "FD5138FE8376435B9FC61D2FC0EB06E3";
+
+    String gHex = "2";
+
+    Constants c = new Constants(NHex, gHex);
+
+    final var bHex = """
+        E487CB59 D31AC550 471E81F0 0F6928E0 1DDA08E9 74A004F4 9E61F5D1 05284D20
+        """.replaceAll("\\s+", "");
+
+    final var AHex = "61D5E490F6F1B79547B0704C436F523DD0E560F0C64115BB72557EC4" +
+        "4352E8903211C04692272D8B2D1A5358A2CF1B6E0BFCF99F921530EC" +
+        "8E39356179EAE45E42BA92AEACED825171E1E8B9AF6D9C03E1327F44" +
+        "BE087EF06530E69F66615261EEF54073CA11CF5858F0EDFDFE15EFEA" +
+        "B349EF5D76988A3672FAC47B0769447B";
+
+    final var BHex = "BD0C61512C692C0CB6D041FA01BB152D4916A1E77AF46AE105393011" +
+        "BAF38964DC46A0670DD125B95A981652236F99D9B681CBF87837EC99" +
+        "6C6DA04453728610D0C6DDB58B318885D7D82C7F8DEB75CE7BD4FBAA" +
+        "37089E6F9C6059F388838E7A00030B331EB76840910440B1B27AAEAE" +
+        "EB4012B7D7665238A8E3FB004B117B58";
+
+    final var expectedPremaster = """
+        B0DC82BA BCF30674 AE450C02 87745E79 90A3381F 63B387AA F271A10D
+        233861E3 59B48220 F7C4693C 9AE12B0A 6F67809F 0876E2D0 13800D6C
+        41BB59B6 D5979B5C 00A172B4 A2A5903A 0BDCAF8A 709585EB 2AFAFA8F
+        3499B200 210DCC1F 10EB3394 3CD67FC8 8A2F39A4 BE5BEC4E C0A3212D
+        C346D7E4 74B29EDE 8A469FFE CA686E5A
+        """.replaceAll("\\s+", "");
+
+    final var vHex = "7E273DE8696FFC4F4E337D05B4B375BEB0DDE1569E8FA00A9886D812" +
+        "9BADA1F1822223CA1A605B530E379BA4729FDC59F105B4787E5186F5" +
+        "C671085A1447B52A48CF1970B4FB6F8400BBF4CEBFBB168152E08AB5" +
+        "EA53D15C1AFF87B2B9DA6E04E058AD51CC72BFC9033B564E26480D78" +
+        "E955A5E29E7AB245DB2BE315E2099AFB";
+
+    // Constants c, String vHex, String AHex, String BHex, String bHex
+    final var premaster = SRPUtils.serverS(c, vHex, AHex, BHex, bHex);
+
+    assertEquals(expectedPremaster, premaster.toUpperCase(),
+        "Premaster secret does not match RFC 5054 Appendix B");
+
+    final var finalKey = SRPUtils.hashedSecret(NHex, premaster);
+    // sha1 hash is 20 bytes, and we will HDKF expand it to 32 bytes for AES
+    assertEquals(32, finalKey.length, "Final key length is not 32 bytes when hashed");
+  }
+}
+</file>
+
+<file path="trex-paxe/src/test/java/com/github/trex_paxos/paxe/PaxeNetworkTest.java">
+package com.github.trex_paxos.paxe;
+
+import com.github.trex_paxos.BallotNumber;
+import com.github.trex_paxos.msg.Fixed;
+import com.github.trex_paxos.network.Channel;
+import com.github.trex_paxos.network.NodeId;
+import org.junit.jupiter.api.*;
+
+import java.nio.channels.Selector;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Level;
+
+import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
+import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+class PaxeNetworkTest {
+  static {
+    System.setProperty(SRPUtils.class.getName() + ".useHash", "SHA3-256");
+  }
+
+  @SuppressWarnings("SpellCheckingInspection")
+  private static final String N = "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C9C256576D674DF7496EA81D3383B4813D692C6E0E0D5D8E250B98BE48E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D4982559B29";
+  private static final SRPUtils.Constants CONSTANTS = new SRPUtils.Constants(N, "2");
+  private static final int TEST_TIMEOUT_MS = 1000;
+
+  private PaxeNetwork network1;
+  private PaxeNetwork network2;
+  private Selector testSelector;
+
+  @BeforeAll
+  static void setupLogging() {
+    final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
+    final Level level = Level.parse(logLevel);
+    ConsoleHandler handler = new ConsoleHandler();
+    handler.setLevel(level);
+    LOGGER.addHandler(handler);
+    LOGGER.setLevel(level);
+    LOGGER.setUseParentHandlers(false);
+  }
+
+  @BeforeEach
+  void setup() throws Exception {
+    LOGGER.fine("Setting up test networks");
+    testSelector = Selector.open();
+    @SuppressWarnings("resource")
+    NetworkTestHarness harness = new NetworkTestHarness(new ClusterId("test"), CONSTANTS);
+
+    network1 = harness.createNetwork((short) 1).network();
+    network2 = harness.createNetwork((short) 2).network();
+
+    network1.start();
+    network2.start();
+
+    LOGGER.fine("Waiting for network establishment");
+    harness.waitForNetworkEstablishment();
+    LOGGER.fine("Network establishment complete");
+  }
+
+  @Test
+  void testSendAndReceiveMessages() throws Exception {
+    Channel channel = CONSENSUS.value();
+    CountDownLatch latch = new CountDownLatch(2);
+    AtomicReference<Fixed> received1 = new AtomicReference<>();
+    AtomicReference<Fixed> received2 = new AtomicReference<>();
+
+    LOGGER.fine("Setting up message handlers");
+    network1.subscribe(channel, (Fixed msg) -> {
+      LOGGER.finest(() -> String.format("Network 1 received message: %s", msg));
+      received1.set(msg);
+      latch.countDown();
+    }, "test1");
+
+    network2.subscribe(channel, (Fixed msg) -> {
+      LOGGER.finest(() -> String.format("Network 2 received message: %s", msg));
+      received2.set(msg);
+      latch.countDown();
+    }, "test2");
+
+    Fixed msg1 = new Fixed((short) 1, 1, new BallotNumber(1, (short) 1));
+    Fixed msg2 = new Fixed((short) 2, 2, new BallotNumber(2, (short) 2));
+
+    LOGGER.fine(() -> String.format("Sending test messages: msg1=%s, msg2=%s", msg1, msg2));
+    network1.send(channel, new NodeId((short) 2), msg1);
+    network2.send(channel, new NodeId((short) 1), msg2);
+
+    LOGGER.fine("Waiting for message exchange");
+    boolean exchangeComplete = latch.await(TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    LOGGER.fine(() -> String.format("Exchange complete: %s, received1=%s, received2=%s",
+        exchangeComplete, received1.get(), received2.get()));
+
+    assertTrue(exchangeComplete, "Message exchange timed out");
+    assertEquals(msg2, received1.get(), "Network 1 received wrong message");
+    assertEquals(msg1, received2.get(), "Network 2 received wrong message");
+  }
+
+  @AfterEach
+  void cleanup() throws Exception {
+    LOGGER.fine("Cleaning up test resources");
+    if (network1 != null) network1.close();
+    if (network2 != null) network2.close();
+    if (testSelector != null) testSelector.close();
+  }
+}
+</file>
+
+<file path="trex-paxe/src/test/java/com/github/trex_paxos/paxe/PaxeStackClusterTest.java">
+package com.github.trex_paxos.paxe;
+
+import com.github.trex_paxos.*;
+import com.github.trex_paxos.network.ClusterMembership;
+import com.github.trex_paxos.network.NetworkAddress;
+import com.github.trex_paxos.network.NodeId;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Level;
+
+import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+class PaxeStackClusterTest {
+  private static final Duration TEST_TIMEOUT = Duration.ofMillis(200);
+
+  private NetworkTestHarness harness;
+  StackServiceImpl stackService1;
+  StackServiceImpl stackService2;
+
+  @BeforeAll
+  static void setupLogging() {
+    final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
+    final Level level = Level.parse(logLevel);
+    ConsoleHandler handler = new ConsoleHandler();
+    handler.setLevel(level);
+    LOGGER.addHandler(handler);
+    LOGGER.setLevel(level);
+    LOGGER.setUseParentHandlers(false);
+  }
+
+  @BeforeEach
+  void setup() throws Exception {
+    LOGGER.fine("Setting up test harness");
+    harness = new NetworkTestHarness();
+
+    NetworkWithTempPort network1 = harness.createNetwork((short) 1);
+    NetworkWithTempPort network2 = harness.createNetwork((short) 2);
+
+    LOGGER.fine("Waiting for network establishment");
+    harness.waitForNetworkEstablishment();
+    LOGGER.fine("Network established successfully");
+
+    Supplier<ClusterMembership> members = () -> new ClusterMembership(
+        Map.of(new NodeId((short) 1), new NetworkAddress(network1.port()),
+            new NodeId((short) 2), new NetworkAddress(network2.port())));
+
+    stackService1 = new StackServiceImpl((short)1, members, network1.network());
+    stackService2 = new StackServiceImpl((short)2, members, network2.network());
+
+    LOGGER.info("Starting applications");
+
+    // Allow time for leader election and initialization
+    Thread.sleep(50);
+    LOGGER.fine("Test setup complete");
+  }
+
+  @Test
+  void testBasicStackOperations() throws Exception {
+    LOGGER.info("Testing basic stack operations");
+
+    // Push "first"
+    CompletableFuture<StackService.Response> future = new CompletableFuture<>();
+    LOGGER.info("Pushing 'first' to stack");
+    stackService1.app().submitValue(new StackService.Push("first"), future);
+    future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+
+    // Push "second"
+    future = new CompletableFuture<>();
+    LOGGER.info("Pushing 'second' to stack from alternate node");
+    stackService2.app().submitValue(new StackService.Push("second"), future);
+    future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+
+    // Peek - should see "second"
+    future = new CompletableFuture<>();
+    LOGGER.info("Testing peek operation");
+    stackService2.app().submitValue(new StackService.Peek(), future);
+    assertEquals("second", future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).value().orElse(null));
+
+    // Pop twice and verify ordering
+    future = new CompletableFuture<>();
+    LOGGER.info("Testing first pop operation");
+    stackService2.app().submitValue(new StackService.Pop(), future);
+    assertEquals("second", future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).value().orElse(null));
+
+    future = new CompletableFuture<>();
+    LOGGER.info("Testing second pop operation");
+    stackService2.app().submitValue(new StackService.Pop(), future);
+    assertEquals("first", future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).value().orElse(null));
+
+    LOGGER.info("Basic stack operations test completed successfully");
+  }
+
+  @Test
+  void testNodeFailure() throws Exception {
+    LOGGER.info("Testing node failure handling");
+
+    // Push initial value
+    CompletableFuture<StackService.Response> future1 = new CompletableFuture<>();
+    LOGGER.info("Pushing test value before network failure");
+    stackService1.app().submitValue(new StackService.Push("persistent"), future1);
+    future1.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+
+    // Close network and verify operations fail
+    LOGGER.info("Simulating network failure");
+    harness.close();
+
+    CompletableFuture<StackService.Response> future2 = new CompletableFuture<>();
+    LOGGER.info("Attempting operation on failed network");
+    stackService2.app().submitValue(new StackService.Push("should-fail"), future2);
+
+    assertThrows(Exception.class, () ->
+        future2.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS));
+    LOGGER.info("Node failure test completed successfully");
+  }
+
+  @AfterEach
+  void tearDown() {
+    LOGGER.fine("Test tear down starting");
+    if (stackService1 != null && stackService1.app() != null) stackService1.app().stop();
+    if (stackService2 != null && stackService2.app() != null) stackService2.app().stop();
+    if (harness != null) harness.close();
+    LOGGER.fine("Test tear down complete");
+  }
+
+}
+</file>
+
+</files>
+
+📦 Repomix v0.3.0
+
+No custom config found at repomix.config.json or global config at /Users/consensussolutions/.config/repomix/repomix.config.json.
+You can add a config file for additional settings. Please check https://github.com/yamadashy/repomix for more information.
+⠙ Collecting files...
+[2K[1A[2K[G⠹ Running security check... (13/24) trex-lib/src/test/java/com/github/trex_paxos
+/PrepareResponsePropertyTests.java
+[2K[1A[2K[1A[2K[G⠸ Generating output...
+[2K[1A[2K[G⠼ Generating output...
+[2K[1A[2K[G⠴ Generating output...
+[2K[1A[2K[G⠦ Calculating metrics...
+[2K[1A[2K[G⠧ Calculating metrics...
+[2K[1A[2K[G⠇ Calculating metrics...
+[2K[1A[2K[G⠏ Calculating metrics... (14/24) trex-lib/src/test/java/com/github/trex_paxos/Re
+cordPicklerTest.java
+[2K[1A[2K[1A[2K[G✔ Packing completed successfully!
+
+📈 Top 5 Files by Character Count and Token Count:
+──────────────────────────────────────────────────
+1.  trex-lib/src/test/java/com/github/trex_paxos/Simulation.java (17,373 chars, 3,982 tokens)
+2.  trex-lib/src/test/java/com/github/trex_paxos/SimulationTests.java (15,525 chars, 3,556 tokens)
+3.  trex-lib/src/test/java/com/github/trex_paxos/SpecificTests.java (7,256 chars, 1,694 tokens)
+4.  trex-lib/src/test/java/com/github/trex_paxos/AcceptResponsePropertyTests.java (7,123 chars, 1,647 tokens)
+5.  trex-lib/src/test/java/com/github/trex_paxos/PreparePropertyTests.java (6,239 chars, 1,393 tokens)
+
+🔎 Security Check:
+──────────────────
+✔ No suspicious files detected.
+
+📊 Pack Summary:
+────────────────
+  Total Files: 24 files
+  Total Chars: 119,167 chars
+ Total Tokens: 27,724 tokens
+       Output: repomix-output.xml
+     Security: ✔ No suspicious files detected
+
+🎉 All Done!
+Your repository has been successfully packed.
+
+💡 Repomix is now available in your browser! Try it at https://repomix.com
