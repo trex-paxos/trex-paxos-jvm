@@ -3,14 +3,13 @@
          xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <modelVersion>4.0.0</modelVersion>
-    <artifactId>trex-locks</artifactId>
+    <artifactId>trex-corfu</artifactId>
     <version>1.0-SNAPSHOT</version>
     <name>trex-locks</name>
     <url>https://github.com/trex-paxos/trex-paxos-jvm</url>
     <description>
-        Advisory locks are application-level locks that allow developers to coordinate access to shared resources across
-        multiple database sessions. They are explicitly controlled by the application code, unlike standard database
-        locks
+        This is an implementation of a Corfu distributed log. It makes use of the Trex Paxos library to provide
+        embedded advisory locks and strong cluster membership.
     </description>
     <parent>
         <groupId>com.github.trex-paxos</groupId>
@@ -19,9 +18,9 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
     <properties>
-        <maven.compiler.source>23</maven.compiler.source>
-        <maven.compiler.target>23</maven.compiler.target>
-        <maven.compiler.release>23</maven.compiler.release>
+        <maven.compiler.source>24</maven.compiler.source>
+        <maven.compiler.target>24</maven.compiler.target>
+        <maven.compiler.release>24</maven.compiler.release>
         <maven.compiler.args>--enable-preview</maven.compiler.args>
     </properties>
     <dependencies>
@@ -48,9 +47,11 @@
             <version>2.3.232</version>
         </dependency>
         <dependency>
-            <groupId>org.junit.platform</groupId>
-            <artifactId>junit-platform-launcher</artifactId>
-            <version>1.11.3</version>
+            <groupId>com.github.trex-paxos</groupId>
+            <artifactId>trex-lib</artifactId>
+            <version>${project.version}</version>
+            <classifier>tests</classifier>
+            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
     </dependencies>

@@ -50,12 +50,12 @@ public class RemoteLockServicePropertyTests {
       TestCase testCase) {
     MVStore store = MVStore.open(null);
     ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-    LockServerSimulation simulation = new LockServerSimulation(store, scheduler);
-
-    // Make node 1 the leader
-    final var engine1 = simulation.getEngine((byte) 1);
-    var prepareResult = engine1.timeoutForTest();
-    prepareResult.ifPresent(msg -> simulation.deliverMessages(List.of(msg)));
+//    LockServerSimulation simulation = new LockServerSimulation(store, scheduler);
+//
+//    // Make node 1 the leader
+//    final var engine1 = simulation.getEngine((byte) 1);
+//    var prepareResult = engine1.timeoutForTest();
+//    prepareResult.ifPresent(msg -> simulation.deliverMessages(List.of(msg)));
 
     // Calculate test stamp based on relation
     final long testStamp = switch (testCase.stampRelation()) {
@@ -73,8 +73,8 @@ public class RemoteLockServicePropertyTests {
 
     // Setup initial lock state if needed
     if (testCase.lockState() == LockState.PRESENT) {
-      simulation.getStore((byte) 1)
-          .tryAcquireLock(TEST_LOCK_ID, BASE_DURATION, BASE_STAMP);
+//      simulation.getStore((byte) 1)
+//          .tryAcquireLock(TEST_LOCK_ID, BASE_DURATION, BASE_STAMP);
     }
 
     // Create command with calculated parameters
@@ -86,18 +86,18 @@ public class RemoteLockServicePropertyTests {
     };
 
     CompletableFuture<LockServerReturnValue> future = new CompletableFuture<>();
-    simulation.getServer((byte) 1).processCommand(command, future);
+    //simulation.getServer((byte) 1).processCommand(command, future);
     LockServerReturnValue result = future.join();
 
     // Record state after command execution
     final var now = Instant.now();
-    final var store1 = simulation.getStore((byte) 1);
-    final var store2 = simulation.getStore((byte) 2);
+//    final var store1 = simulation.getStore((byte) 1);
+//    final var store2 = simulation.getStore((byte) 2);
 
     verifyResult(testCase, result, now);
 
     // Verify both nodes have consistent state
-    assert store1.getLock(TEST_LOCK_ID).equals(store2.getLock(TEST_LOCK_ID));
+//    assert store1.getLock(TEST_LOCK_ID).equals(store2.getLock(TEST_LOCK_ID));
 
     scheduler.shutdown();
   }

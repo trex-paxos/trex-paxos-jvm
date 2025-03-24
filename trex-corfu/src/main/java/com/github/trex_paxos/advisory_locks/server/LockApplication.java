@@ -81,7 +81,7 @@ public class LockApplication implements AutoCloseable {
               byte[] data = new byte[length];
               in.readFully(data);
 
-              command = new Command(UUIDGenerator.generateUUID().toString(), data);
+              command = new Command(UUIDGenerator.generateUUID(), data);
             } catch (EOFException e1) {
               command = null;
             }
@@ -95,10 +95,10 @@ public class LockApplication implements AutoCloseable {
               writeResult(out, result);
             } catch (TimeoutException e) {
               // Handle timeout - send error response to client
-              writeErrorResponse(out, command.clientMsgUuid(), "Processing timeout");
+              writeErrorResponse(out, command.uuid().toString(), "Processing timeout");
             } catch (ExecutionException e) {
               // Handle processing error
-              writeErrorResponse(out, command.clientMsgUuid(), "Processing error");
+              writeErrorResponse(out, command.uuid().toString(), "Processing error");
             }
 
             out.flush();

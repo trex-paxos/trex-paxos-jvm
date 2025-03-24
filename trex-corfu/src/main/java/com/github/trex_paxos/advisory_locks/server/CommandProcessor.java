@@ -36,9 +36,9 @@ public class CommandProcessor {
     // Called by TCP reader virtual threads
     public CompletableFuture<Result> submitCommand(Command command) throws InterruptedException {
         CompletableFuture<Result> future = new CompletableFuture<>();
-        pendingCommands.put(command.clientMsgUuid(), future);
+        pendingCommands.put(command.uuid().toString(), future);
         // Add the command to the work queue
-        workQueue.put(command.clientMsgUuid());
+        workQueue.put(command.uuid().toString());
         return future;
     }
 

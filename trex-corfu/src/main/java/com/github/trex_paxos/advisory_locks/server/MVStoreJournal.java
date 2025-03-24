@@ -11,7 +11,7 @@ import java.util.Optional;
 public class MVStoreJournal implements Journal {
   private final MVStore store;
   private final MVMap<Long, Accept> accepts;
-  private final MVMap<Byte, Progress> progress;
+  private final MVMap<Short, Progress> progress;
 
   public MVStoreJournal(MVStore store) {
     this.store = store;
@@ -25,13 +25,13 @@ public class MVStoreJournal implements Journal {
   }
 
   @Override
-  public void writeAccept(Accept accept) {
-    accepts.put(accept.slot(), accept);
+  public Progress readProgress(short nodeIdentifier) {
+    return progress.get(nodeIdentifier);
   }
 
   @Override
-  public Progress readProgress(byte nodeIdentifier) {
-    return progress.get(nodeIdentifier);
+  public void writeAccept(Accept accept) {
+    accepts.put(accept.slot(), accept);
   }
 
   @Override

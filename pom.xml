@@ -18,7 +18,7 @@
     </description>
     <modules>
         <module>trex-lib</module>
-        <!-- <module>trex-locks</module> -->
+         <module>trex-corfu</module>
         <module>trex-paxe</module>
     </modules>
     <dependencies>
