@@ -26,16 +26,21 @@ public record BallotNumber(short era, int counter, short nodeIdentifier) impleme
 
   public static final BallotNumber MIN = new BallotNumber(Integer.MIN_VALUE, Short.MIN_VALUE);
 
-  @Override
-  public int compareTo(BallotNumber that) {
-    if (this.era != that.era) {
-      return Short.compare(this.era, that.era);
+@Override
+public int compareTo(BallotNumber that) {
+    // First compare by era
+    int eraComparison = Short.compare(this.era, that.era);
+    if (eraComparison != 0) {
+        return eraComparison;
     }
-    if (this.counter == that.counter) {
-      return Short.compare(this.nodeIdentifier, that.nodeIdentifier);
+    // Then compare by counter
+    int counterComparison = Integer.compare(this.counter, that.counter);
+    if (counterComparison != 0) {
+        return counterComparison;
     }
-    return Integer.compare(this.counter, that.counter);
-  }
+    // Finally compare by node identifier
+    return Short.compare(this.nodeIdentifier, that.nodeIdentifier);
+}
 
   @Override
   public String toString() {

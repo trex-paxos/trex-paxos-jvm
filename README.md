@@ -407,6 +407,22 @@ to use your own node failure detection or election mechanism if you do not like 
 
 See the wiki for a more detailed explanation of this topic.
 
+## UPaxos and Cluster Membership Changes
+
+The [UPaxos](https://davecturner.github.io/2016/06/09/unbounded-pipelining-paxos.html) technical paper describes a way 
+to change the cluster membership without any stalls. The following blog posts discuss it: 
+
+1. [Paxos Reconfiguration Stalls](https://simbo1905.wordpress.com/2016/12/15/paxos-reconfiguration-stalls/)
+2. [UPaxos: Unbounded Paxos Reconfigurations](https://simbo1905.wordpress.com/2016/12/16/upaxos-unbounded-paxos-reconfigurations/)
+3. [Paxos Voting Weights](https://simbo1905.wordpress.com/2017/03/16/paxos-voting-weights/)
+
+The key idea is that we introduce an optional highest set of era bits to the `N` value. This means that our actual 
+ballot number record has an optional era: 
+
+```java
+public record BallotNumber(short era, int counter, short nodeIdentifier) implements Comparable<BallotNumber> { }
+```
+
 ## Development Setup
 
 ```bash
