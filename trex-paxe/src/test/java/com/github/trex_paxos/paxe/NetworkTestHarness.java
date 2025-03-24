@@ -19,9 +19,6 @@ import java.util.function.Supplier;
 import static com.github.trex_paxos.network.SystemChannel.KEY_EXCHANGE;
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 
-record NetworkWithTempPort(PaxeNetwork network, int port) {
-}
-
 public class NetworkTestHarness implements AutoCloseable {
   private static final Duration KEY_EXCHANGE_TIMEOUT = Duration.ofSeconds(1);
   private static final Duration CHANNEL_SELECT_TIMEOUT = Duration.ofMillis(500);
@@ -50,7 +47,7 @@ public class NetworkTestHarness implements AutoCloseable {
     this.srpConstants = srpConstants;
   }
 
-  NetworkWithTempPort createNetwork(short nodeId) throws Exception {
+  public NetworkWithTempPort createNetwork(short nodeId) throws Exception {
     if (closed) {
       LOGGER.warning("Attempt to create network after harness closed");
       throw new IllegalStateException("Harness is closed");

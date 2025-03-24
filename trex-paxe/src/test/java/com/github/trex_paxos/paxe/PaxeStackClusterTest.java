@@ -85,18 +85,21 @@ class PaxeStackClusterTest {
     future = new CompletableFuture<>();
     LOGGER.info("Testing peek operation");
     stackService2.app().submitValue(new StackService.Peek(), future);
-    assertEquals("second", future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).value().orElse(null));
+    final var peeked =  future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).value().orElse(null);
+    assertEquals("second",peeked);
 
     // Pop twice and verify ordering
     future = new CompletableFuture<>();
     LOGGER.info("Testing first pop operation");
     stackService2.app().submitValue(new StackService.Pop(), future);
-    assertEquals("second", future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).value().orElse(null));
+    final var popped1 = future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).value().orElse(null);
+    assertEquals("second", popped1);
 
     future = new CompletableFuture<>();
     LOGGER.info("Testing second pop operation");
     stackService2.app().submitValue(new StackService.Pop(), future);
-    assertEquals("first", future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).value().orElse(null));
+    final var popped2 = future.get(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).value().orElse(null);
+    assertEquals("first", popped2);
 
     LOGGER.info("Basic stack operations test completed successfully");
   }

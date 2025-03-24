@@ -16,7 +16,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class StackServiceImpl implements StackService {
-  static final Logger LOGGER = Logger.getLogger(StackServiceImpl.class.getName());
+  // This is public as we will use it in jshell to demo the stack service. As this is a test class here is no risk to expose it.
+  public static final Logger LOGGER = Logger.getLogger(StackServiceImpl.class.getName());
 
   final TrexApp<Value, Response> app;
 
