@@ -28,7 +28,7 @@ public class PickleTests {
 
   @Test
   public void testPickleProgress() throws Exception {
-    Progress progress = new Progress((short) 1, new BallotNumber(2, (short) 3), 4L);
+    Progress progress = new Progress((short) 1, new BallotNumber((short) 2, 3, (short) 4), 5L);
     byte[] pickled = Pickle.writeProgress(progress);
     Progress unpickled = Pickle.readProgress(pickled);
     assertEquals(progress, unpickled);
@@ -36,7 +36,7 @@ public class PickleTests {
 
   @Test
   public void testPickleBallotNumber() throws Exception {
-    BallotNumber ballotNumber = new BallotNumber(2, (short) 3);
+    BallotNumber ballotNumber = new BallotNumber((short) 1, 2, (short) 3);
     byte[] pickled = Pickle.write(ballotNumber);
     BallotNumber unpickled = Pickle.readBallotNumber(pickled);
     assertEquals(ballotNumber, unpickled);

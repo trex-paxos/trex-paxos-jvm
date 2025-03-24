@@ -468,8 +468,8 @@ The list of tasks:
 - [x] Write extensive documentation, including detailed JavaDoc.
 - [x] Write a `Network` for a demo. Kwik does not support connection fail-over. So will make something QUIC-like over
   UDP.
-- [ ] Implement distributed advisor lock service as a full demo.
 - [ ] Implement cluster membership changes as UPaxos.
+- [ ] Implement corfu distributed shared log as a full demo.
 - [ ] Add in phi acculmulator for leader failure detection.
 
 ## Attribution

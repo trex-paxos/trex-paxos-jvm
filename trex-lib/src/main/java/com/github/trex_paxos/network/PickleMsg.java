@@ -17,7 +17,7 @@ public class PickleMsg implements Pickler<TrexMessage> {
   }
 
   private static final int HEADER_SIZE = 5; // fromNode(2) + toNode(2) + type(1)
-  private static final int BALLOT_NUMBER_SIZE = Integer.BYTES + 2; // counter(4) + nodeId(2)
+  private static final int BALLOT_NUMBER_SIZE = 8; // era(2) + counter(4) + nodeId(2)
 
   public static byte[] pickle(TrexMessage msg) {
     int size = HEADER_SIZE + calculateMessageSize(msg);
@@ -294,12 +294,13 @@ public class PickleMsg implements Pickler<TrexMessage> {
 
   // Utility methods for BallotNumber
   private static void write(BallotNumber n, ByteBuffer buffer) {
+    buffer.putShort(n.era());
     buffer.putInt(n.counter());
     buffer.putShort(n.nodeIdentifier());
   }
 
   private static BallotNumber readBallotNumber(ByteBuffer buffer) {
-    return new BallotNumber(buffer.getInt(), buffer.getShort());
+    return new BallotNumber(buffer.getShort(), buffer.getInt(), buffer.getShort());
   }
 
   @Override

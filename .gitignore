@@ -12,3 +12,5 @@ all.java
 my.chatllm
 .aider*
 repomix-output.txt
+output.dat
+repomix-output.xml

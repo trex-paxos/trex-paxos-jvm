@@ -25,7 +25,7 @@ package com.github.trex_paxos.msg;
 /// @param vote                  whether wre have voted for or voted against the Prepare message based on our past promises.
 /// @param highestFixedIndex additional information about the highest accepted index so that a leader will abdicate if it is behind.
 public record AcceptResponse(short from,
-                              short to,
+                             short to,
                              Vote vote,
                              long highestFixedIndex
 ) implements TrexMessage, DirectMessage, LearningMessage {

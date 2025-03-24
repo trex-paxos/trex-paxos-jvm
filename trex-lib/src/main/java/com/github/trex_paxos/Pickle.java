@@ -80,6 +80,7 @@ public class Pickle {
   }
 
   public static void write(BallotNumber n, DataOutputStream dataOutputStream) throws IOException {
+    dataOutputStream.writeShort(n.era());
     dataOutputStream.writeInt(n.counter());
     dataOutputStream.writeShort(n.nodeIdentifier());
   }
@@ -92,7 +93,7 @@ public class Pickle {
   }
 
   public static BallotNumber readBallotNumber(DataInputStream dataInputStream) throws IOException {
-    return new BallotNumber(dataInputStream.readInt(), dataInputStream.readShort());
+    return new BallotNumber(dataInputStream.readShort(), dataInputStream.readInt(), dataInputStream.readShort());
   }
 
   public static void write(Accept m, DataOutputStream dataStream) throws IOException {

@@ -49,5 +49,4 @@ public final class PaxeProtocol {
 
     return (flags & FLAG_MAGIC_1) != 0 && (flags & FLAG_MAGIC_0) == 0;
   }
-
 }

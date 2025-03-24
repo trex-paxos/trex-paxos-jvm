@@ -14,17 +14,23 @@
  * limitations under the License.
  */
 package com.github.trex_paxos;
-/// A ballot number is the proposal number used in the Paxos algorithm. Here we are using five bytes. The most significant
-/// are incremented as an integer when a node wishes to become a leader. We encode the
-/// nodeIdentifier in the least significant fifth byte. This works as long as we make the nodeIdentifier unique within the cluster
-/// at any given configuration. It must also be unique across the overlaps of cluster membership reconfigurations. We can use Paxos itself to
-/// ensure this uniqueness.
-public record BallotNumber(int counter, short nodeIdentifier) implements Comparable<BallotNumber> {
+/// A ballot number is the proposal number used in the Paxos algorithm. Here we are using eight bytes.
+/// In order to do UPaxos configurations we have an optional era field in the most significant byte.
+/// The counter is used to order proposals within an era. The nodeIdentifier is used to break ties so that we can have a total order.
+/// The counter is incremented as an integer when a node wishes to become a leader.
+public record BallotNumber(short era, int counter, short nodeIdentifier) implements Comparable<BallotNumber> {
+
+  public BallotNumber(int counter, short nodeIdentifier) {
+    this((short) 0, counter, nodeIdentifier);
+  }
 
   public static final BallotNumber MIN = new BallotNumber(Integer.MIN_VALUE, Short.MIN_VALUE);
 
   @Override
   public int compareTo(BallotNumber that) {
+    if (this.era != that.era) {
+      return Short.compare(this.era, that.era);
+    }
     if (this.counter == that.counter) {
       return Short.compare(this.nodeIdentifier, that.nodeIdentifier);
     }
@@ -33,7 +39,7 @@ public record BallotNumber(int counter, short nodeIdentifier) implements Compara
 
   @Override
   public String toString() {
-    return String.format("N(c=%d,n=%d)", counter, nodeIdentifier);
+    return String.format("N(e=%d,c=%d,n=%d)", era, counter, nodeIdentifier);
   }
 
   public Boolean lessThan(BallotNumber ballotNumber) {
