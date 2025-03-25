@@ -19,7 +19,7 @@ public record PaxePacket(
     Channel channel,
     Optional<byte[]> nonce,
     Optional<byte[]> authTag,
-    byte[] payload) {
+    byte[] payload) implements PaxeProtocol {
 
   public static final int HEADER_SIZE = 8; // from(2) + to(2) + channel(2) + length(2)
   public static final int AUTHENTICATED_DATA_SIZE = 6; // from(2) + to(2) + channel(2)
