@@ -74,13 +74,20 @@ public final class Crypto {
     }
   }
 
-
   public static byte[] decrypt(ByteBuffer input, byte[] sessionKey) {
-    if (!validateStructure(input)) {
-      throw new SecurityException("Invalid message flags");
+    if (input.remaining() < MIN_MESSAGE_SIZE) {
+      throw new SecurityException("Invalid message as no space for a header and the flags in the input bytebuffer.");
     }
 
     byte flags = input.get(FLAGS_OFFSET);
+
+    // Uninitialized memory is all zeros so we require some magic bits to be set else clear so that we can detect illegal data
+    var result = (flags & FLAG_MAGIC_1) != 0 && (flags & FLAG_MAGIC_0) == 0;
+    if (!result) {
+      throw new SecurityException("Invalid flags byte: 0x" + Integer.toHexString(flags & 0xFF));
+    }
+
+    // The DEK flag is set if the message is encrypted with a Data Encryption Key this is the only real flag in the byte
     return (flags & FLAG_DEK) == 0 ?
         decryptStandard(input, sessionKey) :
         decryptDek(input, sessionKey);
