@@ -1,7 +1,5 @@
 package com.github.trex_paxos.paxe;
 
-import java.nio.ByteBuffer;
-
 
 /// Protocol constants and validation for Paxe secure network communication.
 /// Encapsulates wire format knowledge and validation logic.
@@ -28,26 +26,4 @@ public final class PaxeProtocol {
 
   private PaxeProtocol() {
   }
-
-  // TODO use this
-  public static boolean isValidFlags(byte flags) {
-    // Standard encryption: Only MAGIC_1 set
-    if ((flags & FLAG_DEK) == 0) {
-      return (flags & (FLAG_MAGIC_0 | FLAG_MAGIC_1)) == FLAG_MAGIC_1;
-    }
-    // DEK encryption: DEK and MAGIC_1 set
-    return (flags & (FLAG_DEK | FLAG_MAGIC_0 | FLAG_MAGIC_1)) == (FLAG_DEK | FLAG_MAGIC_1);
-  }
-
-  public static boolean validateStructure(ByteBuffer buffer) {
-    if (buffer.remaining() < MIN_MESSAGE_SIZE) {
-      return false;
-    }
-
-    buffer.position(FLAGS_OFFSET);
-    byte flags = buffer.get();
-
-    return (flags & FLAG_MAGIC_1) != 0 && (flags & FLAG_MAGIC_0) == 0;
-  }
-
 }
