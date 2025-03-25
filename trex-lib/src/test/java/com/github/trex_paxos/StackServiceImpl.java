@@ -8,7 +8,6 @@ import com.github.trex_paxos.network.NetworkLayer;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.logging.ConsoleHandler;

@@ -54,7 +54,7 @@ class TestNetworkLayer implements NetworkLayer {
   }
 
   @Override
-  public void close() throws Exception {
+  public void close() {
     stop();
   }
 }
