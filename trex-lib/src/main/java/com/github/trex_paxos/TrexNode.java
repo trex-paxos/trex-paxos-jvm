@@ -202,7 +202,6 @@ public class TrexNode {
       return;
     }
     switch (input) {
-
       case Accept accept -> {
         final var number = accept.slotTerm().number();
         final var logIndex = accept.slotTerm().logIndex();

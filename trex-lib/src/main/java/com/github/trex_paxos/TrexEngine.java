@@ -101,8 +101,9 @@ public class TrexEngine<RESULT> implements AutoCloseable {
     } catch (InterruptedException e) {
       // FIXME i am not sure what do to in this case
       Thread.currentThread().interrupt();
-      LOGGER.warning("TrexEngine was interrupted awaiting the mutex probably to shutdown while under load.");
-      throw new RuntimeException(e);
+      LOGGER.warning("TrexEngine was interrupted probably to shutdown while under load so we will close.");
+      trexNode().close();
+      return new EngineResult<>(List.of(), List.of());
     } finally {
       mutex.release();
     }
