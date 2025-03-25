@@ -120,7 +120,7 @@ public class PickleMsg implements Pickler<TrexMessage> {
       case NoOperation _ ->
         // Here we use zero bytes as a sentinel to represent the NOOP command.
           buffer.putInt(0);
-      case Command(final UUID uuid, final var operationBytes, final var flavour) -> {
+      case Command(final var flavour, final UUID uuid, final var operationBytes) -> {
         buffer.putInt(operationBytes.length);
         buffer.put(operationBytes);
         buffer.putLong(uuid.getMostSignificantBits());
@@ -139,7 +139,7 @@ public class PickleMsg implements Pickler<TrexMessage> {
     buffer.get(bytes);
     long mostSigBits = buffer.getLong();
     long leastSigBits = buffer.getLong();
-    return new Command(new UUID(mostSigBits, leastSigBits), bytes, buffer.get());
+    return new Command(buffer.get(), new UUID(mostSigBits, leastSigBits), bytes);
   }
 
   public static void write(AcceptResponse m, ByteBuffer buffer) {
