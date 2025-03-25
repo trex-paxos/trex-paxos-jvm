@@ -317,7 +317,7 @@ public class TrexNode {
           messages.add(new Catchup(nodeIdentifier, fixedFrom, highestFixedIndex, progress.highestPromised()));
         }
       }
-      case Catchup(final byte replyTo, _, final var otherFixedIndex, final var otherHighestPromised) -> {
+      case Catchup(final var replyTo, _, final var otherFixedIndex, final var otherHighestPromised) -> {
         // load the slots they do not know that they are missing
         final var missingAccepts = LongStream.rangeClosed(otherFixedIndex + 1, progress.highestFixedIndex())
             .mapToObj(journal::readAccept)
@@ -376,12 +376,6 @@ public class TrexNode {
           journal.writeProgress(progress);
         }
       }
-      default -> {
-        // this is unreachable but on refactor to SHORT the compiler complains TODO
-        LOGGER.severe("Unknown message type: " + input);
-        throw new IllegalArgumentException("Unknown message type: " + input);
-      }
-
     }
   }
 
