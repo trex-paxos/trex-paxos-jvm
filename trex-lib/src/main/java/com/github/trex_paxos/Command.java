@@ -27,9 +27,18 @@ import java.util.zip.CRC32;
 ///                       We are able to assign these within the cluster and may use a custom UUID that has a partial time within each node.
 /// @param operationBytes The application specific binary encoding of the application command to apply
 ///                       to the application state machine.
+/// @param flavour A byte that can be used to distinguish between different types of commands. This allows us to multiplex
+///                       different types of commands within the same Paxos cluster. It also allows us to Paxos itself to
+///                       change the cluster membership without the application being aware of it. Negative numbers are
+/// reserved for system administration commands.
 public record Command(
     UUID uuid,
-    byte[] operationBytes) implements AbstractCommand {
+    byte[] operationBytes,
+    byte flavour) implements AbstractCommand {
+
+  public Command(UUID uuid, byte[] operationBytes) {
+    this(uuid, operationBytes, (byte) 0);
+  }
 
   public Command {
     if (uuid == null) {

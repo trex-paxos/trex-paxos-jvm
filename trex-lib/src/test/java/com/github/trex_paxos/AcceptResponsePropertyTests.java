@@ -35,7 +35,7 @@ public class AcceptResponsePropertyTests {
     };
 
     final var thisCounter = 100;
-    final var thisPromise = new BallotNumber(thisCounter, thisNodeId);
+    final var thisPromise = new BallotNumber((short) 0, thisCounter, thisNodeId);
 
     final var thisFixed = 10L;
 

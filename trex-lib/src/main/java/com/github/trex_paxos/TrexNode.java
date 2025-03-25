@@ -338,6 +338,7 @@ public class TrexNode {
           if (role == TrexRole.LEAD) {
             assert this.term != null;
             this.term = new BallotNumber(
+                otherHighestPromised.era(),
                 otherHighestPromised.counter() + 1,
                 nodeIdentifier
             );
@@ -633,7 +634,7 @@ public class TrexNode {
   Optional<Prepare> timeout() {
     if (role == FOLLOW) {
       role = RECOVER;
-      term = new BallotNumber(progress.highestPromised().counter() + 1, nodeIdentifier);
+      term = new BallotNumber(progress.highestPromised().era(), progress.highestPromised().counter() + 1, nodeIdentifier);
       final var prepare = nextPrepareMessage();
       final var selfPrepareResponse = paxos(prepare);
       assert selfPrepareResponse.messages().size() == 1 : "selfPrepare={" + selfPrepareResponse + "}";
@@ -837,7 +838,7 @@ public class TrexNode {
   @TestOnly
   protected void setLeader() {
     this.role = TrexRole.LEAD;
-    this.term = new BallotNumber(1, this.nodeIdentifier);
+    this.term = new BallotNumber((short) 0, 1, this.nodeIdentifier);
   }
 }
 

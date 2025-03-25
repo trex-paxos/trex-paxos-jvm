@@ -48,7 +48,7 @@ public class PreparePropertyTests {
 
     // Setup ballot number of the node under test
     final var thisCounter = 100;
-    final var thisPromise = new BallotNumber(thisCounter, nodeId);
+    final var thisPromise = new BallotNumber((short) 0, thisCounter, nodeId);
 
     // Setup log indices
     final long thisFixed = 10;
@@ -88,9 +88,9 @@ public class PreparePropertyTests {
 
     // Setup other ballot number of the inbound message
     final var otherNumber = switch (testCase.promiseCounterRelation) {
-      case LESS -> new BallotNumber(thisCounter - 1, otherNodeId);
-      case EQUAL -> new BallotNumber(thisCounter, otherNodeId);
-      case GREATER -> new BallotNumber(thisCounter + 1, otherNodeId);
+      case LESS -> new BallotNumber((short) 0, thisCounter - 1, otherNodeId);
+      case EQUAL -> new BallotNumber((short) 0, thisCounter, otherNodeId);
+      case GREATER -> new BallotNumber((short) 0, thisCounter + 1, otherNodeId);
     };
 
     // Create prepare message

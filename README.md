@@ -184,7 +184,16 @@ public record AcceptResponse(
 The boolean `vote` implies each node may
 respond with either a positive acknowledgement or a negative acknowledgement.
 This implementation includes negative acknowledgements to both `prepare` and `accept`
-messages. When a leader receives a majority negative response, it abdicates.
+messages. When a leader receives a majority negative response, it abdicates. 
+
+If you check the actual code the description above misses off some small optional implementation details that support
+UPaxos cluster reconfigurations as per the paper [Unbounded Pipelining in Dynamically Reconfigurable Paxos Clusters](http://tessanddave.com/paxos-reconf-latest.pdf).
+
+* The `Command` type has an optional `flavour` byte so that optional cluster reconfiguration command that add or remove 
+cluster nodes to commands to be hidden from the host application(s). It also allows multiple appliations to share the 
+same paxos cluster.  
+* The `BallotNumber` has an optional `era` field so that a leader can use its casting vote to decide when the next `era` 
+comes into effect. 
 
 ### Third: Learning Which Values Are Fixed
 

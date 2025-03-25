@@ -52,7 +52,7 @@ public class PickleTests {
 
     @Test
   public void testAcceptNoopPickleUnpickle() throws IOException {
-    Accept accept = new Accept((short) 3, 4L, new BallotNumber(2, (short) 3), NoOperation.NOOP);
+    Accept accept = new Accept((short) 3, 4L, new BallotNumber((short) 0, 2, (short) 3), NoOperation.NOOP);
     byte[] pickled = Pickle.write(accept);
     Accept unpickled = Pickle.readAccept(pickled);
     assertEquals(accept, unpickled);
@@ -61,7 +61,7 @@ public class PickleTests {
     @Test
   public void testAcceptPickleUnpickleClientCommand() throws IOException {
     Command command = new Command( "data".getBytes(StandardCharsets.UTF_8));
-    Accept accept = new Accept((short) 3, 4L, new BallotNumber(2, (short) 3), command);
+    Accept accept = new Accept((short) 3, 4L, new BallotNumber((short) 0, 2, (short) 3), command);
     byte[] pickled = Pickle.write(accept);
     Accept unpickled = Pickle.readAccept(pickled);
     assertEquals(accept, unpickled);
