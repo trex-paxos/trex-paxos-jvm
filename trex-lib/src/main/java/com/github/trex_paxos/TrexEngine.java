@@ -13,8 +13,8 @@ import java.util.function.BiFunction;
 import java.util.logging.Level;
 import java.util.stream.Stream;
 
+import static com.github.trex_paxos.Messages.CRASHED;
 import static com.github.trex_paxos.TrexLogger.LOGGER;
-import static com.github.trex_paxos.TrexNode.CRASHED;
 
 /// Manages thread safety and coordinates between the network layer, TrexNode consensus core algorithm,
 /// and application callbacks. Ensures:
@@ -188,6 +188,7 @@ public class TrexEngine<RESULT> implements AutoCloseable {
     return trexNode.isCrashed();
   }
 
+  @SuppressWarnings("unused")
   public NodeId nodeId() {
     return nodeId;
   }
