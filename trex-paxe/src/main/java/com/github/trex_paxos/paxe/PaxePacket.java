@@ -12,7 +12,77 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
-
+/// Represents a secure network packet for the Paxe protocol, encapsulating both unencrypted and
+/// encrypted message formats. Packets include metadata for routing, integrity checks, and optional
+/// authenticated encryption using AES-GCM.
+///
+/// ## Packet Structure
+///
+/// ### Message Header (8 bytes):
+///
+/// ```
+/// | fromId (2 bytes) | toId (2 bytes) | channel  (2 bytes) | length (2 bytes)
+/// ```
+///
+/// - fromId: Source node identifier
+/// - toId: Destination node identifier
+/// - channel: Communication channel identifier
+/// - length: Payload length
+///
+/// ### Standard Message Format:
+///
+/// ```
+/// | Header (8 bytes)  | flags (1 byte)  | nonce(12) | Payload  | Auth Tag (16)
+/// ```
+///
+/// - Header: Message header defined above
+/// - Flags: Encryption mode and magic bits
+/// - Nonce: Unique 12-byte nonce for AES-GCM encryption
+/// - Payload: The small message payload encrypted with the peer-to-peer session key.
+/// - Auth Tag: 16-byte authentication tag
+///
+/// ### DEK Message Format
+///
+/// ```
+/// | Header (8)  | flags (1)  | nonce (12) | DEK | Auth Tag (16) | Length (2) | Payload | Auth Tag (16)
+/// ```
+/// - Header: Message header defined above
+/// - Flags: Encryption mode and magic bits
+/// - Nonce: Unique 12-byte nonce for AES-GCM encryption
+/// - DEK: Data Encryption Key encrypted with the peer-to-peer session key.
+/// - Length: Payload length
+/// - Payload: The large message payload encrypted with the DEK.
+/// - Auth Tag: 16-byte authentication tag of the encrypted payload.
+///
+/// ### Flags Byte Structure
+///
+/// - Bit 0: DEK flag (0=standard, 1=DEK mode)
+/// - Bit 1: Must be 0
+/// - Bit 2: Must be 1
+/// - Bits 3-7: Reserved
+///
+/// ## Encryption Details
+///
+/// Encrypted packets:
+///
+/// - Use AES-GCM with 16-byte authentication tag appended to ciphertext.
+/// - Unique 12-byte nonce for AES-GCM encryption.
+/// - Uses SRP6a (RFC5054) for peer-to-peer session key negotiation.
+/// - Small message less than 64 bytes are encrypted with the peer-to-peer session key.
+/// - Large messages are encrypted with a Data Encryption Key (DEK) shared amongst broadcast messages.
+/// - DEK is encrypted with each node pair session key.
+///
+/// ## Validation Rules
+///
+/// - Nonce and auth tag must both be present or both absent
+/// - Nonce must be exactly 12 bytes when present
+/// - Auth tag must be exactly 16 bytes when present
+/// - Total packet size cannot exceed 65,535 bytes
+/// - Flags byte must have magic bits set correctly
+///
+/// @see PaxeProtocol PaxeProtocol constants and validation rules
+/// @see #decrypt(PaxePacket, byte[]) Packet decryption method
+/// @see #encrypt(PaxeMessage, NodeId, byte[]) Packet encryption method
 public record PaxePacket(
     NodeId from,
     NodeId to,

@@ -105,7 +105,7 @@ Test infrastructure providing:
 
 ### Message Size
 
-- Standard mode for messages < 64KB
+- Standard mode for small messages < 64 byte (cpu cache line)
 - DEK mode automatically used for larger payloads
 - Maximum UDP packet size: 65507 bytes
 

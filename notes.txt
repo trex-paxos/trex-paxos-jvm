@@ -4,7 +4,9 @@ mvn clean package
 
 npx repomix@latest --include "README.md,trex-lib/src/main/**"
 
-npx repomix@latest --include "README.md,trex-lib/src/**"
+npx repomix@latest --include "README.md,trex-paxe/PAXE.md,trex-paxe/src/main/**"
+
+npx repomix@latest --include "README.md,trex-paxe/PAXE.md,trex-lib/src/**"
 
 npx repomix@latest
 
