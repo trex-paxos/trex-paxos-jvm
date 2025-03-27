@@ -26,7 +26,7 @@ public class StackServiceImplTest {
 
     StackServiceImpl.setLogLevel(Level.parse(logLevel));
 
-    Supplier<ClusterMembership> members = () -> new ClusterMembership(
+    Supplier<ClusterEndpoint> members = () -> new ClusterEndpoint(
         Map.of(new NodeId((short) 1), new NetworkAddress("localhost", 5000),
             new NodeId((short) 2), new NetworkAddress("localhost", 5001)));
 

@@ -24,7 +24,7 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
-import static com.github.trex_paxos.Messages.*;
+import static com.github.trex_paxos.ErrorStrings.*;
 import static com.github.trex_paxos.TrexNode.TrexRole.*;
 
 /// A TrexNode is a single node in a Paxos cluster. It runs the part-time parliament algorithm implementation handling:
@@ -406,27 +406,27 @@ public class TrexNode {
     // only prepare and accept messages can change the promise
     if (!priorPromise.equals(latestPromise) && !protocolMessage) {
       this.crashed = true;
-      final var message = Messages.PROTOCOL_VIOLATION_PROMISES + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
+      final var message = ErrorStrings.PROTOCOL_VIOLATION_PROMISES + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
       LOGGER.severe(message);
     }
 
     // promises cannot go backwards the ballot number must only ever increase
     if (latestPromise.lessThan(priorPromise)) {
       this.crashed = true;
-      final var message = Messages.PROTOCOL_VIOLATION_NUMBER + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
+      final var message = ErrorStrings.PROTOCOL_VIOLATION_NUMBER + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
       LOGGER.severe(message);
     }
 
     // the logFixed slot index must only ever increase
     if (priorProgress.highestFixedIndex() > progress.highestFixedIndex()) {
       this.crashed = true;
-      final var message = Messages.PROTOCOL_VIOLATION_INDEX + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
+      final var message = ErrorStrings.PROTOCOL_VIOLATION_INDEX + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
       LOGGER.severe(message);
     } else if (priorProgress.highestFixedIndex() != progress.highestFixedIndex()) {
       final var slotFixingMessage = input instanceof LearningMessage;
       if (!slotFixingMessage) {
         this.crashed = true;
-        final var message = Messages.PROTOCOL_VIOLATION_SLOT_FIXING + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
+        final var message = ErrorStrings.PROTOCOL_VIOLATION_SLOT_FIXING + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
         LOGGER.severe(message);
       }
     }
@@ -828,7 +828,7 @@ public class TrexNode {
   }
 }
 
-class Messages {
+class ErrorStrings {
   static final String PROTOCOL_VIOLATION_PROMISES = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED Paxos Protocol Violation the promise has been changed when the message is not a PaxosMessage type.";
   static final String PROTOCOL_VIOLATION_NUMBER = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the promise has decreased.";
   static final String PROTOCOL_VIOLATION_INDEX = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the logFixed slot index has decreased.";

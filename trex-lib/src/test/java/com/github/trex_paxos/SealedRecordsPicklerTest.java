@@ -5,12 +5,12 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class PermitsRecordsPicklerTest {
+class SealedRecordsPicklerTest {
   private Pickler<StackService.Value> pickler;
 
   @BeforeEach
   void setup() {
-    pickler = PermitsRecordsPickler.createPickler(StackService.Value.class);
+    pickler = SealedRecordsPickler.createPickler(StackService.Value.class);
   }
 
   @Test
@@ -90,6 +90,6 @@ class PermitsRecordsPicklerTest {
   @Test
   void shouldFailToCreateSerdeForNonSealedInterface() {
     assertThrows(IllegalArgumentException.class,
-        () -> PermitsRecordsPickler.createPickler(Runnable.class));
+        () -> SealedRecordsPickler.createPickler(Runnable.class));
   }
 }

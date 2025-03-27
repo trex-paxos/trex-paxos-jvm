@@ -1,8 +1,8 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.network.Channel;
-import com.github.trex_paxos.network.ClusterMembership;
-import com.github.trex_paxos.network.NamedSubscriber;
+import com.github.trex_paxos.network.ClusterEndpoint;
+import com.github.trex_paxos.network.ChannelSubscription;
 import com.github.trex_paxos.network.NetworkLayer;
 
 import java.util.*;
@@ -49,10 +49,10 @@ public class StackServiceImpl implements StackService {
     }
   }
 
-  public StackServiceImpl(short index, Supplier<ClusterMembership> members, NetworkLayer networkLayer) {
+  public StackServiceImpl(short index, Supplier<ClusterEndpoint> members, NetworkLayer networkLayer) {
     LOGGER.fine(() -> "Creating node " + index);
 
-    final Pickler<Value> valuePickler = PermitsRecordsPickler.createPickler(Value.class);
+    final Pickler<Value> valuePickler = SealedRecordsPickler.createPickler(Value.class);
 
     // Callback to apply committed results to the stack
     BiFunction<Long, Command, Response> callback = (slot, cmd) -> {
@@ -166,6 +166,6 @@ public class StackServiceImpl implements StackService {
     return new TrexEngine<>(node, callback);
   }
 
-  record ChannelAndSubscriber(Channel channel, NamedSubscriber subscriber) {
+  record ChannelAndSubscriber(Channel channel, ChannelSubscription subscriber) {
   }
 }

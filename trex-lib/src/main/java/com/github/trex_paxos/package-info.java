@@ -22,7 +22,7 @@
 /// - [com.github.trex_paxos.QuorumStrategy]: Defines how voting quorums are calculated, allowing for different strategies.
 ///
 /// In order to make it easy to pickle java records and sealed traits that permits only records there are two
-/// utility pickler classes [com.github.trex_paxos.RecordPickler] and [com.github.trex_paxos.PermitsRecordsPickler].
+/// utility pickler classes [com.github.trex_paxos.FlatRecordPickler] and [com.github.trex_paxos.SealedRecordsPickler].
 ///
 /// The library focuses on correctness and performance while remaining agnostic to application specifics.
 /// Architecture Note:

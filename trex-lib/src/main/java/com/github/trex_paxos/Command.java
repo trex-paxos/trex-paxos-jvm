@@ -18,9 +18,8 @@ package com.github.trex_paxos;
 import java.util.UUID;
 import java.util.zip.CRC32;
 
-/// A client command which is the id we are trying to fix. As this library is neutral
-/// to the application, the command is completely opaque to the library. The
-/// application is responsible for encoding and decoding the results from and to byte array.
+/// A [Command] which is the value we are trying to fix. The
+/// application is responsible for encoding and decoding real host commands and values from and to byte array.
 ///
 /// @param uuid  The client message unique identifier used to respond to the client who issued the command.
 ///                       This just be universally unique across all clients and all time. 

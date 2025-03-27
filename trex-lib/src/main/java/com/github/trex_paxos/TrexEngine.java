@@ -13,7 +13,7 @@ import java.util.function.BiFunction;
 import java.util.logging.Level;
 import java.util.stream.Stream;
 
-import static com.github.trex_paxos.Messages.CRASHED;
+import static com.github.trex_paxos.ErrorStrings.CRASHED;
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 /// Manages thread safety and coordinates between the network layer, TrexNode consensus core algorithm,

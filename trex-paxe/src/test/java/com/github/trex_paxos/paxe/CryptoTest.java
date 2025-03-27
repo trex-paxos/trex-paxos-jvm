@@ -79,10 +79,10 @@ class CryptoTest {
     byte[] payload = new byte[1024];
     random.nextBytes(payload);
 
-    final var dekPayload = Crypto.dekInner(payload);
+    final var dekPayload = Crypto.dekEncryptWithRandomKey(payload);
     ByteBuffer encrypt = getBuffer();
 
-    Crypto.encryptDek(encrypt, dekPayload, sessionKey);
+    Crypto.sessionKeyEncryptDek(encrypt, dekPayload, sessionKey);
     encrypt.flip();
 
     byte[] decrypted = Crypto.decryptDek(encrypt, sessionKey);

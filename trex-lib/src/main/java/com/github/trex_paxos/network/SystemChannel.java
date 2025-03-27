@@ -2,6 +2,8 @@ package com.github.trex_paxos.network;
 
 import java.util.List;
 
+/// System channels are used for system messages that are part of the trex paxos and paxe protocols.
+/// Channels below 100 are reserved for system channels.
 public enum SystemChannel {
   CONSENSUS((short) 1),       // Core paxos consensus
   PROXY((short) 2),          // Forward results to leader

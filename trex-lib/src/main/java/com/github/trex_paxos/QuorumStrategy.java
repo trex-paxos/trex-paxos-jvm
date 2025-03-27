@@ -49,9 +49,6 @@ public interface QuorumStrategy {
 
   QuorumOutcome assessAccepts(long logIndex, Set<AcceptResponse.Vote> accepts);
 
-  /// This is important to know when a majority write has been achieved.
-  int clusterSize();
-
   enum QuorumOutcome {
     WIN, LOSE, WAIT
   }

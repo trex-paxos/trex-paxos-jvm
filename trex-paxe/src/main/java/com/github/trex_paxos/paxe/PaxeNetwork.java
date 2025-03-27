@@ -24,15 +24,28 @@ import static com.github.trex_paxos.network.SystemChannel.*;
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 import static com.github.trex_paxos.paxe.PaxeProtocol.MAX_UDP_SIZE;
 
-/// Wire protocol for Paxe secured network communication.
+/// ## Paxe Network Protocol
 ///
-/// The protocol uses Data Encryption Keys (DEK) for efficient broadcast of large messages.
-/// For payloads >64 bytes, we first encrypt the data once with a random DEK using AES-GCM,
-/// then encrypt only the DEK itself with each recipient's session key. This avoids
-/// re-encrypting large payloads multiple times during broadcast. Both the inner (DEK)
-/// and outer (session key) encryption use AES-GCM with fresh IVs each time.
+/// This class is inspired by the QUIC protocol which is UDP used by HTTP3. Rather than using
+/// public certificates we use RFC5054 SRP TLS to generated shared session keys between pairs of nodes.
+/// Each UDP packet is encrypted with the session key using tamper-proof AES-GCM.
 ///
-/// Datagram Structure:
+/// If the message is not broadcast message then it is simply encrypted with the session key for
+/// the destination node. If the message is a broadcast message and greater than 64 bytes then it is first encrypted
+/// random Data Encryption Key (DEK). The DEK is then encrypted with the session key of each recipient. This avoids
+/// doing a lot of encryption work for messages that are bigger than a CPU cache line.
+///
+/// The protocol is limited to 63.8k payloads. Even a 63.8k payload is many frames over the network. Writing such a
+/// large command into the Paxos log will be single threaded and make the log slower to run. A much better approach is
+/// to have client write large commands into fault-tolerant cloud storage referenced by a UUID. Then use the UUID
+/// as the command in the Paxos log. That way it is only consistency of ordering that is mediated by the Paxos protocol.
+///
+/// Paxe supports many channels to multiplex many parallel streams of data. Channel numbers below 100 are reserved for
+/// protocol purposes. Channel numbers above 100 are for application use. Channel 0 is reserved for key exchange. Channel 1 is
+///  system channels are used for Paxos and proxy.
+///
+/// # Datagram Structure
+///
 /// ```
 /// Header (8 bytes):
 ///   from:     2 bytes - source node ID
@@ -44,7 +57,7 @@ import static com.github.trex_paxos.paxe.PaxeProtocol.MAX_UDP_SIZE;
 ///   bit 0:    1 = DEK encryption used, 0 = direct session key encryption
 ///   bit 1:    magic bit, must be 0
 ///   bit 2:    magic bit, must be 1
-///   bit 3-7: reserved
+///   bit 3-7:  reserved
 ///
 /// For direct encryption (flags.bit0 == 0):
 ///   nonce:      12 bytes
@@ -65,6 +78,8 @@ import static com.github.trex_paxos.paxe.PaxeProtocol.MAX_UDP_SIZE;
 /// - Direct encryption: 65507 - 8 - 1 - 12 - 16 = 65470 bytes
 /// - DEK encryption: 65507 - 8 - 1 - 12 - 16 - 16 - 12 - 16 - 2 = 65424 bytes
 ///```
+///
+/// TODO This logic uses a pickler that will geneerate a lot of byte arrays we should make one that writes to a pooled ByteBuffer
 public class PaxeNetwork implements NetworkLayer, AutoCloseable {
 
   sealed interface Traffic {
@@ -85,7 +100,7 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
   final DatagramChannel channel;
   final Selector selector;
   private final Map<Channel, List<Consumer<?>>> subscribers;
-  final Supplier<ClusterMembership> membership;
+  final Supplier<ClusterEndpoint> membership;
   private final Map<Channel, Pickler<?>> picklers;
 
   private volatile boolean running;
@@ -106,10 +121,10 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
     private final SessionKeyManager keyManager;
     private final int port;
     private final NodeId local;
-    private final Supplier<ClusterMembership> membership;
+    private final Supplier<ClusterEndpoint> membership;
 
     public Builder(SessionKeyManager keyManager, int port, NodeId local,
-                   Supplier<ClusterMembership> membership) {
+                   Supplier<ClusterEndpoint> membership) {
       Objects.requireNonNull(keyManager, "Key manager cannot be null");
       Objects.requireNonNull(local, "Local node ID cannot be null");
       Objects.requireNonNull(membership, "Membership supplier cannot be null");
@@ -128,7 +143,7 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
   }
 
   PaxeNetwork(SessionKeyManager keyManager, int port, NodeId local,
-              Supplier<ClusterMembership> membership,
+              Supplier<ClusterEndpoint> membership,
               Map<Channel, Pickler<?>> picklers) throws IOException {
     this.keyManager = keyManager;
     this.localNode = local;
@@ -272,7 +287,7 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
   }
 
   @Override
-  public <T> void broadcast(Supplier<ClusterMembership> membershipSupplier, Channel channel, T msg) {
+  public <T> void broadcast(Supplier<ClusterEndpoint> membershipSupplier, Channel channel, T msg) {
     Collection<NodeId> recipients = membershipSupplier.get().otherNodes(localNode);
     byte[] serialized = serializeMessage(msg, channel);
 
@@ -282,12 +297,12 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
     } else {
       try {
         // Large messages: Encrypt payload once with DEK
-        var dekPayload = Crypto.dekInner(serialized);
+        var dekWithEncryptedPayload = Crypto.dekEncryptWithRandomKey(serialized);
 
         // Then only encrypt DEK per recipient
         for (NodeId recipient : recipients) {
           ByteBuffer output = ByteBuffer.allocateDirect(MAX_UDP_SIZE);
-          Crypto.encryptDek(output, dekPayload, keyManager.sessionKeys.get(recipient));
+          Crypto.sessionKeyEncryptDek(output, dekWithEncryptedPayload, keyManager.sessionKeys.get(recipient));
           output.flip();
           // Send the encrypted DEK and reuse the encrypted payload
           send(channel, recipient, output);

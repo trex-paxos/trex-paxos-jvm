@@ -15,10 +15,8 @@
  */
 package com.github.trex_paxos;
 
-/// There are two primary types of results. The NOOP which is used to speed up recovery and normal results sent by clients of
-/// the host application.
-///
-/// At a future date we are likely to add some cluster reconfiguration results. These will be used to add and remove
-/// nodes from the cluster or to change voting weights.
+/// There are two primary types of results:
+/// - The [NoOperation] which is used to speed up recovery.
+/// - [Command] which are normal commands. These come in flavors so that there can be system commands to reconfigure the cluster.
 public sealed interface AbstractCommand permits NoOperation, Command {
 }

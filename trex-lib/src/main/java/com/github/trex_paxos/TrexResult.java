@@ -22,15 +22,13 @@ import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-/// The result of running the paxos algorithm for an input messages is a possible empty list of sequentially fixed
-/// results and a possibly empty list of messages to be sent out. The journal must be made crash durable before any
-/// messages are sent out see [Journal].
+/// The result of running the paxos algorithm for a batch of input messages is a possible empty list of sequentially
+/// fixed commands results and a possibly empty list of messages to be sent out. The journal must be made crash durable
+/// before any messages are sent out see [Journal].
 ///
-/// TODO this needs to contain the result.
-///
-/// @param results A possibly empty list of sequentially chosen values aka fixed results for the host application to process.
+/// @param results A possibly empty list of sequentially chosen commands aka fixed values.
 /// @param messages A possibly empty list of messages that were generated to be sent out after the journal is made crash durable.
-public record TrexResult(List<TrexMessage> messages, TreeMap<Long, AbstractCommand> results) {
+ record TrexResult(List<TrexMessage> messages, TreeMap<Long, AbstractCommand> results) {
   public TrexResult {
     messages = List.copyOf(messages);
     results = new TreeMap<>(results);

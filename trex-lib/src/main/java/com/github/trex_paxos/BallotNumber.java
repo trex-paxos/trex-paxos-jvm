@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 package com.github.trex_paxos;
-/// A ballot number is the proposal number used in the Paxos algorithm. Here we are using five bytes. The most significant
-/// are incremented as an integer when a node wishes to become a leader. We encode the
-/// nodeIdentifier in the least significant fifth byte. This works as long as we make the nodeIdentifier unique within the cluster
-/// at any given configuration. It must also be unique across the overlaps of cluster membership reconfigurations. We can use Paxos itself to
-/// ensure this uniqueness.
+
+/// A ballot number is the proposal number used in the Paxos algorithm. Here we are using eight bytes.
+///
+/// counter (4 bytes) | nodeIdentifier (2 bytes) |
+///
+/// The system administrator must ensure that the `nodeIdentifier` is unique for each node in the cluster.
+/// Each node must increment the `counter` in the ballot number each time it attempts to lead.
 public record BallotNumber(int counter, short nodeIdentifier) implements Comparable<BallotNumber> {
 
   public static final BallotNumber MIN = new BallotNumber(Integer.MIN_VALUE, Short.MIN_VALUE);
