@@ -5,7 +5,8 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-public class PermitsRecordsPickler {
+/// This pickler serializes and deserializes sealed records. It creates pickler for each permitted subclass.
+public class SealedRecordsPickler {
   public static <T> Pickler<T> createPickler(Class<T> sealedInterface) {
     if (!sealedInterface.isSealed()) {
       throw new IllegalArgumentException("Class must be a sealed interface");
@@ -50,7 +51,7 @@ public class PermitsRecordsPickler {
           }
         });
       } else {
-        picklersByClass.put(subclass, RecordPickler.createPickler(recordClass));
+        picklersByClass.put(subclass, FlatRecordPickler.createPickler(recordClass));
       }
 
       typeIdsByClass.put(subclass, nextTypeId);

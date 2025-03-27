@@ -6,7 +6,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class RecordPicklerTest {
+class FlatRecordPicklerTest {
   record TestRecord(
       int intValue,
       long longValue,
@@ -30,7 +30,7 @@ class RecordPicklerTest {
 
   @Test
   void testBasicSerialization() {
-    var serde = RecordPickler.createPickler(TestRecord.class);
+    var serde = FlatRecordPickler.createPickler(TestRecord.class);
     var record = new TestRecord(42, 123L, true, "hello");
 
     byte[] bytes = serde.serialize(record);
@@ -41,7 +41,7 @@ class RecordPicklerTest {
 
   @Test
   void testNullString() {
-    var serde = RecordPickler.createPickler(StringRecord.class);
+    var serde = FlatRecordPickler.createPickler(StringRecord.class);
     var record = new StringRecord(null);
 
     byte[] bytes = serde.serialize(record);
@@ -52,7 +52,7 @@ class RecordPicklerTest {
 
   @Test
   void testEmptyString() {
-    var serde = RecordPickler.createPickler(StringRecord.class);
+    var serde = FlatRecordPickler.createPickler(StringRecord.class);
     var record = new StringRecord("");
 
     byte[] bytes = serde.serialize(record);
@@ -63,7 +63,7 @@ class RecordPicklerTest {
 
   @Test
   void testNullInputs() {
-    var serde = RecordPickler.createPickler(TestRecord.class);
+    var serde = FlatRecordPickler.createPickler(TestRecord.class);
 
     assertNull(serde.deserialize(null));
     assertNull(serde.deserialize(new byte[0]));
@@ -72,7 +72,7 @@ class RecordPicklerTest {
 
   @Test
   void testEdgeCases() {
-    var serde = RecordPickler.createPickler(TestRecord.class);
+    var serde = FlatRecordPickler.createPickler(TestRecord.class);
     var record = new TestRecord(
         Integer.MAX_VALUE,
         Long.MAX_VALUE,
@@ -88,7 +88,7 @@ class RecordPicklerTest {
 
   @Test
   void testEmptyOptional() {
-    var serde = RecordPickler.createPickler(OptionalRecord.class);
+    var serde = FlatRecordPickler.createPickler(OptionalRecord.class);
     var record = new OptionalRecord(Optional.empty());
 
     byte[] bytes = serde.serialize(record);
@@ -100,7 +100,7 @@ class RecordPicklerTest {
 
   @Test
   void testPresentOptional() {
-    var serde = RecordPickler.createPickler(OptionalRecord.class);
+    var serde = FlatRecordPickler.createPickler(OptionalRecord.class);
     var record = new OptionalRecord(Optional.of("test id"));
 
     byte[] bytes = serde.serialize(record);
@@ -113,7 +113,7 @@ class RecordPicklerTest {
 
   @Test
   void testMixedRecord() {
-    var serde = RecordPickler.createPickler(MixedRecord.class);
+    var serde = FlatRecordPickler.createPickler(MixedRecord.class);
     var record = new MixedRecord(42, Optional.of("optional"), "required");
 
     byte[] bytes = serde.serialize(record);
@@ -133,7 +133,7 @@ class RecordPicklerTest {
 
     //noinspection unchecked,rawtypes
     assertThrows(IllegalArgumentException.class, () ->
-        RecordPickler.createPickler((Class) NotARecord.class)
+        FlatRecordPickler.createPickler((Class) NotARecord.class)
     );
   }
 }

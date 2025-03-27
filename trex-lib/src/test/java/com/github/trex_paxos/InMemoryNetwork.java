@@ -1,7 +1,7 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.network.Channel;
-import com.github.trex_paxos.network.NamedSubscriber;
+import com.github.trex_paxos.network.ChannelSubscription;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -27,7 +27,7 @@ class InMemoryNetwork {
     }
   }
 
-  public void subscribe(Channel channel, NamedSubscriber handler) {
+  public void subscribe(Channel channel, ChannelSubscription handler) {
     StackServiceImpl.ChannelAndSubscriber channelAndSubscriber = new StackServiceImpl.ChannelAndSubscriber(channel, handler);
     handlers.add(channelAndSubscriber);
   }

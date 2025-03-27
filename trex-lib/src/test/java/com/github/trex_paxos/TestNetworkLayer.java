@@ -23,7 +23,7 @@ class TestNetworkLayer implements NetworkLayer {
   public <T> void subscribe(Channel channel, Consumer<T> handler, String name) {
     @SuppressWarnings("unchecked")
     Pickler<T> pickler = (Pickler<T>) picklers.get(channel);
-    final var namedSubscriber = new NamedSubscriber(byteBuffer -> handler.accept(pickler.deserialize(byteBuffer.array())), name);
+    final var namedSubscriber = new ChannelSubscription(byteBuffer -> handler.accept(pickler.deserialize(byteBuffer.array())), name);
     LOGGER.fine(() -> "Subscribing to channel: " + channel + " with name: " + name);
     network.subscribe(channel, namedSubscriber);
   }
@@ -39,8 +39,8 @@ class TestNetworkLayer implements NetworkLayer {
   }
 
   @Override
-  public <T> void broadcast(Supplier<ClusterMembership> membershipSupplier, Channel channel, T msg) {
-    ClusterMembership membership = membershipSupplier.get();
+  public <T> void broadcast(Supplier<ClusterEndpoint> membershipSupplier, Channel channel, T msg) {
+    ClusterEndpoint membership = membershipSupplier.get();
     var others = new HashSet<>(membership.otherNodes(nodeId));
     others.forEach(nodeId -> send(channel, nodeId, msg));
   }

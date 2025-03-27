@@ -3,7 +3,7 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.DirectMessage;
 import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
-import com.github.trex_paxos.network.ClusterMembership;
+import com.github.trex_paxos.network.ClusterEndpoint;
 import com.github.trex_paxos.network.NetworkLayer;
 import com.github.trex_paxos.network.NodeId;
 import org.jetbrains.annotations.TestOnly;
@@ -66,14 +66,14 @@ public class TrexApp<COMMAND, RESULT> {
 
   protected final TrexEngine<RESULT> engine;
   protected final NetworkLayer networkLayer;
-  protected final Supplier<ClusterMembership> clusterMembershipSupplier;
+  protected final Supplier<ClusterEndpoint> clusterMembershipSupplier;
   final protected LeaderTracker leaderTracker = new LeaderTracker();
   final ResponseTracker<RESULT> responseTracker = new ResponseTracker<>();
   protected final Pickler<COMMAND> valuePickler;
   public final NodeId nodeId;
 
   public TrexApp(
-      Supplier<ClusterMembership> clusterMembershipSupplier,
+      Supplier<ClusterEndpoint> clusterMembershipSupplier,
       TrexEngine<RESULT> engine,
       NetworkLayer networkLayer,
       Pickler<COMMAND> valuePickler) {
@@ -184,7 +184,7 @@ public class TrexApp<COMMAND, RESULT> {
 
   /// Transmits a list of Trex messages across the network to their respective destinations.
   /// DirectMessage instances are sent to specific nodes while other messages are broadcast.
-  /// Delegates to the NetworkLayer to handle actual transmission and ClusterMembership for broadcasts.
+  /// Delegates to the NetworkLayer to handle actual transmission and ClusterEndpoint for broadcasts.
   ///
   /// @param messages The list of Trex messages to be transmitted
   private void transmitTrexMessages(List<TrexMessage> messages) {

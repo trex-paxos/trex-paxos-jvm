@@ -11,7 +11,8 @@ import java.util.HexFormat;
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 import static com.github.trex_paxos.paxe.PaxeProtocol.*;
 
-/// Cryptographic operations for the Paxe protocol with zero-copy buffer handling
+/// Cryptographic operations for the Paxe protocol with zero-copy buffer handling using AES/GCM/NoPadding
+/// FIXME we should not have the dumpBuffer method called without having a specific debug level enabled for this class.
 public final class Crypto {
 
   private static final SecureRandom RANDOM = new SecureRandom();
@@ -23,6 +24,7 @@ public final class Crypto {
     }
   });
 
+  /// Dumps a buffer to a hex string for debugging
   static String dumpBuffer(ByteBuffer buffer, int start, int len) {
     byte[] bytes = new byte[Math.min(len, buffer.remaining())];
     int originalPosition = buffer.position();
@@ -32,6 +34,8 @@ public final class Crypto {
     return HexFormat.of().formatHex(bytes).replaceAll("(.{2})", "$1 ").trim();
   }
 
+  /// This does a standard encryption of a payload using AES/GCM/NoPadding
+  /// FIXME we should preallocate a pool of Direct ByteBuffers to avoid the cost of allocation and to make it off-heap
   public static byte[] encrypt(byte[] payload, byte[] sessionKey) {
     ByteBuffer buffer = ByteBuffer.allocateDirect(payload.length);
     buffer.put(payload).flip();
@@ -46,6 +50,7 @@ public final class Crypto {
     return result;
   }
 
+  // FIXME we should preallocate a pool of Direct ByteBuffers to avoid the cost of allocation and to make it off-heap
   public static byte[] decrypt(byte[] encrypted, byte[] sessionKey) {
     ByteBuffer buffer = ByteBuffer.allocateDirect(encrypted.length);
     buffer.put(encrypted).flip();
@@ -119,8 +124,8 @@ public final class Crypto {
     }
   }
 
-  public record DekPayload(byte[] dekKey, byte[] dekNonce, byte[] dekEncrypted) {
-    public DekPayload {
+  public record DekEncryptedPayloadWithKey(byte[] dekKey, byte[] dekNonce, byte[] dekEncryptedMessage) {
+    public DekEncryptedPayloadWithKey {
       if (dekKey.length != DEK_KEY_SIZE) {
         throw new IllegalArgumentException("Invalid DEK key length");
       }
@@ -130,8 +135,11 @@ public final class Crypto {
     }
   }
 
-
-  public static DekPayload dekInner(byte[] payload) throws GeneralSecurityException {
+  /// This is the inner encryption of a payload with a Data Encryption Key (DEK).
+  ///
+  /// @param payload The message payload to encrypt with a fresh random Data Encryption Key
+  /// @return The encrypted payload with the random DEK key and random nonce
+  public static DekEncryptedPayloadWithKey dekEncryptWithRandomKey(byte[] payload) throws GeneralSecurityException {
     byte[] dekKey = new byte[DEK_KEY_SIZE];
     RANDOM.nextBytes(dekKey);
 
@@ -149,34 +157,37 @@ public final class Crypto {
         dumpBuffer(ByteBuffer.wrap(dekEncrypted), dekEncrypted.length - GCM_TAG_LENGTH - 8, 8),
         dumpBuffer(ByteBuffer.wrap(dekEncrypted), dekEncrypted.length - GCM_TAG_LENGTH, GCM_TAG_LENGTH)));
 
-    return new DekPayload(dekKey, dekNonce, dekEncrypted);
+    return new DekEncryptedPayloadWithKey(dekKey, dekNonce, dekEncrypted);
   }
 
-  /// Encrypts a Data Encryption Key (DEK) payload using session encryption
-  /// Creates a buffer with:
-  /// - [byte] flags: FLAG_DEK | FLAG_MAGIC_1
-  /// - [12bytes] session nonce
-  /// - [32bytes] session-encrypted DEK key
-  /// - [12bytes] DEK nonce (not encrypted)
-  /// - [2bytes] encrypted payload length
-  /// - bytes DEK-encrypted payload
-  /// - [16bytes] GCM tag
+  /// Encrypts a Data Encryption Key (DEK) using session encryption.
+  /// Writes to the output buffer in the following format:
   ///
-  /// @param output Buffer to write the encrypted message to
-  /// @param payload The DEK payload containing key, nonce and encrypted data
-  /// @param sessionKey The session key to encrypt the DEK key with
+  /// - `1 byte` flags: FLAG_DEK | FLAG_MAGIC_1 | FLAG_MAGIC_2
+  /// - `12 bytes` session nonce
+  /// - `32 bytes` session-encrypted DEK key
+  /// - `12 bytes` DEK nonce (not encrypted)
+  /// - `2 bytes` encrypted payload length
+  /// - `N bytes` DEK-encrypted payload
+  /// - `16 bytes` GCM tag
+  ///
+  /// @param output Buffer to write the session encrypted DEK key along with the DEK encrypted payload
+  /// @param payload The DEK key and the DEK encrypted payload and nonce
+  /// @param sessionKey The peer-to-peer session key to encrypt the DEK with
   /// @throws SecurityException if encryption fails
-  public static void encryptDek(ByteBuffer output, DekPayload payload, byte[] sessionKey) {
+  public static void sessionKeyEncryptDek(ByteBuffer output, DekEncryptedPayloadWithKey payload, byte[] sessionKey) {
     try {
-      // Skip zeroing the header - let protocol handle it
+      // Skip zeroing the header which will be rewritten else where to reflect the `from` and `to` nodes.
       output.position(FLAGS_OFFSET);
 
+      // we must set the first magic bit to be one no need to clear the second magic bit as it is already zero
       byte flags = (byte) (FLAG_DEK | FLAG_MAGIC_1);
       LOGGER.finest(() -> String.format("Writing flags=%02x at position=%d", flags, output.position()));
       output.put(flags);
 
       byte[] sessionNonce = new byte[GCM_NONCE_LENGTH];
       RANDOM.nextBytes(sessionNonce);
+
       LOGGER.finest(() -> String.format("Writing sessionNonce at position=%d", output.position()));
       output.put(sessionNonce);
 
@@ -190,17 +201,14 @@ public final class Crypto {
       output.put(sessionCipher.doFinal(payload.dekKey));
       LOGGER.finest(() -> String.format("Encrypted DEK key: %s", dumpBuffer(output, encryptedKeyPos, DEK_KEY_SIZE + GCM_TAG_LENGTH)));
 
-
       LOGGER.finest(() -> String.format("Writing dekNonce at position=%d", output.position()));
       final var noncePos = output.position();
       output.put(payload.dekNonce);
       LOGGER.finest(() -> String.format("DEK nonce: %s", dumpBuffer(output, noncePos, GCM_NONCE_LENGTH)));
 
-
-      LOGGER.finest(() -> String.format("Writing payload length=%d at position=%d", payload.dekEncrypted.length, output.position()));
-      output.putShort((short) payload.dekEncrypted.length);
-      output.put(payload.dekEncrypted);
-
+      LOGGER.finest(() -> String.format("Writing payload length=%d at position=%d", payload.dekEncryptedMessage.length, output.position()));
+      output.putShort((short) payload.dekEncryptedMessage.length);
+      output.put(payload.dekEncryptedMessage);
     } catch (GeneralSecurityException e) {
       throw new SecurityException("DEK encryption failed", e);
     }
@@ -270,7 +278,6 @@ public final class Crypto {
           new GCMParameterSpec(GCM_TAG_LENGTH_BITS, dekNonce));
 
       return dekCipher.doFinal(encryptedPayload);
-
     } catch (GeneralSecurityException e) {
       throw new SecurityException("DEK decryption failed", e);
     }
@@ -284,5 +291,3 @@ public final class Crypto {
     return sb.toString();
   }
 }
-
-

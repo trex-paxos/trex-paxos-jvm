@@ -7,8 +7,8 @@ import java.util.stream.Collectors;
 
 /// The cluster membership information which may be changed at runtime using UPaxos for dynamic membership
 /// changes without stalls. 
-public record ClusterMembership(Map<NodeId, NetworkAddress> nodeAddresses) {
-  public ClusterMembership {
+public record ClusterEndpoint(Map<NodeId, NetworkAddress> nodeAddresses) {
+  public ClusterEndpoint {
     nodeAddresses = Map.copyOf(nodeAddresses); // Defensive copy
   }
 
