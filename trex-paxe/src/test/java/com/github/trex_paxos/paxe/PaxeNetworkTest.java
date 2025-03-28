@@ -3,7 +3,7 @@ package com.github.trex_paxos.paxe;
 import com.github.trex_paxos.BallotNumber;
 import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.network.Channel;
-import com.github.trex_paxos.network.NodeId;
+import com.github.trex_paxos.NodeId;
 import org.junit.jupiter.api.*;
 
 import java.nio.channels.Selector;

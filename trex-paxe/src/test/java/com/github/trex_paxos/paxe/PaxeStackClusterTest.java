@@ -3,7 +3,7 @@ package com.github.trex_paxos.paxe;
 import com.github.trex_paxos.*;
 import com.github.trex_paxos.network.ClusterEndpoint;
 import com.github.trex_paxos.network.NetworkAddress;
-import com.github.trex_paxos.network.NodeId;
+import com.github.trex_paxos.NodeId;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;

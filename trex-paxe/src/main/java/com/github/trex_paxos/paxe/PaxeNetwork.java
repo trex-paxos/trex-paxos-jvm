@@ -1,5 +1,6 @@
 package com.github.trex_paxos.paxe;
 
+import com.github.trex_paxos.NodeId;
 import com.github.trex_paxos.Pickle;
 import com.github.trex_paxos.Pickler;
 import com.github.trex_paxos.network.*;

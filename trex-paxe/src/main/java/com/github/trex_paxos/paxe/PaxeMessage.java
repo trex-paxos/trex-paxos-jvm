@@ -1,7 +1,7 @@
 package com.github.trex_paxos.paxe;
 
 import com.github.trex_paxos.network.Channel;
-import com.github.trex_paxos.network.NodeId;
+import com.github.trex_paxos.NodeId;
 
 import java.util.Arrays;
 import java.util.Objects;

@@ -1,5 +1,7 @@
 package com.github.trex_paxos.network;
 
+import com.github.trex_paxos.NodeId;
+
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 

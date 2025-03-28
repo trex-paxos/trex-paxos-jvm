@@ -18,32 +18,28 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.AcceptResponse;
 import com.github.trex_paxos.msg.PrepareResponse;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
-/// The interface to provide a strategy for determining whether a quorum has been reached. UPaxos Quorums requires an understanding
-/// of the current cluster configuration. That will be different at each log index. This means that
-/// there can be different rules for determining overlapping quorums at different parts of the protocol. Voting weights
-/// allow us to do specific optimizations such as the even node gambit. The papers such as UPaxos and FPaxos explains that
-/// what we need is that any two quorums must overlap in at least one node. We can use different quorum strategies for the
-/// prepare and accept phases. For example, we could use a simple majority for the `accept` phase and a weighted quorum
-/// the `prepare` phase so that to the following primary-secondary cross-regional configuration:
+/// The interface to provide a strategy for determining whether a quorum has been reached.
+/// TheFPaxos paper [Flexible Paxos: Quorum intersection revisited](https://arxiv.org/pdf/1608.06696v1) and the UPaxos
+/// paper [Unbounded Pipelining in Dynamically Reconfigurable Paxos Clusters](http://tessanddave.com/paxos-reconf-latest.pdf)
+/// show that we can be more flexible than countVotes majorities. The papers explain that
+/// what we need is that any two quorums must overlap in at least one node. This is trivially the case for when we change
+/// voting weights by one.
 ///
-/// - Use a six node cluster with two nodes in each region
-/// - Put each node in a separate zone so that it is in a separate failure domain so unlikely that any two nodes will ever fail at the same time
-/// - When in steady state use a weighted quorum with one region designated as the primary region.
-/// - In each region set the two nodes to have a voting weight of 0. These are hot standby nodes in case of a regional failure.
-/// - In the primary region set one node to have a voting weight of 2, the other to have a voting weight of 1
-/// - In the secondary region set both nodes to have a voting weight of 1
-/// - In the `accept` phase use the weighted quorum strategy. This will mean that when the primary contacts the other
-/// node in the primary region the id is accepted without contacting the secondary region.
-/// - In the `prepare` phase do not use weights use a simple majority. That requires one vote in the opposite region to
-/// force any node in the secondary region to promote to being the leader.
-/// - When you want to actually fail-over between regions the host application as a distributed system may need some things
-/// like DNS updates or URL updates for the app to move to the other region.
-/// - When you are initiation the cross region fail-over you can force the two nodes in the primary region to have a new
-/// just set the voting weights to 1 on in the active region and 0 in the other region.
-/// - This will cause the secondary region to suddenly have a majority for both `prepare` and `accept`.
+/// We can use different quorum strategies for the prepare and accept phases as long as they overlap. The even node gambit
+/// is:
 ///
+/// - Use four servers that are two pairs in two resilience zones `{A1, A2, B1, B2}`.
+/// - Set the `prepare` quorum size to be 3
+/// - Set the `accept` quorum size to be 2
+///
+/// If the link between the resilience zones fails then the cluster can still make progress. The leader only needs a
+/// single response to know a value is fixed. Yet a split brain cannot occur as the leader takeover protocol needs
+/// three out of four nodes to vote.
 public interface QuorumStrategy {
   QuorumOutcome assessPromises(long logIndex, Set<PrepareResponse.Vote> promises);
 
@@ -51,5 +47,15 @@ public interface QuorumStrategy {
 
   enum QuorumOutcome {
     WIN, LOSE, WAIT
+  }
+
+  default QuorumOutcome countVotes(int quorum, List<Boolean> votes) {
+    Map<Boolean, List<Boolean>> voteMap = votes.stream().collect(Collectors.partitioningBy(v -> v));
+    if (voteMap.get(true).size() >= quorum)
+      return QuorumOutcome.WIN;
+    else if (voteMap.get(false).size() >= quorum)
+      return QuorumOutcome.LOSE;
+    else
+      return QuorumOutcome.WAIT;
   }
 }

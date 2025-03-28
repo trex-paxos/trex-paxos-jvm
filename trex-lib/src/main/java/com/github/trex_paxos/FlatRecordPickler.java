@@ -5,7 +5,7 @@ import java.lang.reflect.RecordComponent;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
-/// This is a simple pickler for flat records. It only supports records that have components that are
+/// This is a countVotes pickler for flat records. It only supports records that have components that are
 /// primitive types, strings, and Optional<String>. This is good enough for all the messages in Trex.
 /// Core java is working on making records serializable by default, but until then, this is good enough. 
 public class FlatRecordPickler {

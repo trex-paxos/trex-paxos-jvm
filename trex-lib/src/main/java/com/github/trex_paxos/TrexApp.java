@@ -5,7 +5,6 @@ import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
 import com.github.trex_paxos.network.ClusterEndpoint;
 import com.github.trex_paxos.network.NetworkLayer;
-import com.github.trex_paxos.network.NodeId;
 import org.jetbrains.annotations.TestOnly;
 
 import java.util.*;

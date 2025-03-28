@@ -32,7 +32,7 @@ public class SealedRecordsPickler {
       @SuppressWarnings("unchecked")
       Class<? extends Record> recordClass = (Class<? extends Record>) subclass;
 
-      // For empty records (no components), create a simple pickler
+      // For empty records (no components), create a countVotes pickler
       if (recordClass.getRecordComponents() == null || recordClass.getRecordComponents().length == 0) {
         Constructor<?> constructor = recordClass.getDeclaredConstructors()[0];
         picklersByClass.put(subclass, new Pickler<Record>() {

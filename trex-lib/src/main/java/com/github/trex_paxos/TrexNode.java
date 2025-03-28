@@ -40,7 +40,7 @@ import static com.github.trex_paxos.TrexNode.TrexRole.*;
 /// It requires the following collaborating classes:
 ///
 /// * One [Journal] which must be crash durable storage.
-/// * One [QuorumStrategy] which may be a simple majority, in the future FPaxos or UPaxos.
+/// * One [QuorumStrategy] which may be a countVotes majority, in the future FPaxos or UPaxos.
 ///
 /// This class logs to JUL logging as severe. You can configure JUL logging to
 /// bridge to your chosen logging framework. This class is not thread safe. The [TrexEngine] will wrap this class and
@@ -85,7 +85,7 @@ public class TrexNode {
   ///
   /// @param logAtLevel     The level to log when values are known to be chosen which is logged as "WIN" and when are know to be sequentially logFixed with is logged as "FIXED".
   /// @param nodeIdentifier The unique node identifier. This must be unique across the cluster and across enough time for prior messages to have been forgotten.
-  /// @param quorumStrategy The quorum strategy that may be a simple majority, else things like FPaxos or UPaxos
+  /// @param quorumStrategy The quorum strategy that may be a countVotes majority, else things like FPaxos or UPaxos
   /// @param journal        The durable storage and durable log. This must be pre-initialised.
   public TrexNode(Level logAtLevel, short nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal) {
     this.nodeIdentifier = nodeIdentifier;

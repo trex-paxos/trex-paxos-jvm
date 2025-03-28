@@ -1,5 +1,7 @@
 package com.github.trex_paxos.network;
 
+import com.github.trex_paxos.NodeId;
+
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
