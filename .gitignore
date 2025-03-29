@@ -13,3 +13,4 @@ my.chatllm
 .aider*
 repomix-output.txt
 repomix-output.xml
+output*.log
