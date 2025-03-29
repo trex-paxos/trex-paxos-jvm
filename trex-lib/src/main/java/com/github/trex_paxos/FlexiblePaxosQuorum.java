@@ -46,7 +46,7 @@ public class FlexiblePaxosQuorum implements QuorumStrategy {
 
   public FlexiblePaxosQuorum(Set<VotingWeight> weights, int prepareQuorumSize, int acceptQuorumSize) {
     final var sumWeights = weights.stream().mapToInt(VotingWeight::weight).sum();
-    if (sumWeights <= prepareQuorumSize + acceptQuorumSize) {
+    if ( prepareQuorumSize + acceptQuorumSize <= sumWeights) {
       throw new IllegalArgumentException("|N| > |A| + |P| is required yet N="
           + sumWeights + " A=" + acceptQuorumSize + " P=" + prepareQuorumSize);
     }
@@ -79,14 +79,14 @@ public class FlexiblePaxosQuorum implements QuorumStrategy {
         .mapToInt(v -> id2Weight.get(fromExtractor.applyAsInt(v)))
         .sum();
 
-    if (yesCount > quorumSize) {
+    if (yesCount >= quorumSize) {
       return QuorumOutcome.WIN;
     } else {
       final var noCount = count.get(false).stream()
           .mapToInt(v -> id2Weight.get(fromExtractor.applyAsInt(v)))
           .sum();
 
-      if (noCount > quorumSize) {
+      if (noCount >= quorumSize) {
         return QuorumOutcome.LOSE;
       } else {
         return QuorumOutcome.WAIT;
