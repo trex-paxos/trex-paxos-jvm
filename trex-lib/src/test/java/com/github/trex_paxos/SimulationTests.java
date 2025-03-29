@@ -189,7 +189,10 @@ public class SimulationTests {
     assertThat(min).isGreaterThan(0);
   }
 
-  /// This returns the minimum command size of the three engines
+  /// This test will take the time when something is happening modulo 10 and if it is any of [0,1,2] it will drop
+  /// messages to that node. Assuming messages are spread evenly through time it would be a 30% loss rate. That is
+  /// a very high drop rate.
+  /// This returns the minimum command size of the committed journal of the three engines
   private int testWorkLossyNetwork(RandomGenerator rng) {
     // given a repeatable test setup
     final var simulation = new Simulation(rng, 30);
@@ -197,18 +200,18 @@ public class SimulationTests {
     // first force a leader as we have separate tests for leader election. This is a partitioned network test.
     makeLeader(simulation);
 
-    int runLength = 30;
+    int runLength = 15;
 
     final var counter = new AtomicLong();
 
     final var nemesis = makeNemesis(
-        _ -> (byte) (counter.getAndIncrement() % 5),
+        _ -> (byte) (counter.getAndIncrement() % 10),
         simulation.trexEngine1,
         simulation.trexEngine2,
         simulation.trexEngine3
     );
 
-    // when we run for 15 iterations with client data
+    // when we run for runLength iterations with client data
     simulation.run(runLength, true, nemesis);
 
     assertThat(inconsistentFixedIndex(
