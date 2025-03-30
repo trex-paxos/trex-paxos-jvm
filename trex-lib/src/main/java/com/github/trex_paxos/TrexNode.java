@@ -572,9 +572,8 @@ public class TrexNode {
         nodeIdentifier, prepare.number().nodeIdentifier(),
         new PrepareResponse.Vote(nodeIdentifier,
             prepare.number().nodeIdentifier(),
-            prepare.slot(),
-            true,
-            prepare.number()),
+            prepare.slotTerm(),
+            true),
         journal.readAccept(prepare.slot()),
         highestAccepted()
     );
@@ -590,9 +589,8 @@ public class TrexNode {
         nodeIdentifier, prepare.number().nodeIdentifier(),
         new PrepareResponse.Vote(nodeIdentifier,
             prepare.number().nodeIdentifier(),
-            prepare.slot(),
-            false,
-            prepare.number()),
+            prepare.slotTerm(),
+            false),
         journal.readAccept(prepare.slot()), highestAccepted()
     );
   }
@@ -705,7 +703,7 @@ public class TrexNode {
 
   private void processPrepareResponse(PrepareResponse prepareResponse, List<TrexMessage> messages) {
     final var from = prepareResponse.from();
-    final long logIndex = prepareResponse.vote().logIndex();
+    final long logIndex = prepareResponse.vote().slotTerm().logIndex();
     final var votes = prepareResponsesByLogIndex.computeIfAbsent(logIndex, _ -> new HashMap<>());
     votes.put(from, prepareResponse);
     Set<PrepareResponse.Vote> vs = votes.values().stream()

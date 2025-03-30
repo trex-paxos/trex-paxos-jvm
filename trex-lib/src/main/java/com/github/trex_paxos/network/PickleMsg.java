@@ -187,21 +187,19 @@ public class PickleMsg implements Pickler<TrexMessage> {
     return Short.BYTES + Short.BYTES + Long.BYTES + BALLOT_NUMBER_SIZE + 1; // from + to + slotTerm + vote
   }
 
+  public static void write(PrepareResponse.Vote m, ByteBuffer buffer) {
+    write(m.slotTerm(), buffer);
+    buffer.put((byte) (m.vote() ? 1 : 0));
+  }
+
   public static PrepareResponse.Vote readVotePrepare(ByteBuffer buffer, short from, short to) {
-    long logIndex = buffer.getLong();
+    SlotTerm slotTerm = readSlotTerm(buffer);
     boolean vote = buffer.get() != 0;
-    BallotNumber number = readBallotNumber(buffer);
-    return new PrepareResponse.Vote(from, to, logIndex, vote, number);
+    return new PrepareResponse.Vote(from, to, slotTerm, vote);
   }
 
   private static int calculateVotePrepareSize() {
     return Long.BYTES + 1 + BALLOT_NUMBER_SIZE; // logIndex + vote + ballotNumber
-  }
-
-  public static void write(PrepareResponse.Vote m, ByteBuffer buffer) {
-    buffer.putLong(m.logIndex());
-    buffer.put((byte) (m.vote() ? 1 : 0));
-    write(m.number(), buffer);
   }
 
   public static void write(Accept m, ByteBuffer buffer) {
