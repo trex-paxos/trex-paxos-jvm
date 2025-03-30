@@ -1,6 +1,5 @@
 package com.github.trex_paxos.paxe;
 
-
 /// Protocol constants and validation for Paxe secure network communication.
 /// Encapsulates wire format knowledge and validation logic.
 public sealed interface PaxeProtocol permits PaxePacket {

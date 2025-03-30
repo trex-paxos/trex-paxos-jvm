@@ -21,14 +21,16 @@ import java.util.zip.CRC32;
 /// A [Command] which is the value we are trying to fix. The
 /// application is responsible for encoding and decoding real host commands and values from and to byte array.
 ///
-/// @param uuid  The client message unique identifier used to respond to the client who issued the command.
-///                       This just be universally unique across all clients and all time. 
-///                       We are able to assign these within the cluster and may use a custom UUID that has a partial time within each node.
+/// @param uuid           The client message unique identifier used to respond to the client who issued the command.
+///                                                                   This just be universally unique across all clients and all time.
 /// @param operationBytes The application specific binary encoding of the application command to apply
-///                       to the application state machine.
+///                                                                   to the application state machine.
+/// @param flavour        A byte that can be used to distinguish between different types of commands. This allows us to multiplex
+///                                                                   different types of commands within the same Paxos cluster. Negative numbers are
+///                                             reserved for system administration commands.
 public record Command(
-    UUID uuid,
-    byte[] operationBytes) implements AbstractCommand {
+    UUID uuid, byte[] operationBytes, byte flavour
+) implements AbstractCommand {
 
   public Command {
     if (uuid == null) {
@@ -43,8 +45,18 @@ public record Command(
     }
   }
 
+  /// Creates a command with the specified operation bytes and flavor.
+  /// The UUID will be automatically generated to be time ordered using [UUIDGenerator#generateUUID()].
+  /// @param bytes The application-specific binary data for this command
+  /// @param flavour A byte that distinguishes different types of commands. Negative numbers are reserved for system administration commands.
+  public Command(byte[] bytes, byte flavour) {
+    this(UUIDGenerator.generateUUID(), bytes, flavour);
+  }
+
+  /// Creates a command with the specified operation bytes.
+  /// The UUID will be automatically generated and flavor will be set to 0
   public Command(byte[] bytes) {
-    this(UUIDGenerator.generateUUID(), bytes);
+    this(bytes, (byte) 0);
   }
 
   @Override
@@ -73,7 +85,8 @@ public record Command(
     CRC32 crc32 = new CRC32();
     crc32.update(operationBytes);
 
-    return String.format("Command[clientMsgUuid='%s', operationBytes=byte[%d]:CRC32=%d]",
+    return String.format("Command[flavour=%d, clientMsgUuid='%s', operationBytes=byte[%d]:CRC32=%d]",
+        flavour,
         uuid.toString(),
         operationBytes.length,
         crc32.getValue());

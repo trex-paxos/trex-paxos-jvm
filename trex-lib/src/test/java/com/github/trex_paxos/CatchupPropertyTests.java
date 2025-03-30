@@ -41,11 +41,11 @@ public class CatchupPropertyTests {
     };
 
     final var thisCounter = 100;
-    final var thisPromise = new BallotNumber(thisCounter, thisNodeId);
+    final var thisPromise = new BallotNumber((short) 0, thisCounter, thisNodeId);
     final var otherNumber = switch (testCase.promiseCounterRelation) {
-      case LESS -> new BallotNumber(thisCounter - 1, otherNodeId);
-      case EQUAL -> new BallotNumber(thisCounter, otherNodeId);
-      case GREATER -> new BallotNumber(thisCounter + 1, otherNodeId);
+      case LESS -> new BallotNumber((short) 0, thisCounter - 1, otherNodeId);
+      case EQUAL -> new BallotNumber((short) 0, thisCounter, otherNodeId);
+      case GREATER -> new BallotNumber((short) 0, thisCounter + 1, otherNodeId);
     };
 
     final var thisFixed = 10L;

@@ -17,7 +17,7 @@ public class PickleMsg implements Pickler<TrexMessage> {
   }
 
   private static final int HEADER_SIZE = 5; // fromNode(2) + toNode(2) + type(1)
-  private static final int BALLOT_NUMBER_SIZE = Integer.BYTES + 2; // counter(4) + nodeId(2)
+  private static final int BALLOT_NUMBER_SIZE = 8; // era(2) + counter(4) + nodeId(2)
 
   public static byte[] pickle(TrexMessage msg) {
     int size = HEADER_SIZE + calculateMessageSize(msg);
@@ -120,11 +120,12 @@ public class PickleMsg implements Pickler<TrexMessage> {
       case NoOperation _ ->
         // Here we use zero bytes as a sentinel to represent the NOOP command.
           buffer.putInt(0);
-      case Command(final UUID uuid, final var operationBytes) -> {
+      case Command(final UUID uuid, final var operationBytes, final var flavour) -> {
         buffer.putInt(operationBytes.length);
         buffer.put(operationBytes);
         buffer.putLong(uuid.getMostSignificantBits());
         buffer.putLong(uuid.getLeastSignificantBits());
+        buffer.put(flavour);
       }
     }
   }
@@ -138,7 +139,7 @@ public class PickleMsg implements Pickler<TrexMessage> {
     buffer.get(bytes);
     long mostSigBits = buffer.getLong();
     long leastSigBits = buffer.getLong();
-    return new Command(new UUID(mostSigBits, leastSigBits), bytes);
+    return new Command(new UUID(mostSigBits, leastSigBits), bytes, buffer.get());
   }
 
   public static void write(AcceptResponse m, ByteBuffer buffer) {
@@ -206,7 +207,7 @@ public class PickleMsg implements Pickler<TrexMessage> {
     return switch (command) {
       case NoOperation _ -> Integer.BYTES;
       case Command c -> Integer.BYTES + c.operationBytes().length +
-          Long.BYTES + Long.BYTES; // operationBytes + UUID
+          Long.BYTES + Long.BYTES + 1; // operationBytes + UUID + flavour
     };
   }
 
@@ -294,12 +295,13 @@ public class PickleMsg implements Pickler<TrexMessage> {
 
   // Utility methods for BallotNumber
   private static void write(BallotNumber n, ByteBuffer buffer) {
+    buffer.putShort(n.era());
     buffer.putInt(n.counter());
     buffer.putShort(n.nodeIdentifier());
   }
 
   private static BallotNumber readBallotNumber(ByteBuffer buffer) {
-    return new BallotNumber(buffer.getInt(), buffer.getShort());
+    return new BallotNumber(buffer.getShort(), buffer.getInt(), buffer.getShort());
   }
 
   @Override

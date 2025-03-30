@@ -3,7 +3,6 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.AcceptResponse;
 import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
-import com.github.trex_paxos.network.NodeId;
 import org.jetbrains.annotations.TestOnly;
 
 import java.util.ArrayList;
@@ -101,8 +100,9 @@ public class TrexEngine<RESULT> implements AutoCloseable {
     } catch (InterruptedException e) {
       // FIXME i am not sure what do to in this case
       Thread.currentThread().interrupt();
-      LOGGER.warning("TrexEngine was interrupted awaiting the mutex probably to shutdown while under load.");
-      throw new RuntimeException(e);
+      LOGGER.warning("TrexEngine was interrupted probably to shutdown while under load so we will close.");
+      trexNode().close();
+      return new EngineResult<>(List.of(), List.of());
     } finally {
       mutex.release();
     }
@@ -138,7 +138,7 @@ public class TrexEngine<RESULT> implements AutoCloseable {
   }
 
   private TrexMessage nextAcceptMessage(Command command) {
-    LOGGER.fine(() -> "node " + nodeIdentifier() + " processing next command " + command.uuid());
+    LOGGER.finest(() -> "node " + nodeIdentifier() + " processing next command " + command.uuid());
     final var nextAcceptMessage = trexNode.nextAcceptMessage(command);
     // FIXME: pull this out so that we can run it as a batch
     final var r = trexNode.paxos(nextAcceptMessage);

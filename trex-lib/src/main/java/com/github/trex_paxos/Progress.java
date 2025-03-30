@@ -43,7 +43,7 @@ public record Progress(
     return new Progress(nodeIdentifier, highestPromised, fixedLogIndex);
   }
 
-  // Java may get `with` so that we can retire this method.
+  // Java may get `withers` so that we can retire this method.
   public Progress withHighestPromised(BallotNumber p) {
     return new Progress(nodeIdentifier, p, highestFixedIndex);
   }

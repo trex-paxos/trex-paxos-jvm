@@ -1,6 +1,6 @@
 package com.github.trex_paxos.paxe;
 
-import com.github.trex_paxos.network.NodeId;
+import com.github.trex_paxos.NodeId;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;

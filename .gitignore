@@ -5,6 +5,7 @@ target/
 trex2-lib/target/
 .idea/
 */.jqwik-database
+**/output.log
 *.db
 all.md
 all.java

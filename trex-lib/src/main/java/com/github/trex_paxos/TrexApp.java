@@ -5,7 +5,6 @@ import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
 import com.github.trex_paxos.network.ClusterEndpoint;
 import com.github.trex_paxos.network.NetworkLayer;
-import com.github.trex_paxos.network.NodeId;
 import org.jetbrains.annotations.TestOnly;
 
 import java.util.*;
@@ -127,14 +126,19 @@ public class TrexApp<COMMAND, RESULT> {
     }
   }
 
-  public void submitValue(COMMAND value, CompletableFuture<RESULT> future) {
+  public void submitValue(COMMAND value, CompletableFuture<RESULT> future){
+    submitValue(value, future, (byte) 0);
+  }
+
+  public void submitValue(COMMAND value, CompletableFuture<RESULT> future, byte type) {
+    if( type < 0 ) throw new IllegalArgumentException("type must be non-negative as negative values are reserved for internal use");
     final var uuid = UUIDGenerator.generateUUID();
     try {
       responseTracker.track(uuid, future);
 
       if (engine.isLeader()) {
         byte[] valueBytes = valuePickler.serialize(value);
-        final var cmd = new Command(uuid, valueBytes);
+        final var cmd = new Command(uuid, valueBytes, type);
         final var messages = createLeaderMessages(cmd);
         LOGGER.fine(() -> engine.nodeIdentifier() + " leader is sending accept messages " + messages);
         transmitTrexMessages(messages);
@@ -143,7 +147,7 @@ public class TrexApp<COMMAND, RESULT> {
             leader -> {
               LOGGER.fine(() -> engine.nodeIdentifier() + " " + engine.trexNode.getRole() + " is proxying cmd messages" + value);
               byte[] valueBytes = valuePickler.serialize(value);
-              Command cmd = new Command(uuid, valueBytes);
+              Command cmd = new Command(uuid, valueBytes, type);
               networkLayer.send(PROXY.value(), leader, cmd);
             },
             () -> {

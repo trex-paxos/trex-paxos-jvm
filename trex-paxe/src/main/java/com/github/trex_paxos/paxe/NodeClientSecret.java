@@ -2,7 +2,7 @@ package com.github.trex_paxos.paxe;
 
 import java.util.Objects;
 
-import com.github.trex_paxos.network.NodeId;
+import com.github.trex_paxos.NodeId;
 /// This is an Secure Remote Password secret for a node see RFC5054
 public record NodeClientSecret(
   String srpIdentity,

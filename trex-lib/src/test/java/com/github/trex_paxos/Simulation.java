@@ -18,6 +18,7 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.*;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.random.RandomGenerator;
 import java.util.random.RandomGeneratorFactory;
@@ -30,33 +31,55 @@ import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 class Simulation {
   private final RandomGenerator rng;
-  private final long longMaxTimeout;
-  private final long shortMaxTimeout;
 
-  public Simulation(RandomGenerator rng, long longMaxTimeout) {
-    this.longMaxTimeout = longMaxTimeout;
+  public Simulation(RandomGenerator rng, long longMaxTimeout, QuorumStrategy quorumStrategy) {
     this.rng = rng;
-    shortMaxTimeout = longMaxTimeout / 3;
-    assert this.longMaxTimeout > 1;
-    assert this.shortMaxTimeout > 0 && this.shortMaxTimeout < this.longMaxTimeout;
-    LOGGER.info("maxTimeout: " + longMaxTimeout + " halfTimeout: " + shortMaxTimeout);
+    this.longMaxTimeout = longMaxTimeout;
+    trexEngine1 = makeTrexEngine((short) 1, quorumStrategy, allCommandsMap.get((short) 1));
+    trexEngine2 = makeTrexEngine((short) 2, quorumStrategy, allCommandsMap.get((short) 2));
+    trexEngine3 = makeTrexEngine((short) 3, quorumStrategy, allCommandsMap.get((short) 3));
+    trexEngine4 = makeTrexEngine((short) 4, quorumStrategy, allCommandsMap.get((short) 4));
+    engines = Map.of(
+        (short) 1, trexEngine1,
+        (short) 2, trexEngine2,
+        (short) 3, trexEngine3,
+        (short) 4, trexEngine4
+    );
+    DEFAULT_NETWORK_SIMULATION =
+        (send, _) ->
+            send.messages.stream().flatMap(x -> switch (x) {
+              case BroadcastMessage m ->
+                  engines.values().stream().flatMap(engine -> engine.paxos(List.of(m)).messages().stream());
+              case DirectMessage m -> engines.get(m.to()).paxos(List.of(m)).messages().stream();
+            });
+  }
+
+  long longMaxTimeout;
+
+  long timeout(RandomGenerator rng) {
+    var shortMaxTimeout = longMaxTimeout / 3;
+    return rng.nextInt((int) shortMaxTimeout + 1, (int) longMaxTimeout - 1);
+  }
+
+  long heartBeatInterval() {
+    return longMaxTimeout / 3 - 2;
   }
 
   static RandomGenerator repeatableRandomGenerator(long seed) {
     RandomGeneratorFactory<RandomGenerator> factory = RandomGeneratorFactory.of("L64X128MixRandom");
     // Create a seeded random generator using the factory
-    RandomGenerator rng = factory.create(seed);
+    final RandomGenerator rng = factory.create(seed);
     LOGGER.info("Simulation Using Seed: " + seed);
     return rng;
   }
 
   Map<Short, Long> nodeTimeouts = new HashMap<>();
 
-  Optional<Prepare> timeout(TrexNode trexNode) {
+  Optional<Prepare> timeout(TrexNode trexNode, long now) {
     var result = trexNode.timeout();
     if (result.isPresent()) {
       LOGGER.fine(() -> "Timeout: " + trexNode.nodeIdentifier() + " " + trexNode.getRole());
-      setRandomTimeout(trexNode.nodeIdentifier());
+      setRandomTimeout(trexNode.nodeIdentifier(), now);
     }
     return result;
   }
@@ -73,13 +96,14 @@ class Simulation {
     final var _ = IntStream.range(0, iterations).anyMatch(iteration -> {
       Optional.ofNullable(eventQueue.pollFirstEntry())
           .ifPresent(timeWithEvents -> {
+            final long now = timeWithEvents.getKey();
+            this.now.set(now);
             // advance the clock
-            tick(timeWithEvents.getKey());
-
             LOGGER.info("------------------");
             LOGGER.info("tick: " + now + "\n\t" + trexEngine1.role() + " " + trexEngine1.trexNode().progress.toString()
                 + "\n\t" + trexEngine2.role() + " " + trexEngine2.trexNode().progress.toString()
                 + "\n\t" + trexEngine3.role() + " " + trexEngine3.trexNode().progress.toString()
+                + "\n\t" + trexEngine4.role() + " " + trexEngine4.trexNode().progress.toString()
             );
 
             // grab the events at this time
@@ -87,14 +111,15 @@ class Simulation {
 
             // for what is in the queue of events at this time
             final List<TrexMessage> newMessages = events.stream().flatMap(event -> {
-              LOGGER.fine(() -> "event: " + event);
+              LOGGER.fine(() -> "now: " + now + ", event: " + event);
               switch (event) {
                 case Timeout timeout -> {
                   // if it is a timeout collect the prepare messages if the node is still a follower at this time
                   final var prepare = switch (timeout.nodeIdentifier) {
-                    case 1 -> timeout(trexEngine1.trexNode());
-                    case 2 -> timeout(trexEngine2.trexNode());
-                    case 3 -> timeout(trexEngine3.trexNode());
+                    case 1 -> timeout(trexEngine1.trexNode(), now);
+                    case 2 -> timeout(trexEngine2.trexNode(), now);
+                    case 3 -> timeout(trexEngine3.trexNode(), now);
+                    case 4 -> timeout(trexEngine4.trexNode(), now);
                     default ->
                         throw new IllegalArgumentException("Unexpected node identifier for timeout: " + timeout.nodeIdentifier);
                   };
@@ -106,11 +131,14 @@ class Simulation {
                   return networkSimulation(send, now, nemesis);
                 }
                 case Heartbeat heartbeat -> {
+                  LOGGER.fine(() -> "Event Heartbeat: " + heartbeat.nodeIdentifier);
+                  // FIXME this is weird the only the leader should be heartbeating
                   // if it is a timeout collect the prepare messages if the node is still a follower at this time
                   final var fixedWithAccepts = switch (heartbeat.nodeIdentifier) {
-                    case 1 -> createHeartbeatMessagesAndReschedule(trexEngine1.trexNode());
-                    case 2 -> createHeartbeatMessagesAndReschedule(trexEngine2.trexNode());
-                    case 3 -> createHeartbeatMessagesAndReschedule(trexEngine3.trexNode());
+                    case 1 -> createHeartbeatMessagesAndReschedule(trexEngine1.trexNode(), now);
+                    case 2 -> createHeartbeatMessagesAndReschedule(trexEngine2.trexNode(), now);
+                    case 3 -> createHeartbeatMessagesAndReschedule(trexEngine3.trexNode(), now);
+                    case 4 -> createHeartbeatMessagesAndReschedule(trexEngine4.trexNode(), now);
                     default ->
                         throw new IllegalArgumentException("Unexpected node identifier for heartbeat: " + heartbeat.nodeIdentifier);
                   };
@@ -121,7 +149,8 @@ class Simulation {
                       .flatMap(e -> {
                         final var commands = IntStream.range(0, 3).mapToObj(i -> {
                           final var data = now + ":" + e.getKey() + i;
-                          return new Command(data.getBytes());
+                          UUID uuid = new UUID(rng.nextLong(), rng.nextLong());
+                          return new Command(uuid, data.getBytes(), (byte) 0);
                         }).toList();
                         final TrexEngine<?> engine = e.getValue();
                         return engine.isLeader() ? engine.nextLeaderBatchOfMessages(commands).stream()
@@ -152,14 +181,17 @@ class Simulation {
       final var inconsistentFixedIndex = inconsistentFixedIndex(
           allCommandsMap.get(trexEngine1.nodeIdentifier()),
           allCommandsMap.get(trexEngine2.nodeIdentifier()),
-          allCommandsMap.get(trexEngine3.nodeIdentifier())
+          allCommandsMap.get(trexEngine3.nodeIdentifier()),
+          allCommandsMap.get(trexEngine4.nodeIdentifier())
       );
       finished = finished || inconsistentFixedIndex.isPresent();
       if (inconsistentFixedIndex.isPresent()) {
         LOGGER.info("finished as not matching results:" +
             "\n\t" + allCommandsMap.get(trexEngine1.nodeIdentifier()).values().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
             + "\n\t" + allCommandsMap.get(trexEngine2.nodeIdentifier()).values().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
-            + "\n\t" + allCommandsMap.get(trexEngine3.nodeIdentifier()).values().stream().map(Objects::toString).collect(Collectors.joining(",")));
+            + "\n\t" + allCommandsMap.get(trexEngine3.nodeIdentifier()).values().stream().map(Objects::toString).collect(Collectors.joining(",")) + "\n"
+            + "\n\t" + allCommandsMap.get(trexEngine4.nodeIdentifier()).values().stream().map(Objects::toString).collect(Collectors.joining(","))
+        );
         throw new AssertionError("results not matching");
       }
       engines.values().forEach(
@@ -173,43 +205,50 @@ class Simulation {
     });
   }
 
-  List<TrexMessage> createHeartbeatMessagesAndReschedule(TrexNode trexNode) {
+  /// If the node is a leader then it will create a heartbeat message and reschedule the next heartbeat
+  /// TODO it should only be doing this if it is a leader and then be consistent about when it does it?
+  private List<TrexMessage> createHeartbeatMessagesAndReschedule(TrexNode trexNode, long now) {
     var result = trexNode.createHeartbeatMessages();
     if (!result.isEmpty()) {
-      setHeartbeat(trexNode.nodeIdentifier());
-      LOGGER.finer(() -> "Heartbeat: " + trexNode.nodeIdentifier() + " " + trexNode.getRole() + " " + result);
+      final var when = scheduleNextHeartbeat(trexNode.nodeIdentifier(), now);
+      LOGGER.finer(() -> "Heartbeat: " + trexNode.nodeIdentifier() + " at " + when + " " + trexNode.getRole() + " " + result);
     }
     return result;
   }
 
   static OptionalLong inconsistentFixedIndex(TreeMap<Long, Command> c1,
                                              TreeMap<Long, Command> c2,
-                                             TreeMap<Long, Command> c3) {
+                                             TreeMap<Long, Command> c3,
+                                             TreeMap<Long, Command> c4
+  ) {
     final var c1last = !c1.isEmpty() ? c1.lastKey() : 0;
     final var c2last = !c2.isEmpty() ? c2.lastKey() : 0;
     final var c3last = !c3.isEmpty() ? c3.lastKey() : 0;
+    final var c4last = !c4.isEmpty() ? c4.lastKey() : 0;
     final var maxLength = Math.max(
         c1last, Math.max(
             c2last,
-            c3last));
+            Math.max(c3last, c4last)));
     return LongStream.range(0, maxLength).filter(i -> {
       final Optional<AbstractCommand> optC1 = Optional.ofNullable(c1.get(i));
       final Optional<AbstractCommand> optC2 = Optional.ofNullable(c2.get(i));
       final Optional<AbstractCommand> optC3 = Optional.ofNullable(c3.get(i));
+      final Optional<AbstractCommand> optC4 = Optional.ofNullable(c4.get(i));
 
       // Check if all non-empty values are equal
       final var result =
           optC1.map(
-                  // if one is defined check it against the two and three
-                  a1 -> optC2.map(a1::equals).orElse(true) && optC3.map(a1::equals).orElse(true)
-              )
-              // if one is not defined then check two against three
-              .orElse(true)
-              &&
+              a1 -> optC2.map(a1::equals).orElse(true) &&
+                  optC3.map(a1::equals).orElse(true) &&
+                  optC4.map(a1::equals).orElse(true)
+          ).orElse(true) &&
               optC2.map(
-                  // check two against three
-                  a2 -> optC3.map(a2::equals).orElse(true)
-              ).orElse(true); // if one and two are not defined it does not matter what three is
+                  a2 -> optC3.map(a2::equals).orElse(true) &&
+                      optC4.map(a2::equals).orElse(true)
+              ).orElse(true) &&
+              optC3.map(
+                  a3 -> optC4.map(a3::equals).orElse(true)
+              ).orElse(true);
       if (!result) {
         LOGGER.info("command mismatch logIndex=" + i + ":\n\t" + optC1 + "\n\t" + optC2 + "\n\t" + optC3);
       }
@@ -238,30 +277,43 @@ class Simulation {
 
   NavigableMap<Long, List<Event>> eventQueue = new TreeMap<>();
 
-  long now = 0;
-  long lastNow = 0;
-
-  private void tick(long now) {
-    this.lastNow = this.now;
-    this.now = now;
-  }
+  final AtomicLong now = new AtomicLong(0L);
 
   void setRandomTimeout(short nodeIdentifier) {
-    final var oldTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
-    final var timeout = rng.nextInt((int) shortMaxTimeout + 1, (int) longMaxTimeout);
-    final var when = Math.max(lastNow, now) + timeout;
+    setRandomTimeout(nodeIdentifier, now.get());
+  }
+
+  void setRandomTimeout(short nodeIdentifier, long now) {
+    final var oldTimeouts = new Long[]
+        {nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier),
+            nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier),
+            nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier),
+            nodeTimeouts.get(trexEngine4.trexNode.nodeIdentifier)
+        };
+    final var timeout = timeout(rng);
+    final var when = now + timeout;
     if (nodeTimeouts.containsKey(nodeIdentifier)) {
       clearTimeout(nodeIdentifier);
     }
     final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
     nodeTimeouts.put(nodeIdentifier, when);
     events.add(new Timeout(nodeIdentifier));
-    final var newTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
+    final var newTimeouts = new Long[]{
+        nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier),
+        nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier),
+        nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier),
+        nodeTimeouts.get(trexEngine4.trexNode.nodeIdentifier)
+    };
     LOGGER.fine(() -> "\tsetRandomTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier + "+=" + timeout);
   }
 
   void clearTimeout(short nodeIdentifier) {
-    final var oldTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
+    final var oldTimeouts = new Long[]{
+        nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier),
+        nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier),
+        nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier),
+        nodeTimeouts.get(trexEngine4.trexNode.nodeIdentifier)
+    };
     Optional.ofNullable(nodeTimeouts.get(nodeIdentifier)).ifPresent(timeout -> Optional.ofNullable(eventQueue.get(timeout)).ifPresent(events -> {
           events.remove(new Timeout(nodeIdentifier));
           if (events.isEmpty()) {
@@ -270,22 +322,33 @@ class Simulation {
         })
     );
     nodeTimeouts.remove(nodeIdentifier);
-    final var newTimeouts = new Long[]{nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier), nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier)};
+    final var newTimeouts = new Long[]{
+        nodeTimeouts.get(trexEngine1.trexNode.nodeIdentifier),
+        nodeTimeouts.get(trexEngine2.trexNode.nodeIdentifier),
+        nodeTimeouts.get(trexEngine3.trexNode.nodeIdentifier),
+        nodeTimeouts.get(trexEngine4.trexNode.nodeIdentifier)
+    };
     LOGGER.fine(() -> "\tclearTimeout: " + Arrays.toString(oldTimeouts) + " -> " + Arrays.toString(newTimeouts) + " : " + nodeIdentifier);
   }
 
-  void setHeartbeat(short nodeIdentifier) {
-    final var timeout = rng.nextInt((int) shortMaxTimeout / 2, (int) shortMaxTimeout);
-    final var when = Math.max(lastNow, now) + timeout;
+  long scheduleNextHeartbeat(short nodeIdentifier) {
+    return scheduleNextHeartbeat(nodeIdentifier, now.get());
+  }
+
+  /// This just pushes the next HB into the future by the heartbeat interval
+  ///
+  /// @return when the next heartbeat is scheduled
+  long scheduleNextHeartbeat(short nodeIdentifier, long now) {
+    final var timeout = heartBeatInterval();
+    final var when = now + timeout;
     final var events = eventQueue.computeIfAbsent(when, _ -> new ArrayList<>());
     final var hb = new Heartbeat(nodeIdentifier);
     if (!events.contains(hb)) {
       events.add(hb);
-      LOGGER.fine(() -> "\tsetHeartbeat: " + nodeIdentifier + "+=" + timeout);
+      LOGGER.fine(() -> "\t" + nodeIdentifier + " scheduleNextHeartbeat at " + when);
     }
+    return when;
   }
-
-  final QuorumStrategy threeNodeQuorum = new SimpleMajority(3);
 
   final Map<Short, TreeMap<Long, Command>> allCommandsMap = commandMaps();
 
@@ -294,28 +357,29 @@ class Simulation {
     final var c1 = new TreeMap<Long, Command>();
     final var c2 = new TreeMap<Long, Command>();
     final var c3 = new TreeMap<Long, Command>();
+    final var c4 = new TreeMap<Long, Command>();
     return Map.of(
         (short) 1, c1,
         (short) 2, c2,
-        (short) 3, c3
+        (short) 3, c3,
+        (short) 4, c4
     );
   }
 
-  final SimulationPaxosEngine<Command> trexEngine1 = makeTrexEngine((short) 1, threeNodeQuorum, allCommandsMap.get((short) 1));
-  final SimulationPaxosEngine<Command> trexEngine2 = makeTrexEngine((short) 2, threeNodeQuorum, allCommandsMap.get((short) 2));
-  final SimulationPaxosEngine<Command> trexEngine3 = makeTrexEngine((short) 3, threeNodeQuorum, allCommandsMap.get((short) 3));
+  final SimulationPaxosEngine<Command> trexEngine1;
+  final SimulationPaxosEngine<Command> trexEngine2;
+  final SimulationPaxosEngine<Command> trexEngine3;
+  final SimulationPaxosEngine<Command> trexEngine4;
 
-  final Map<Short, SimulationPaxosEngine<Command>> engines = Map.of(
-      (short) 1, trexEngine1,
-      (short) 2, trexEngine2,
-      (short) 3, trexEngine3
-  );
+  final Map<Short, SimulationPaxosEngine<Command>> engines;
 
   // start will launch some timeouts into the event queue
   void coldStart() {
-    setRandomTimeout(trexEngine1.nodeIdentifier());
-    setRandomTimeout(trexEngine2.nodeIdentifier());
-    setRandomTimeout(trexEngine3.nodeIdentifier());
+    setRandomTimeout(trexEngine1.nodeIdentifier(), 0L);
+    setRandomTimeout(trexEngine3.nodeIdentifier(), 0L);
+    setRandomTimeout(trexEngine2.nodeIdentifier(), 0L);
+    setRandomTimeout(trexEngine3.nodeIdentifier(), 0L);
+    setRandomTimeout(trexEngine4.nodeIdentifier(), 0L);
   }
 
   /// This is how we can inject network failures into the simulation. The default implementation is to pass the messages
@@ -329,18 +393,13 @@ class Simulation {
     return nemesis.apply(send, now);
   }
 
-  final BiFunction<Send, Long, Stream<TrexMessage>> DEFAULT_NETWORK_SIMULATION =
-      (send, _) ->
-          send.messages.stream().flatMap(x -> switch (x) {
-            case BroadcastMessage m ->
-                engines.values().stream().flatMap(engine -> engine.paxos(List.of(m)).messages().stream());
-            case DirectMessage m -> engines.get(m.to()).paxos(List.of(m)).messages().stream();
-          });
+  final BiFunction<Send, Long, Stream<TrexMessage>> DEFAULT_NETWORK_SIMULATION;
 
   private void makeClientDataEvents(int iterations, NavigableMap<Long, List<Event>> eventQueue) {
     IntStream.range(0, iterations).forEach(i -> {
       if (rng.nextBoolean()) {
-        eventQueue.put((long) i, new ArrayList<>(List.of(new ClientCommand())));
+        final var events = eventQueue.computeIfAbsent((long) i, _ -> new ArrayList<>());
+        events.add(new ClientCommand());
       }
     });
   }
@@ -369,8 +428,8 @@ class Simulation {
       final var result = super.paxos(trexMessages);
       final var newRole = trexNode.getRole();
       if (oldRole != newRole && newRole == TrexNode.TrexRole.LEAD) {
-        LOGGER.info(() -> "Node has become leader " + trexNode.nodeIdentifier());
-        Simulation.this.setHeartbeat(trexNode.nodeIdentifier());
+        final var when = scheduleNextHeartbeat(trexNode.nodeIdentifier());
+        LOGGER.info(() -> "Node has become leader " + trexNode.nodeIdentifier() + " and will heartbeat at " + when);
       }
       return result;
     }

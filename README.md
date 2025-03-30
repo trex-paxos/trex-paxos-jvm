@@ -184,7 +184,16 @@ public record AcceptResponse(
 The boolean `vote` implies each node may
 respond with either a positive acknowledgement or a negative acknowledgement.
 This implementation includes negative acknowledgements to both `prepare` and `accept`
-messages. When a leader receives a majority negative response, it abdicates.
+messages. When a leader receives a majority negative response, it abdicates. 
+
+If you check the actual code the description above misses off some small optional implementation details that support
+UPaxos cluster reconfigurations as per the paper [Unbounded Pipelining in Dynamically Reconfigurable Paxos Clusters](http://tessanddave.com/paxos-reconf-latest.pdf).
+
+* The `Command` type has an optional `flavour` byte so that optional cluster reconfiguration command that add or remove 
+cluster nodes to commands to be hidden from the host application(s). It also allows multiple appliations to share the 
+same paxos cluster.  
+* The `BallotNumber` has an optional `era` field so that a leader can use its casting vote to decide when the next `era` 
+comes into effect. 
 
 ### Third: Learning Which Values Are Fixed
 
@@ -407,6 +416,22 @@ to use your own node failure detection or election mechanism if you do not like 
 
 See the wiki for a more detailed explanation of this topic.
 
+## UPaxos and Cluster Membership Changes
+
+The [UPaxos](https://davecturner.github.io/2016/06/09/unbounded-pipelining-paxos.html) technical paper describes a way 
+to change the cluster membership without any stalls. The following blog posts discuss it: 
+
+1. [Paxos Reconfiguration Stalls](https://simbo1905.wordpress.com/2016/12/15/paxos-reconfiguration-stalls/)
+2. [UPaxos: Unbounded Paxos Reconfigurations](https://simbo1905.wordpress.com/2016/12/16/upaxos-unbounded-paxos-reconfigurations/)
+3. [Paxos Voting Weights](https://simbo1905.wordpress.com/2017/03/16/paxos-voting-weights/)
+
+The key idea is that we introduce an optional highest set of era bits to the `N` value. This means that our actual 
+ballot number record has an optional era: 
+
+```java
+public record BallotNumber(short era, int counter, short nodeIdentifier) implements Comparable<BallotNumber> { }
+```
+
 ## Development Setup
 
 ```bash
@@ -468,8 +493,8 @@ The list of tasks:
 - [x] Write extensive documentation, including detailed JavaDoc.
 - [x] Write a `Network` for a demo. Kwik does not support connection fail-over. So will make something QUIC-like over
   UDP.
-- [ ] Implement distributed advisor lock service as a full demo.
 - [ ] Implement cluster membership changes as UPaxos.
+- [ ] Implement corfu distributed shared log as a full demo.
 - [ ] Add in phi acculmulator for leader failure detection.
 
 ## Attribution

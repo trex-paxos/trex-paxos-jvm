@@ -2,7 +2,7 @@ package com.github.trex_paxos.paxe;
 
 import com.github.trex_paxos.network.ClusterEndpoint;
 import com.github.trex_paxos.network.NetworkAddress;
-import com.github.trex_paxos.network.NodeId;
+import com.github.trex_paxos.NodeId;
 
 import java.net.InetSocketAddress;
 import java.nio.channels.DatagramChannel;

@@ -40,7 +40,7 @@ import static com.github.trex_paxos.TrexNode.TrexRole.*;
 /// It requires the following collaborating classes:
 ///
 /// * One [Journal] which must be crash durable storage.
-/// * One [QuorumStrategy] which may be a simple majority, in the future FPaxos or UPaxos.
+/// * One [QuorumStrategy] which may be a countVotes majority, in the future FPaxos or UPaxos.
 ///
 /// This class logs to JUL logging as severe. You can configure JUL logging to
 /// bridge to your chosen logging framework. This class is not thread safe. The [TrexEngine] will wrap this class and
@@ -85,7 +85,7 @@ public class TrexNode {
   ///
   /// @param logAtLevel     The level to log when values are known to be chosen which is logged as "WIN" and when are know to be sequentially logFixed with is logged as "FIXED".
   /// @param nodeIdentifier The unique node identifier. This must be unique across the cluster and across enough time for prior messages to have been forgotten.
-  /// @param quorumStrategy The quorum strategy that may be a simple majority, else things like FPaxos or UPaxos
+  /// @param quorumStrategy The quorum strategy that may be a countVotes majority, else things like FPaxos or UPaxos
   /// @param journal        The durable storage and durable log. This must be pre-initialised.
   public TrexNode(Level logAtLevel, short nodeIdentifier, QuorumStrategy quorumStrategy, Journal journal) {
     this.nodeIdentifier = nodeIdentifier;
@@ -203,7 +203,6 @@ public class TrexNode {
       return;
     }
     switch (input) {
-
       case Accept accept -> {
         final var number = accept.slotTerm().number();
         final var logIndex = accept.slotTerm().logIndex();
@@ -339,6 +338,7 @@ public class TrexNode {
           if (role == TrexRole.LEAD) {
             assert this.term != null;
             this.term = new BallotNumber(
+                otherHighestPromised.era(),
                 otherHighestPromised.counter() + 1,
                 nodeIdentifier
             );
@@ -620,7 +620,7 @@ public class TrexNode {
   Optional<Prepare> timeout() {
     if (role == FOLLOW) {
       role = RECOVER;
-      term = new BallotNumber(progress.highestPromised().counter() + 1, nodeIdentifier);
+      term = new BallotNumber(progress.highestPromised().era(), progress.highestPromised().counter() + 1, nodeIdentifier);
       final var prepare = nextPrepareMessage();
       final var selfPrepareResponse = paxos(prepare);
       assert selfPrepareResponse.messages().size() == 1 : "selfPrepare={" + selfPrepareResponse + "}";
@@ -824,7 +824,7 @@ public class TrexNode {
   @TestOnly
   protected void setLeader() {
     this.role = TrexRole.LEAD;
-    this.term = new BallotNumber(1, this.nodeIdentifier);
+    this.term = new BallotNumber((short) 0, 1, this.nodeIdentifier);
   }
 }
 

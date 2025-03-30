@@ -40,7 +40,7 @@ public class PrepareResponsePropertyTests {
     };
 
     final var thisCounter = 100;
-    final var thisPromise = new BallotNumber(thisCounter, thisNodeId);
+    final var thisPromise = new BallotNumber((short) 0, thisCounter, thisNodeId);
     final var thisFixed = 10L;
 
     //  slotAtomic is used to track test slot number for the prepare response
@@ -133,7 +133,7 @@ public class PrepareResponsePropertyTests {
   }
 
   private PrepareResponse createPrepareResponse(long slot, boolean vote) {
-    final var v = new PrepareResponse.Vote((short) 2, (short) 2, slot, vote, new BallotNumber(100, (short) 2));
+    final var v = new PrepareResponse.Vote((short) 2, (short) 2, slot, vote, new BallotNumber((short) 0, 100, (short) 2));
     return new PrepareResponse((short) 2, (short) 2, v, Optional.empty(), slot);
   }
 

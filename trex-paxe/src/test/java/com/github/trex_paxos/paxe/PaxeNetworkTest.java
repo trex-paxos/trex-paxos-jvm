@@ -3,7 +3,7 @@ package com.github.trex_paxos.paxe;
 import com.github.trex_paxos.BallotNumber;
 import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.network.Channel;
-import com.github.trex_paxos.network.NodeId;
+import com.github.trex_paxos.NodeId;
 import org.junit.jupiter.api.*;
 
 import java.nio.channels.Selector;
@@ -82,8 +82,8 @@ class PaxeNetworkTest {
       latch.countDown();
     }, "test2");
 
-    Fixed msg1 = new Fixed((short) 1, 1, new BallotNumber(1, (short) 1));
-    Fixed msg2 = new Fixed((short) 2, 2, new BallotNumber(2, (short) 2));
+    Fixed msg1 = new Fixed((short) 1, 1, new BallotNumber((short) 0, 1, (short) 1));
+    Fixed msg2 = new Fixed((short) 2, 2, new BallotNumber((short) 0, 2, (short) 2));
 
     LOGGER.fine(() -> String.format("Sending test messages: msg1=%s, msg2=%s", msg1, msg2));
     network1.send(channel, new NodeId((short) 2), msg1);

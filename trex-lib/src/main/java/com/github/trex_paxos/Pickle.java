@@ -80,6 +80,7 @@ public class Pickle {
   }
 
   public static void write(BallotNumber n, DataOutputStream dataOutputStream) throws IOException {
+    dataOutputStream.writeShort(n.era());
     dataOutputStream.writeInt(n.counter());
     dataOutputStream.writeShort(n.nodeIdentifier());
   }
@@ -92,7 +93,7 @@ public class Pickle {
   }
 
   public static BallotNumber readBallotNumber(DataInputStream dataInputStream) throws IOException {
-    return new BallotNumber(dataInputStream.readInt(), dataInputStream.readShort());
+    return new BallotNumber(dataInputStream.readShort(), dataInputStream.readInt(), dataInputStream.readShort());
   }
 
   public static void write(Accept m, DataOutputStream dataStream) throws IOException {
@@ -123,12 +124,12 @@ public class Pickle {
       case NoOperation _ ->
         // Here we use zero bytes as a sentinel to represent the NOOP command.
           dataStream.writeInt(0);
-      case Command command -> {
-        dataStream.writeInt(command.operationBytes().length);
-        dataStream.write(command.operationBytes());
-        final var uuid = command.uuid();
+      case Command(var uuid, var operationBytes, var flavour) -> {
+        dataStream.writeInt(operationBytes.length);
+        dataStream.write(operationBytes);
         dataStream.writeLong(uuid.getMostSignificantBits());
         dataStream.writeLong(uuid.getLeastSignificantBits());
+        dataStream.writeByte(flavour);
       }
     }
   }
@@ -147,7 +148,10 @@ public class Pickle {
     }
     byte[] bytes = new byte[byteLength];
     dataInputStream.readFully(bytes);
-    return new Command(new UUID(dataInputStream.readLong(), dataInputStream.readLong()), bytes);
+    final var msb = dataInputStream.readLong();
+    final var lsb = dataInputStream.readLong();
+    byte flavour = dataInputStream.readByte();
+    return new Command(new UUID(msb, lsb), bytes, flavour);
   }
 
   public static byte[] write(Accept a) throws IOException {

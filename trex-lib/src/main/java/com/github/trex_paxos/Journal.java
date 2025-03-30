@@ -24,7 +24,7 @@ import java.util.Optional;
 /// When an empty node is fist created the journal must have a `NoOperation.NOOP` accept journaled at log index 0.
 /// It must also have the nodes progress saved as `new Progress(noteIdentifier)` which defaults to the minimum ballot number. .
 ///
-/// If you are already using a relational database you can use it to store the state of the journal in two simple tables.
+/// If you are already using a relational database you can use it to store the state of the journal in two countVotes tables.
 /// The `progress` table will have one row. The accept table will have a row for each `accept` message.
 ///
 /// If you use a store that does not support transactions when the [TrexEngine] will call {@link #sync()} and you must
