@@ -39,8 +39,8 @@ class TestNetworkLayer implements NetworkLayer {
   }
 
   @Override
-  public <T> void broadcast(Supplier<ClusterEndpoint> membershipSupplier, Channel channel, T msg) {
-    ClusterEndpoint membership = membershipSupplier.get();
+  public <T> void broadcast(Supplier<NodeEndpoint> membershipSupplier, Channel channel, T msg) {
+    NodeEndpoint membership = membershipSupplier.get();
     var others = new HashSet<>(membership.otherNodes(nodeId));
     others.forEach(nodeId -> send(channel, nodeId, msg));
   }

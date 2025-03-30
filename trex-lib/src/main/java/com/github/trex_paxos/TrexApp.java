@@ -3,7 +3,7 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.DirectMessage;
 import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
-import com.github.trex_paxos.network.ClusterEndpoint;
+import com.github.trex_paxos.network.NodeEndpoint;
 import com.github.trex_paxos.network.NetworkLayer;
 import org.jetbrains.annotations.TestOnly;
 
@@ -65,20 +65,20 @@ public class TrexApp<COMMAND, RESULT> {
 
   protected final TrexEngine<RESULT> engine;
   protected final NetworkLayer networkLayer;
-  protected final Supplier<ClusterEndpoint> clusterMembershipSupplier;
+  protected final Supplier<NodeEndpoint> nodeEndpointSupplier;
   final protected LeaderTracker leaderTracker = new LeaderTracker();
   final ResponseTracker<RESULT> responseTracker = new ResponseTracker<>();
   protected final Pickler<COMMAND> valuePickler;
   public final NodeId nodeId;
 
   public TrexApp(
-      Supplier<ClusterEndpoint> clusterMembershipSupplier,
+      Supplier<NodeEndpoint> nodeEndpointSupplier,
       TrexEngine<RESULT> engine,
       NetworkLayer networkLayer,
       Pickler<COMMAND> valuePickler) {
     this.engine = engine;
     this.networkLayer = networkLayer;
-    this.clusterMembershipSupplier = clusterMembershipSupplier;
+    this.nodeEndpointSupplier = nodeEndpointSupplier;
     this.valuePickler = valuePickler;
     this.nodeId = new NodeId(engine.nodeIdentifier());
   }
@@ -140,7 +140,7 @@ public class TrexApp<COMMAND, RESULT> {
         byte[] valueBytes = valuePickler.serialize(value);
         final var cmd = new Command(uuid, valueBytes, type);
         final var messages = createLeaderMessages(cmd);
-        LOGGER.fine(() -> engine.nodeIdentifier() + " leader is sending accept messages " + messages);
+        LOGGER.fine(() -> engine.nodeIdentifier() + " leader is sending slotTerm messages " + messages);
         transmitTrexMessages(messages);
       } else {
         leaderTracker.currentLeader().ifPresentOrElse(
@@ -183,7 +183,7 @@ public class TrexApp<COMMAND, RESULT> {
 
   /// Transmits a list of Trex messages across the network to their respective destinations.
   /// DirectMessage instances are sent to specific nodes while other messages are broadcast.
-  /// Delegates to the NetworkLayer to handle actual transmission and ClusterEndpoint for broadcasts.
+  /// Delegates to the NetworkLayer to handle actual transmission and NodeEndpoint for broadcasts.
   ///
   /// @param messages The list of Trex messages to be transmitted
   private void transmitTrexMessages(List<TrexMessage> messages) {
@@ -193,7 +193,7 @@ public class TrexApp<COMMAND, RESULT> {
         networkLayer.send(CONSENSUS.value(), new NodeId(directMessage.to()), message);
       } else {
         LOGGER.finer(() -> engine.nodeIdentifier() + " broadcasting message " + message);
-        networkLayer.broadcast(clusterMembershipSupplier, CONSENSUS.value(), message);
+        networkLayer.broadcast(nodeEndpointSupplier, CONSENSUS.value(), message);
       }
     });
   }

@@ -80,19 +80,19 @@ public class AcceptResponsePropertyTests {
           // drop a rigged vote in at the first slot
           final var s = slotAtomic.getAndIncrement();
           final var v = createAcceptVotes(s);
-          // Setup gap scenario we first add chosen `accept` before gap
-          acceptVotesByLogIndex.put(s, v.votes());
+          // Setup gap scenario we first add chosen `slotTerm` before gap
+          acceptVotesByLogIndex.put(v.accept().slotTerm().logIndex(), v.votes());
           // we need to put it into the journal
           journaledAccepts.get().put(s, v.accept());
-          // then increment the slot counter without adding an `accept`
+          // then increment the slot counter without adding an `slotTerm`
           slotAtomic.getAndIncrement();
         }
 
         // now we add the rigged vote for at least one slot which may be the only slot else after a gap
         final var s = slotAtomic.get();
         final var v = createAcceptVotes(s);
-        // Setup gap scenario we first add chosen `accept` before gap
-        acceptVotesByLogIndex.put(s, v.votes());
+        // Setup gap scenario we first add chosen `slotTerm` before gap
+        acceptVotesByLogIndex.put(v.accept().slotTerm().logIndex(), v.votes());
         // we need to put it into the journal
         journaledAccepts.get().put(s, v.accept());
       }
@@ -100,12 +100,12 @@ public class AcceptResponsePropertyTests {
       record CreatedData(Accept accept, AcceptVotes votes) {
       }
 
-      ///  Set up an `accept` and `acceptVotes` for a given slot
+      ///  Set up an `slotTerm` and `acceptVotes` for a given slot
       private CreatedData createAcceptVotes(long s) {
         final var a = new Accept(thisNodeId, s, thisPromise, NoOperation.NOOP);
         final Map<Short, AcceptResponse> responses = new TreeMap<>();
         responses.put(thisNodeId, new AcceptResponse(thisNodeId, thisNodeId,
-            new AcceptResponse.Vote(thisNodeId, thisNodeId, s, thisVote), s));
+            new AcceptResponse.Vote(thisNodeId, thisNodeId, a.slotTerm(), thisVote), s));
         AcceptVotes votes = new AcceptVotes(a.slotTerm(), responses, false);
         return new CreatedData(a, votes);
       }
@@ -118,9 +118,10 @@ public class AcceptResponsePropertyTests {
       case LOSE, WAIT -> false;
     };
 
-    // Create accept response for the next slot
+    // Create slotTerm response for the next slot
     final var slot = slotAtomic.get();
-    final var vote = new AcceptResponse.Vote(otherNodeId, thisNodeId, slot, otherVote);
+    final SlotTerm slotTerm = new SlotTerm(slot, thisPromise);
+    final var vote = new AcceptResponse.Vote(otherNodeId, thisNodeId, slotTerm, otherVote);
     final var acceptResponse = new AcceptResponse(otherNodeId, thisNodeId, vote,
         slot);
 
@@ -129,14 +130,14 @@ public class AcceptResponsePropertyTests {
     final var result = node.paxos(acceptResponse);
 
     if (result instanceof TrexResult(final var messages, final var commands)) {
-      // both followers and revolvers will process accept responses yet followers ignore them
+      // both followers and revolvers will process slotTerm responses yet followers ignore them
       // nodes ignore responses not sent to them
       //  ignore responses sent to ourself
       if (testCase.role == ArbitraryValues.RoleState.FOLLOW
           || acceptResponse.to() != thisNodeId
           || testCase.nodeIdentifierRelation == ArbitraryValues.NodeIdentifierRelation.EQUAL
       ) {
-        // Followers ignore accept responses
+        // Followers ignore slotTerm responses
         assert messages.isEmpty();
         assert commands.isEmpty();
       } else if (testCase.role == ArbitraryValues.RoleState.LEAD &&

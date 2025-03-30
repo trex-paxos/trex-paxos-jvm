@@ -15,7 +15,7 @@ public class CatchupPropertyTests {
   /// Number of accepts to return from the journal for the range
   enum AcceptCount {
     NONE,           // Return no accepts
-    ONE,            // Return single accept
+    ONE,            // Return single slotTerm
     MULTIPLE       // Return multiple accepts
   }
 
@@ -116,13 +116,13 @@ public class CatchupPropertyTests {
         }
       }
 
-      // we must not increment our promise outside of the `prepare` or `accept` messages
+      // we must not increment our promise outside of the `prepare` or `slotTerm` messages
       assert journaledProgress.get() == null;
 
-      // it is possible to end up in a state where a node is rejecting `accept` messages as it has
+      // it is possible to end up in a state where a node is rejecting `slotTerm` messages as it has
       // a higher promise. That node will request catchup and so the leader will learn that the node
-      // cannot accept any values. The leader will increase its term so that on the next accept message
-      // that itself receives it will make a promise and the other node will accept the message.
+      // cannot slotTerm any values. The leader will increase its term so that on the next slotTerm message
+      // that itself receives it will make a promise and the other node will slotTerm the message.
       assert testCase.role != ArbitraryValues.RoleState.LEAD ||
           !thisPromise.lessThan(otherNumber) || node.term.greaterThan(otherNumber);
     }
