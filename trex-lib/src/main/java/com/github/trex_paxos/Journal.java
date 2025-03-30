@@ -21,16 +21,16 @@ import java.util.Optional;
 
 /// The journal is the storage layer of the Paxos Algorithm. Journal writes must be crash-proof (disk flush or equivalent).
 ///
-/// When an empty node is fist created the journal must have a `NoOperation.NOOP` slotTerm journaled at log index 0.
+/// When an empty node is fist created the journal must have a `NoOperation.NOOP` accept journaled at log index 0.
 /// It must also have the nodes progress saved as `new Progress(noteIdentifier)` which defaults to the minimum ballot number. .
 ///
 /// If you are already using a relational database you can use it to store the state of the journal in two countVotes tables.
-/// The `progress` table will have one row. The slotTerm table will have a row for each `slotTerm` message.
+/// The `progress` table will have one row. The accept table will have a row for each `accept` message.
 ///
 /// If you use a store that does not support transactions when the [TrexEngine] will call {@link #sync()} and you must
 /// make the state crash durable in the following order:
 ///
-/// 1. All `slotTerm` messages in the log must be made crash durable first.
+/// 1. All `accept` messages in the log must be made crash durable first.
 /// 2. The `progress` record is made crash durable last.
 ///
 /// If you are using a store that supports transactions you can commit your application writes in the same transaction
@@ -40,10 +40,10 @@ import java.util.Optional;
 /// method return fixed results you can apply the results to your database and then commit the transaction. Once again
 /// this must happen before ending any messages to the network.
 ///
-/// It is important to note you should not delete `slotTerm` messages the moment they are up-called into the application.
+/// It is important to note you should not delete `accept` messages the moment they are up-called into the application.
 /// They should be kept around so that other nodes can request retransmission of missed messages. To
 /// keep the database size under control you can run a cronjob that reads the {@link Progress#highestFixedIndex()}
-/// from all databases and take the min id. You can then delete all `slotTerm` messages from all nodes that are at a
+/// from all databases and take the min id. You can then delete all `accept` messages from all nodes that are at a
 /// lower log slot index.
 ///
 /// VERY IMPORTANT: If you get errors where you don't know what the state of the underlying journal has become you should call
@@ -68,25 +68,25 @@ public interface Journal {
   ///                                                                                                                                                           history when moving nodes between servers we require the node identifier. This is only a safety feature.
   Progress readProgress(short nodeIdentifier);
 
-  /// Save a value wrapped in an `slotTerm` into the log.
-  /// Logically this method is storing `slotTerm(S,N,V)` so it needs to store the values `{N,V}` at log slot `S`
+  /// Save a value wrapped in an `accept` into the log.
+  /// Logically this method is storing `accept(S,N,V)` so it needs to store the values `{N,V}` at log slot `S`
   /// The `N` is the term number of the leader that generated the message.
   /// Typically, values are written in sequential `S` order.
   ///
-  /// @param accept An slotTerm message that is a log index, command id and term number.
+  /// @param accept An accept message that is a log index, command id and term number.
   void writeAccept(Accept accept);
 
-  /// Load any slotTerm record from the log. There may be no slotTerm record for the given log index.
+  /// Load any accept record from the log. There may be no accept record for the given log index.
   /// Typically, values are read once in sequential `S`. During crash recovery or syncing nodes they are reread.
   ///
-  /// You should not delete any `slotTerm` messages until you know all nodes have a higher [Progress#highestFixedIndex()]
-  /// than the log index of the slotTerm message.
+  /// You should not delete any `accept` messages until you know all nodes have a higher [Progress#highestFixedIndex()]
+  /// than the log index of the accept message.
   ///
   /// When a slot is learned to be fixed by a `fixed(S,N')` the id is read from the log and  if `N' != N` then
-  /// Retransmission of the correct `slotTerm` will be requested from the leader.
+  /// Retransmission of the correct `accept` will be requested from the leader.
   ///
-  /// @param logIndex The log slot to load the slotTerm record for.
-  /// @return The slotTerm record if it exists at the specified log index.
+  /// @param logIndex The log slot to load the accept record for.
+  /// @return The accept record if it exists at the specified log index.
   Optional<Accept> readAccept(long logIndex);
 
   /// The name of this is inspired by the [libc sync call](https://man7.org/linux/man-pages/man2/sync.2.html).

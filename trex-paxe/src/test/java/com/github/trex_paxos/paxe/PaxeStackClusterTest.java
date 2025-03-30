@@ -1,7 +1,7 @@
 package com.github.trex_paxos.paxe;
 
 import com.github.trex_paxos.*;
-import com.github.trex_paxos.network.NodeEndpoint;
+import com.github.trex_paxos.network.ClusterEndpoint;
 import com.github.trex_paxos.network.NetworkAddress;
 import com.github.trex_paxos.NodeId;
 import org.junit.jupiter.api.AfterEach;
@@ -51,7 +51,7 @@ class PaxeStackClusterTest {
     harness.waitForNetworkEstablishment();
     LOGGER.fine("Network established successfully");
 
-    Supplier<NodeEndpoint> members = () -> new NodeEndpoint(
+    Supplier<ClusterEndpoint> members = () -> new ClusterEndpoint(
         Map.of(new NodeId((short) 1), new NetworkAddress(network1.port()),
             new NodeId((short) 2), new NetworkAddress(network2.port())));
 

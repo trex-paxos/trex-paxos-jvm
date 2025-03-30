@@ -101,7 +101,7 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
   final DatagramChannel channel;
   final Selector selector;
   private final Map<Channel, List<Consumer<?>>> subscribers;
-  final Supplier<NodeEndpoint> membership;
+  final Supplier<ClusterEndpoint> membership;
   private final Map<Channel, Pickler<?>> picklers;
 
   private volatile boolean running;
@@ -122,10 +122,10 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
     private final SessionKeyManager keyManager;
     private final int port;
     private final NodeId local;
-    private final Supplier<NodeEndpoint> membership;
+    private final Supplier<ClusterEndpoint> membership;
 
     public Builder(SessionKeyManager keyManager, int port, NodeId local,
-                   Supplier<NodeEndpoint> membership) {
+                   Supplier<ClusterEndpoint> membership) {
       Objects.requireNonNull(keyManager, "Key manager cannot be null");
       Objects.requireNonNull(local, "Local node ID cannot be null");
       Objects.requireNonNull(membership, "Membership supplier cannot be null");
@@ -144,7 +144,7 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
   }
 
   PaxeNetwork(SessionKeyManager keyManager, int port, NodeId local,
-              Supplier<NodeEndpoint> membership,
+              Supplier<ClusterEndpoint> membership,
               Map<Channel, Pickler<?>> picklers) throws IOException {
     this.keyManager = keyManager;
     this.localNode = local;
@@ -288,7 +288,7 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
   }
 
   @Override
-  public <T> void broadcast(Supplier<NodeEndpoint> membershipSupplier, Channel channel, T msg) {
+  public <T> void broadcast(Supplier<ClusterEndpoint> membershipSupplier, Channel channel, T msg) {
     Collection<NodeId> recipients = membershipSupplier.get().otherNodes(localNode);
     byte[] serialized = serializeMessage(msg, channel);
 

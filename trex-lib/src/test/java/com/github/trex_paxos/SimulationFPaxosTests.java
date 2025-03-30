@@ -479,7 +479,7 @@ public class SimulationFPaxosTests {
           simulation.trexEngine3.paxos(List.of(lm.messages().getFirst()));
           simulation.trexEngine4.paxos(List.of(lm.messages().getFirst()));
 
-          // Collect 1 slotTerm response to finalize (quorum size 2)
+          // Collect 1 accept response to finalize (quorum size 2)
           final var r2a = simulation.trexEngine2.paxos(List.of(lm.messages().getFirst()));
           final var r3a = simulation.trexEngine3.paxos(List.of(lm.messages().getFirst()));
 

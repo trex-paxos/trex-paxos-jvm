@@ -16,17 +16,17 @@ import java.util.stream.Collectors;
 /// An implementation of `QuorumStrategy` that uses weighted voting with flexible quorum sizes.
 ///
 /// This implementation is based on the [Flexible Paxos](https://arxiv.org/pdf/1608.06696v1) theorem which states that:
-/// - Different quorum sizes can be used for the prepare and slotTerm phases
-/// - The only requirement is that any prepare quorum must intersect with any slotTerm quorum
+/// - Different quorum sizes can be used for the prepare and accept phases
+/// - The only requirement is that any prepare quorum must intersect with any accept quorum
 /// - Mathematically: |N| > |P| + |A| where:
 ///   - |N| is the total voting weight
 ///   - |P| is the prepare quorum size
-///   - |A| is the slotTerm quorum size
+///   - |A| is the accept quorum size
 ///
 /// ## Usage
 ///
 /// To use the even nodes gambit with pairs of nodes in two reliance zones we can assign the prepare quorum to be 3
-/// and the slotTerm quorum to be 2:
+/// and the accept quorum to be 2:
 ///
 /// ```
 /// Set<VotingWeight> weights = Set.of(

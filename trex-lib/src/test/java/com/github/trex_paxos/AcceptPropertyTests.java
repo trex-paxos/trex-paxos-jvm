@@ -83,7 +83,7 @@ public class AcceptPropertyTests {
       };
     }};
 
-    // Create slotTerm message
+    // Create accept message
     final var accept = new Accept(otherNodeId, otherIndex, otherNumber, cmd);
 
     // Execute
@@ -91,7 +91,7 @@ public class AcceptPropertyTests {
 
     // Verify
     if (result instanceof TrexResult(final var messages, final var commands)) {
-      // No results should be generated from slotTerm
+      // No results should be generated from accept
       assert commands.isEmpty();
 
       assert messages.size() == 1;
@@ -102,13 +102,13 @@ public class AcceptPropertyTests {
         assert journaledAccept.get() == null;
         assert journaledProgress.get() == null;
       } else {
-        // Must slotTerm higher or equal ballot numbers
+        // Must accept higher or equal ballot numbers
         assert response.vote().vote();
 
         // Verify response properties
         assert response.vote().from() == thisNodeId;
         assert response.vote().to() == otherNodeId;
-        assert response.vote().slotTerm().equals(accept.slotTerm());
+        assert response.vote().logIndex() == otherIndex;
 
         // Verify journaling
         assert journaledAccept.get() != null;
@@ -123,7 +123,6 @@ public class AcceptPropertyTests {
     }
   }
 
-  @SuppressWarnings("unused")
   @Provide
   Arbitrary<TestCase> testCases() {
     return Combinators.combine(

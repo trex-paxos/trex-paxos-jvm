@@ -21,7 +21,7 @@ To use this library:
 
 At this the time:
 
-1. There are JQwik property tests that the algorithm is never violated that exhaustive check every inequality. 
+1. There are exhaustive brute force tests that the algorithm is never violated.
 2. There are runtime checks that the algorithm is never violated.
 3. The library will mark itself as crashed if it spots problems such a journal write errors.
 4. There are junit tests that simulate randomized rolling network partitions 1,000 times.

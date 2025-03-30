@@ -19,8 +19,8 @@ public class ArbitraryValues {
   /// State of the journal at the fixed slot
   enum JournalState {
     EMPTY,              // No id at slot
-    MATCHING_NUMBER,    // Has `slotTerm` with matching ballot number
-    DIFFERENT_NUMBER   // Has `slotTerm` with different ballot number
+    MATCHING_NUMBER,    // Has `accept` with matching ballot number
+    DIFFERENT_NUMBER   // Has `accept` with different ballot number
   }
 
   // Catchup alignment state
@@ -30,7 +30,7 @@ public class ArbitraryValues {
     TOO_HIGH   // No accepts are processed
   }
 
-  /// Outcome of the vote collection for either an `slotTerm` or a `prepare`
+  /// Outcome of the vote collection for either an `accept` or a `prepare`
   enum VoteOutcome {
     WIN,    // Will achieve majority with this vote
     LOSE,    // Will not achieve majority

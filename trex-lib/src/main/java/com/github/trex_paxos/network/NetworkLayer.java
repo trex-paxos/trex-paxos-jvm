@@ -9,6 +9,6 @@ import java.util.function.Supplier;
 public interface NetworkLayer extends AutoCloseable {
   <T> void subscribe(Channel channel, Consumer<T> handler, String name);
   <T> void send(Channel channel, NodeId to, T msg);
-  <T> void broadcast(Supplier<NodeEndpoint> membershipSupplier, Channel channel, T msg);
+  <T> void broadcast(Supplier<ClusterEndpoint> membershipSupplier, Channel channel, T msg);
   void start();
 }
