@@ -197,7 +197,7 @@ class Simulation {
       engines.values().forEach(
           engine -> engine.journal.fakeJournal.forEach((k, v) -> {
             if (!v.slot().equals(k)) {
-              throw new AssertionError("Journaled accept.logIndex not equal to slot index");
+              throw new AssertionError("Journaled accept.slot not equal to slot index");
             }
           })
       );

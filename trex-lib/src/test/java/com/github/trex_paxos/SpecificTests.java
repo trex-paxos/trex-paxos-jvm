@@ -150,6 +150,5 @@ public class SpecificTests {
 
   // FIXME make sure you test explicitly all the abdication scenarios
 
-  // FIXME other tests around making sure fixed messages are issued for every
-  // accept
+  // FIXME other tests around making sure fixed messages are issued for every accept
 }

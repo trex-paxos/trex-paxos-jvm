@@ -157,23 +157,34 @@ public class PickleMsg implements Pickler<TrexMessage> {
     return new AcceptResponse(from, to, vote, highestFixedIndex);
   }
 
-  public static AcceptResponse.Vote readVoteAccept(ByteBuffer buffer) {
-    short from = buffer.getShort();
-    short to = buffer.getShort();
-    long logIndex = buffer.getLong();
-    boolean vote = buffer.get() != 0;
-    return new AcceptResponse.Vote(from, to, logIndex, vote);
+  public static void write(SlotTerm slotTerm, ByteBuffer buffer){
+    buffer.putLong(slotTerm.logIndex());
+    write(slotTerm.number(), buffer);
   }
 
-  private static int calculateVoteAcceptSize() {
-    return Short.BYTES + Short.BYTES + Long.BYTES + 1; // from + to + logIndex + vote
+  public static SlotTerm readSlotTerm(ByteBuffer buffer){
+    long logIndex = buffer.getLong();
+    BallotNumber number = readBallotNumber(buffer);
+    return new SlotTerm(logIndex, number);
   }
 
   public static void write(AcceptResponse.Vote m, ByteBuffer buffer) {
     buffer.putShort(m.from());
     buffer.putShort(m.to());
-    buffer.putLong(m.logIndex());
+    write(m.slotTerm(), buffer);
     buffer.put((byte) (m.vote() ? 1 : 0));
+  }
+
+  public static AcceptResponse.Vote readVoteAccept(ByteBuffer buffer) {
+    short from = buffer.getShort();
+    short to = buffer.getShort();
+    SlotTerm slotTerm = readSlotTerm(buffer);
+    boolean vote = buffer.get() != 0;
+    return new AcceptResponse.Vote(from, to, slotTerm, vote);
+  }
+
+  private static int calculateVoteAcceptSize() {
+    return Short.BYTES + Short.BYTES + Long.BYTES + BALLOT_NUMBER_SIZE + 1; // from + to + slotTerm + vote
   }
 
   public static PrepareResponse.Vote readVotePrepare(ByteBuffer buffer, short from, short to) {
@@ -219,7 +230,7 @@ public class PickleMsg implements Pickler<TrexMessage> {
   }
 
   private static int calculateAcceptInnerSize(Accept m) {
-    return Short.BYTES + calculateAcceptSize(m); // from + accept size
+    return Short.BYTES + calculateAcceptSize(m); // from + accept
   }
 
   public static Accept readAccept(ByteBuffer buffer, short from) {

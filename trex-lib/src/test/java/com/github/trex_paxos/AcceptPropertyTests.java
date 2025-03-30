@@ -102,13 +102,13 @@ public class AcceptPropertyTests {
         assert journaledAccept.get() == null;
         assert journaledProgress.get() == null;
       } else {
-        // Must accept higher or equal ballot numbers
+        // Must slotTerm higher or equal ballot numbers
         assert response.vote().vote();
 
         // Verify response properties
         assert response.vote().from() == thisNodeId;
         assert response.vote().to() == otherNodeId;
-        assert response.vote().logIndex() == otherIndex;
+        assert response.vote().slotTerm().equals(accept.slotTerm());
 
         // Verify journaling
         assert journaledAccept.get() != null;
@@ -123,6 +123,7 @@ public class AcceptPropertyTests {
     }
   }
 
+  @SuppressWarnings("unused")
   @Provide
   Arbitrary<TestCase> testCases() {
     return Combinators.combine(

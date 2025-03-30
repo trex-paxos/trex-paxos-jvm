@@ -81,7 +81,7 @@ public class AcceptResponsePropertyTests {
           final var s = slotAtomic.getAndIncrement();
           final var v = createAcceptVotes(s);
           // Setup gap scenario we first add chosen `accept` before gap
-          acceptVotesByLogIndex.put(s, v.votes());
+          acceptVotesByLogIndex.put(v.accept().slotTerm().logIndex(), v.votes());
           // we need to put it into the journal
           journaledAccepts.get().put(s, v.accept());
           // then increment the slot counter without adding an `accept`
@@ -91,8 +91,8 @@ public class AcceptResponsePropertyTests {
         // now we add the rigged vote for at least one slot which may be the only slot else after a gap
         final var s = slotAtomic.get();
         final var v = createAcceptVotes(s);
-        // Setup gap scenario we first add chosen `accept` before gap
-        acceptVotesByLogIndex.put(s, v.votes());
+        // Setup gap scenario we first add chosen `slotTerm` before gap
+        acceptVotesByLogIndex.put(v.accept().slotTerm().logIndex(), v.votes());
         // we need to put it into the journal
         journaledAccepts.get().put(s, v.accept());
       }
@@ -105,7 +105,7 @@ public class AcceptResponsePropertyTests {
         final var a = new Accept(thisNodeId, s, thisPromise, NoOperation.NOOP);
         final Map<Short, AcceptResponse> responses = new TreeMap<>();
         responses.put(thisNodeId, new AcceptResponse(thisNodeId, thisNodeId,
-            new AcceptResponse.Vote(thisNodeId, thisNodeId, s, thisVote), s));
+            new AcceptResponse.Vote(thisNodeId, thisNodeId, a.slotTerm(), thisVote), s));
         AcceptVotes votes = new AcceptVotes(a.slotTerm(), responses, false);
         return new CreatedData(a, votes);
       }
@@ -120,7 +120,8 @@ public class AcceptResponsePropertyTests {
 
     // Create accept response for the next slot
     final var slot = slotAtomic.get();
-    final var vote = new AcceptResponse.Vote(otherNodeId, thisNodeId, slot, otherVote);
+    final SlotTerm slotTerm = new SlotTerm(slot, thisPromise);
+    final var vote = new AcceptResponse.Vote(otherNodeId, thisNodeId, slotTerm, otherVote);
     final var acceptResponse = new AcceptResponse(otherNodeId, thisNodeId, vote,
         slot);
 
