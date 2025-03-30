@@ -25,7 +25,8 @@ At this the time:
 2. There are runtime checks that the algorithm is never violated.
 3. The library will mark itself as crashed if it spots problems.
 4. There are junit tests that simulate randomized rolling network partitions 1,000 times.
-5. There is not yet a full example of nodes communicating over network sockets.
+5. There is a UDP based encrypted network protocol inspired by QUIC yet you can use your own RPC messaging or TCP.
+6. There is support for Flexible Paxos (FPaxos) quorum strategies.
 
 The library is therefore at the stage where the bold and brave could try it out.
 
@@ -44,9 +45,6 @@ The ambition of this documentation is to:
 4. Provide enough documentation so that someone can carefully study the code, the tests, and the papers to verify this
    implementation with far less overall effort than it would take them to write any equivalent implementation.
 5. Explicitly explain the design decisions in this implementation.
-
-As of today, the proceeding list is aspirational. When the exhaustive tests are written, I will invite peer review and
-possibly offer a nominal bug bounty (which would be a folly I would surely come to regret instantly).
 
 The description below refers to server processes as "nodes" within a cluster. This helps to disambiguate the code
 running the algorithm from the physical server or host process.
