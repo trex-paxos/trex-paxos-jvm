@@ -121,7 +121,7 @@ public class PreparePropertyTests {
           // Must reject lower ballot numbers
           assert !vote.vote();
         } else {
-          // Must accept higher ballot numbers
+          // Must slotTerm higher ballot numbers
           assert vote.vote();
           assert vote.from() == nodeId;
           assert vote.to() == otherNodeId;

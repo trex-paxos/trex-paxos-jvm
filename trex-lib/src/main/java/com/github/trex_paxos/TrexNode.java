@@ -460,7 +460,7 @@ public class TrexNode {
 
   private void processAcceptResponse(AcceptResponse acceptResponse, Map<Long, AbstractCommand> commands, List<TrexMessage> messages) {
     final var vote = acceptResponse.vote();
-    final var logIndex = vote.logIndex();
+    final var logIndex = vote.slotTerm().logIndex();
     Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex)).ifPresent(acceptVotes -> {
       assert acceptVotes.accept.logIndex() == logIndex;
       if (!acceptVotes.chosen()) {
@@ -542,7 +542,7 @@ public class TrexNode {
         nodeIdentifier, accept.number().nodeIdentifier(),
         new AcceptResponse.Vote(nodeIdentifier,
             accept.number().nodeIdentifier(),
-            accept.slot(), true),
+            accept.slotTerm(), true),
         progress.highestFixedIndex());
   }
 
@@ -557,7 +557,7 @@ public class TrexNode {
         slotTerm.number().nodeIdentifier(),
         new AcceptResponse.Vote(nodeIdentifier,
             slotTerm.number().nodeIdentifier(),
-            slotTerm.logIndex(),
+            slotTerm,
             false)
         , progress.highestFixedIndex());
   }

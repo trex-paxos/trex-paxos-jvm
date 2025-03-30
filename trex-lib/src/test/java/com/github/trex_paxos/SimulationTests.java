@@ -409,10 +409,10 @@ public class SimulationTests {
       // in a three node cluster we need only one other node to be reachable to become leader
       final var r = simulation.trexEngine2.paxos(List.of(p));
       final var lm = leader.paxos(List.of(r.messages().getFirst()));
-      // we need to send accept messages to the other nodes
+      // we need to send slotTerm messages to the other nodes
       final var r1 = simulation.trexEngine2.paxos(List.of(lm.messages().getFirst()));
       simulation.trexEngine3.paxos(List.of(lm.messages().getFirst()));
-      // we only need one accept response to get a fixed id
+      // we only need one slotTerm response to get a fixed id
       final var r3 = leader.paxos(List.of(r1.messages().getFirst()));
       simulation.trexEngine2.paxos(List.of(r3.messages().getFirst()));
       simulation.trexEngine3.paxos(List.of(r3.messages().getFirst()));

@@ -1,7 +1,7 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.network.Channel;
-import com.github.trex_paxos.network.ClusterEndpoint;
+import com.github.trex_paxos.network.NodeEndpoint;
 import com.github.trex_paxos.network.ChannelSubscription;
 import com.github.trex_paxos.network.NetworkLayer;
 
@@ -49,7 +49,7 @@ public class StackServiceImpl implements StackService {
     }
   }
 
-  public StackServiceImpl(short index, Supplier<ClusterEndpoint> members, NetworkLayer networkLayer) {
+  public StackServiceImpl(short index, Supplier<NodeEndpoint> endpointSupplier, NetworkLayer networkLayer) {
     LOGGER.fine(() -> "Creating node " + index);
 
     final Pickler<Value> valuePickler = SealedRecordsPickler.createPickler(Value.class);
@@ -102,7 +102,7 @@ public class StackServiceImpl implements StackService {
     TrexEngine<Response> engine = getTrexEngine(index, callback);
 
     app = new TrexApp<>(
-        members,
+        endpointSupplier,
         engine,
         networkLayer,
         valuePickler

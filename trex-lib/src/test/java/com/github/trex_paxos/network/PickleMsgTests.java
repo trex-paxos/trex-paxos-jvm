@@ -15,10 +15,7 @@
  */
 package com.github.trex_paxos.network;
 
-import com.github.trex_paxos.BallotNumber;
-import com.github.trex_paxos.Command;
-import com.github.trex_paxos.NoOperation;
-import com.github.trex_paxos.Progress;
+import com.github.trex_paxos.*;
 import com.github.trex_paxos.msg.*;
 import org.junit.jupiter.api.Test;
 
@@ -70,7 +67,7 @@ public class PickleMsgTests {
   public void testAcceptNackPickleUnpickle() {
     AcceptResponse acceptNack = new AcceptResponse(
         (short) 1, (short) 2,
-        new AcceptResponse.Vote((short) 1, (short) 2, 4L, true),
+        new AcceptResponse.Vote((short) 1, (short) 2, new SlotTerm(4L, new BallotNumber((short)5, 6, (short)7)), true),
         11L);
     byte[] pickled = PickleMsg.pickle(acceptNack);
     AcceptResponse unpickled = (AcceptResponse) PickleMsg.unpickle(java.nio.ByteBuffer.wrap(pickled));
