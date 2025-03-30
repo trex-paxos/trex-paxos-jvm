@@ -138,7 +138,7 @@ public class TrexApp<COMMAND, RESULT> {
 
       if (engine.isLeader()) {
         byte[] valueBytes = valuePickler.serialize(value);
-        final var cmd = new Command(type, uuid, valueBytes);
+        final var cmd = new Command(uuid, valueBytes, type);
         final var messages = createLeaderMessages(cmd);
         LOGGER.fine(() -> engine.nodeIdentifier() + " leader is sending accept messages " + messages);
         transmitTrexMessages(messages);
@@ -147,7 +147,7 @@ public class TrexApp<COMMAND, RESULT> {
             leader -> {
               LOGGER.fine(() -> engine.nodeIdentifier() + " " + engine.trexNode.getRole() + " is proxying cmd messages" + value);
               byte[] valueBytes = valuePickler.serialize(value);
-              Command cmd = new Command(type, uuid, valueBytes);
+              Command cmd = new Command(uuid, valueBytes, type);
               networkLayer.send(PROXY.value(), leader, cmd);
             },
             () -> {

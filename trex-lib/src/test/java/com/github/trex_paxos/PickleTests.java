@@ -44,7 +44,7 @@ public class PickleTests {
 
   @Test
   public void testPickleCommand() throws Exception {
-    Command command = new Command((byte) 64, UUIDGenerator.generateUUID(), "data".getBytes());
+    Command command = new Command(UUIDGenerator.generateUUID(), "data".getBytes(), (byte) 64);
     byte[] pickled = Pickle.write(command);
     final var unpickled = Pickle.readCommand(pickled);
     assertEquals(command, unpickled);

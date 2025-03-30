@@ -124,7 +124,7 @@ public class Pickle {
       case NoOperation _ ->
         // Here we use zero bytes as a sentinel to represent the NOOP command.
           dataStream.writeInt(0);
-      case Command(var flavour, var uuid, var operationBytes) -> {
+      case Command(var uuid, var operationBytes, var flavour) -> {
         dataStream.writeInt(operationBytes.length);
         dataStream.write(operationBytes);
         dataStream.writeLong(uuid.getMostSignificantBits());
@@ -151,7 +151,7 @@ public class Pickle {
     final var msb = dataInputStream.readLong();
     final var lsb = dataInputStream.readLong();
     byte flavour = dataInputStream.readByte();
-    return new Command(flavour, new UUID(msb, lsb), bytes);
+    return new Command(new UUID(msb, lsb), bytes, flavour);
   }
 
   public static byte[] write(Accept a) throws IOException {

@@ -21,22 +21,18 @@ import com.github.trex_paxos.msg.TrexMessage;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import java.util.logging.ConsoleHandler;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.logging.*;
+import java.util.logging.Formatter;
 import java.util.random.RandomGenerator;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static com.github.trex_paxos.SimulationFPaxos.inconsistentFixedIndex2;
+import static com.github.trex_paxos.Simulation.inconsistentFixedIndex;
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -44,30 +40,51 @@ public class SimulationFPaxosTests {
 
   @BeforeAll
   static void setupLogging() {
-
     final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
     final Level level = Level.parse(logLevel);
 
+    // Create a custom formatter
+    Formatter customFormatter = new Formatter() {
+      @Override
+      public String format(LogRecord record) {
+        return record.getLevel() + ": " + formatMessage(record) + "\n";
+      }
+    };
+
+    // Configure main logger
     LOGGER.setLevel(level);
     ConsoleHandler consoleHandler = new ConsoleHandler();
     consoleHandler.setLevel(level);
+    consoleHandler.setFormatter(customFormatter);
     LOGGER.addHandler(consoleHandler);
 
-    // Configure SessionKeyManager logger
-    Logger sessionKeyManagerLogger = Logger.getLogger("");
-    sessionKeyManagerLogger.setLevel(level);
-    ConsoleHandler skmHandler = new ConsoleHandler();
-    skmHandler.setLevel(level);
-    sessionKeyManagerLogger.addHandler(skmHandler);
+    // Configure root logger
+    Logger rootLogger = Logger.getLogger("");
+    rootLogger.setLevel(level);
+    ConsoleHandler rootHandler = new ConsoleHandler();
+    rootHandler.setLevel(level);
+    rootHandler.setFormatter(customFormatter);
+    rootLogger.addHandler(rootHandler);
 
-    // Optionally disable parent handlers if needed
+    // Disable parent handlers
     LOGGER.setUseParentHandlers(false);
-    sessionKeyManagerLogger.setUseParentHandlers(false);
+    rootLogger.setUseParentHandlers(false);
   }
+
+  final QuorumStrategy fourNodesEvenNodeGambitFPaxos = new FlexiblePaxosQuorum(
+      Set.of(
+          new VotingWeight((short) 1, 1),
+          new VotingWeight((short) 2, 1),
+          new VotingWeight((short) 3, 1),
+          new VotingWeight((short) 4, 1)
+      ),
+      3,
+      2
+  );
 
   @Test
   public void testLeaderElection1000() {
-    RandomGenerator rng = SimulationFPaxos.repeatableRandomGenerator(1234);
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(1234);
     IntStream.range(0, 1000).forEach(i -> {
           LOGGER.info("\n ================= \nstarting iteration: " + i);
           testLeaderElection(rng);
@@ -77,13 +94,13 @@ public class SimulationFPaxosTests {
 
   @Test
   public void testLeaderElection() {
-    RandomGenerator rng = SimulationFPaxos.repeatableRandomGenerator(1234);
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(1234);
     testLeaderElection(rng);
   }
 
   public void testLeaderElection(RandomGenerator rng) {
     // given a repeatable test setup
-    final var simulation = new SimulationFPaxos(rng, 30);
+    final var simulation = new Simulation(rng, 30, fourNodesEvenNodeGambitFPaxos);
 
     // we do a cold cluster start with no prior leader in the journals
     simulation.coldStart();
@@ -104,8 +121,8 @@ public class SimulationFPaxosTests {
 
   @Test
   public void testClientWorkPerfectNetwork1000() {
-    RandomGenerator rng = SimulationFPaxos.repeatableRandomGenerator(9876);
-    IntStream.range(0, 1).forEach(i -> {
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(9876);
+    IntStream.range(0, 1000).forEach(i -> {
           LOGGER.info("\n ================= \nstarting iteration: " + i);
           testClientWork(rng);
         }
@@ -114,19 +131,19 @@ public class SimulationFPaxosTests {
 
   @Test
   public void testClientWorkPerfectNetwork() {
-    RandomGenerator rng = SimulationFPaxos.repeatableRandomGenerator(9876);
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(9876);
     testClientWork(rng);
   }
 
   @Test
   public void testClientWork() {
-    RandomGenerator rng = SimulationFPaxos.repeatableRandomGenerator(1234);
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(1234);
     testClientWork(rng);
   }
 
   public void testClientWork(RandomGenerator rng) {
     // given a repeatable test setup
-    final var simulation = new SimulationFPaxos(rng, 30);
+    final var simulation = new Simulation(rng, 30, fourNodesEvenNodeGambitFPaxos);
 
     // no code start rather we will make a leader
     makeLeader(simulation);
@@ -134,7 +151,7 @@ public class SimulationFPaxosTests {
     // when we run for 30 iterations with client data
     simulation.run(30, true);
 
-    final var badCommandIndex = inconsistentFixedIndex2(
+    final var badCommandIndex = inconsistentFixedIndex(
         simulation.allCommandsMap.get(simulation.trexEngine1.nodeIdentifier()),
         simulation.allCommandsMap.get(simulation.trexEngine2.nodeIdentifier()),
         simulation.allCommandsMap.get(simulation.trexEngine3.nodeIdentifier()),
@@ -162,7 +179,7 @@ public class SimulationFPaxosTests {
 
   @Test
   public void testClientWorkLossyNetwork1000() {
-    RandomGenerator rng = SimulationFPaxos.repeatableRandomGenerator(56734);
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(56734);
 
     final var maxOfMinimum = new AtomicInteger(0);
 
@@ -180,7 +197,7 @@ public class SimulationFPaxosTests {
 
   @Test
   public void testClientWorkLossyNetwork() {
-    RandomGenerator rng = SimulationFPaxos.repeatableRandomGenerator(4566);
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(4566);
     var min = 0;
     var counter = 0;
     while (min == 0 && counter < 5) {
@@ -193,7 +210,7 @@ public class SimulationFPaxosTests {
   /// This returns the minimum command size of the three engines
   private int testWorkLossyNetwork(RandomGenerator rng) {
     // given a repeatable test setup
-    final var simulation = new SimulationFPaxos(rng, 30);
+    final var simulation = new Simulation(rng, 30, fourNodesEvenNodeGambitFPaxos);
 
     // first force a leader as we have separate tests for leader election. This is a partitioned network test.
     makeLeader(simulation);
@@ -214,7 +231,7 @@ public class SimulationFPaxosTests {
     simulation.run(runLength, true, nemesis);
 
     assertThat(
-        inconsistentFixedIndex2(
+        inconsistentFixedIndex(
             simulation.allCommandsMap.get(simulation.trexEngine1.nodeIdentifier()),
             simulation.allCommandsMap.get(simulation.trexEngine1.nodeIdentifier()),
             simulation.allCommandsMap.get(simulation.trexEngine1.nodeIdentifier()),
@@ -238,7 +255,7 @@ public class SimulationFPaxosTests {
 
   @Test
   public void testWorkRotationNetworkPartition100() {
-    RandomGenerator rng = SimulationFPaxos.repeatableRandomGenerator(634546345);
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(634546345);
     final var max = new AtomicInteger();
     IntStream.range(0, 100).forEach(i -> {
       LOGGER.info("\n ================= \nstarting iteration: " + i);
@@ -252,13 +269,13 @@ public class SimulationFPaxosTests {
 
   @Test
   public void testWorkRotationNetworkPartition() {
-    RandomGenerator rng = SimulationFPaxos.repeatableRandomGenerator(5);
+    RandomGenerator rng = Simulation.repeatableRandomGenerator(5);
     testWorkRotationNetworkPartition(rng);
   }
 
   private int testWorkRotationNetworkPartition(RandomGenerator rng) {
     // given a repeatable test setup
-    final var simulation = new SimulationFPaxos(rng, 30);
+    final var simulation = new Simulation(rng, 30, fourNodesEvenNodeGambitFPaxos);
 
     // first force a leader as we have separate tests for leader election. This is a partitioned network test.
     makeLeader(simulation);
@@ -343,8 +360,23 @@ public class SimulationFPaxosTests {
       return result;
     });
   }
-
-  private static BiFunction<SimulationFPaxos.Send, Long, Stream<TrexMessage>> getRotatingPartitionNemesis(SimulationFPaxos simulation, int period) {
+  /**
+   * Creates a rotating partition nemesis that cycles through nodes at fixed intervals.
+   * <p>
+   * Implements a deterministic partition schedule:
+   * <ul>
+   *   <li>Changes isolated node every {@code period} logical time units</li>
+   *   <li>Cycles through nodes in sequence: 1 → 2 → 3 → 4 → 1...</li>
+   *   <li>Maintains partition for full duration of each period</li>
+   * </ul>
+   *
+   * @param simulation Parent simulation context
+   * @param period Number of logical time units between partition changes
+   * @return Configured rotating partition nemesis function
+   * @implNote Uses atomic counters to maintain deterministic behavior across simulation runs
+   * @see #makeNemesis for base partitioning logic
+   */
+  private static BiFunction<Simulation.Send, Long, Stream<TrexMessage>> getRotatingPartitionNemesis(Simulation simulation, int period) {
     final var counter = new AtomicLong();
     final var latestTime = new AtomicLong();
     final var isolatedNode = new AtomicLong();
@@ -352,9 +384,8 @@ public class SimulationFPaxosTests {
     return makeNemesis(
         time -> {
           final var lastTime = latestTime.get();
-          if (time > lastTime) {
-            counter.getAndIncrement();
-            latestTime.set(time);
+          if (time <= lastTime) {
+            throw new AssertionError("time is not increasing: " + time + " <= " + lastTime);
           }
           lastIsolatedNode.set(isolatedNode.get());
           isolatedNode.set(counter.getAndIncrement() / period % 4);
@@ -369,8 +400,27 @@ public class SimulationFPaxosTests {
         simulation.trexEngine4
     );
   }
-
-  static <R> BiFunction<SimulationFPaxos.Send, Long, Stream<TrexMessage>> makeNemesis(
+  /**
+   * Creates a network partition nemesis that isolates specific nodes based on simulation time.
+   * <p>
+   * The partition behavior is determined by the {@code timeToPartitionedNode} function which
+   * maps simulation time to a node index. Handles message routing with the following semantics:
+   * <ul>
+   *   <li>Broadcast messages from partitioned node are suppressed</li>
+   *   <li>Direct messages involving partitioned node (either sender or receiver) are dropped</li>
+   *   <li>Non-partitioned nodes form a fully connected sub-cluster</li>
+   * </ul>
+   *
+   * @param <R> Paxos response type
+   * @param timeToPartitionedNode Function mapping current time to 0-based node index to isolate
+   * @param engine1 First paxos engine (node 1)
+   * @param engine2 Second paxos engine (node 2)
+   * @param engine3 Third paxos engine (node 3)
+   * @param engine4 Fourth paxos engine (node 4)
+   * @return BiFunction handling message routing with current partition scheme
+   * @implNote Partition index range: 0-3 (1-based nodes 1-4). Index values outside 0-3 disable partitioning
+   */
+  static <R> BiFunction<Simulation.Send, Long, Stream<TrexMessage>> makeNemesis(
       Function<Long, Byte> timeToPartitionedNode,
       TestablePaxosEngine<R> engine1,
       TestablePaxosEngine<R> engine2,
@@ -410,10 +460,10 @@ public class SimulationFPaxosTests {
     };
   }
 
-  void makeLeader(SimulationFPaxos simulation) {
+  void makeLeader(Simulation simulation) {
       final var leader = simulation.trexEngine1;
 
-      simulation.timeout(leader.trexNode()).ifPresent(p -> {
+      simulation.timeout(leader.trexNode(), 0L).ifPresent(p -> {
           // Need 3 responses for prepare quorum (including self)
           final var r2 = simulation.trexEngine2.paxos(List.of(p));
           final var r3 = simulation.trexEngine3.paxos(List.of(p));

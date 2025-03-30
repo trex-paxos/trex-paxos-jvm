@@ -21,16 +21,15 @@ import java.util.zip.CRC32;
 /// A [Command] which is the value we are trying to fix. The
 /// application is responsible for encoding and decoding real host commands and values from and to byte array.
 ///
-/// @param flavour        A byte that can be used to distinguish between different types of commands. This allows us to multiplex
-///                                             different types of commands within the same Paxos cluster. Negative numbers are
-///                       reserved for system administration commands.
 /// @param uuid           The client message unique identifier used to respond to the client who issued the command.
-///                                             This just be universally unique across all clients and all time.
+///                                                                   This just be universally unique across all clients and all time.
 /// @param operationBytes The application specific binary encoding of the application command to apply
-///                                             to the application state machine.
+///                                                                   to the application state machine.
+/// @param flavour        A byte that can be used to distinguish between different types of commands. This allows us to multiplex
+///                                                                   different types of commands within the same Paxos cluster. Negative numbers are
+///                                             reserved for system administration commands.
 public record Command(
-    byte flavour, UUID uuid,
-    byte[] operationBytes
+    UUID uuid, byte[] operationBytes, byte flavour
 ) implements AbstractCommand {
 
   public Command {
@@ -51,7 +50,7 @@ public record Command(
   /// @param bytes The application-specific binary data for this command
   /// @param flavour A byte that distinguishes different types of commands. Negative numbers are reserved for system administration commands.
   public Command(byte[] bytes, byte flavour) {
-    this(flavour, UUIDGenerator.generateUUID(), bytes);
+    this(UUIDGenerator.generateUUID(), bytes, flavour);
   }
 
   /// Creates a command with the specified operation bytes.

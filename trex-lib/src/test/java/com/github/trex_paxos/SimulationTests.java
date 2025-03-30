@@ -81,9 +81,11 @@ public class SimulationTests {
     testLeaderElection(rng);
   }
 
+  QuorumStrategy simpleMajority = new SimpleMajority(3);
+
   public void testLeaderElection(RandomGenerator rng) {
     // given a repeatable test setup
-    final var simulation = new Simulation(rng, 30);
+    final var simulation = new Simulation(rng, 30, simpleMajority);
 
     // we do a cold cluster start with no prior leader in the journals
     simulation.coldStart();
@@ -126,7 +128,7 @@ public class SimulationTests {
 
   public void testClientWork(RandomGenerator rng) {
     // given a repeatable test setup
-    final var simulation = new Simulation(rng, 30);
+    final var simulation = new Simulation(rng, 30, simpleMajority);
 
     // no code start rather we will make a leader
     makeLeader(simulation);
@@ -137,7 +139,8 @@ public class SimulationTests {
     final var badCommandIndex = inconsistentFixedIndex(
         simulation.allCommandsMap.get(simulation.trexEngine1.nodeIdentifier()),
         simulation.allCommandsMap.get(simulation.trexEngine2.nodeIdentifier()),
-        simulation.allCommandsMap.get(simulation.trexEngine3.nodeIdentifier())
+        simulation.allCommandsMap.get(simulation.trexEngine3.nodeIdentifier()),
+        new TreeMap<>()
     );
 
     assertThat(badCommandIndex.isEmpty()).isTrue();
@@ -195,7 +198,7 @@ public class SimulationTests {
   /// This returns the minimum command size of the committed journal of the three engines
   private int testWorkLossyNetwork(RandomGenerator rng) {
     // given a repeatable test setup
-    final var simulation = new Simulation(rng, 30);
+    final var simulation = new Simulation(rng, 30, simpleMajority);
 
     // first force a leader as we have separate tests for leader election. This is a partitioned network test.
     makeLeader(simulation);
@@ -217,7 +220,8 @@ public class SimulationTests {
     assertThat(inconsistentFixedIndex(
         simulation.allCommandsMap.get(simulation.trexEngine1.nodeIdentifier()),
         simulation.allCommandsMap.get(simulation.trexEngine2.nodeIdentifier()),
-        simulation.allCommandsMap.get(simulation.trexEngine3.nodeIdentifier())
+        simulation.allCommandsMap.get(simulation.trexEngine3.nodeIdentifier()),
+        new TreeMap<>()
     ).isEmpty()).isTrue();
 
     assertThat(consistentFixed(
@@ -256,7 +260,7 @@ public class SimulationTests {
 
   private int testWorkRotationNetworkPartition(RandomGenerator rng) {
     // given a repeatable test setup
-    final var simulation = new Simulation(rng, 30);
+    final var simulation = new Simulation(rng, 30, simpleMajority);
 
     // first force a leader as we have separate tests for leader election. This is a partitioned network test.
     makeLeader(simulation);
@@ -401,7 +405,7 @@ public class SimulationTests {
     final var leader = simulation.trexEngine1;
 
     // when we call timeout it will make a new prepare and self-promise to become Recoverer
-    simulation.timeout(leader.trexNode()).ifPresent(p -> {
+    simulation.timeout(leader.trexNode(), 0L).ifPresent(p -> {
       // in a three node cluster we need only one other node to be reachable to become leader
       final var r = simulation.trexEngine2.paxos(List.of(p));
       final var lm = leader.paxos(List.of(r.messages().getFirst()));
@@ -413,8 +417,6 @@ public class SimulationTests {
       simulation.trexEngine2.paxos(List.of(r3.messages().getFirst()));
       simulation.trexEngine3.paxos(List.of(r3.messages().getFirst()));
     });
-    // FIXME what do we need to do to get the leader to send heartbeats?
-    //simulation.createHeartbeatMessagesAndReschedule(leader.trexNode());
     LOGGER.info(leader.trexNode.nodeIdentifier + " == LEADER");
   }
 }

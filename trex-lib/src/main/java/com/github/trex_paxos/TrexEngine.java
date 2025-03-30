@@ -138,7 +138,7 @@ public class TrexEngine<RESULT> implements AutoCloseable {
   }
 
   private TrexMessage nextAcceptMessage(Command command) {
-    LOGGER.fine(() -> "node " + nodeIdentifier() + " processing next command " + command.uuid());
+    LOGGER.finest(() -> "node " + nodeIdentifier() + " processing next command " + command.uuid());
     final var nextAcceptMessage = trexNode.nextAcceptMessage(command);
     // FIXME: pull this out so that we can run it as a batch
     final var r = trexNode.paxos(nextAcceptMessage);
