@@ -416,16 +416,26 @@ to use your own node failure detection or election mechanism if you do not like 
 
 See the wiki for a more detailed explanation of this topic.
 
-## UPaxos and Cluster Membership Changes
+## FPaxos "Flexible Paxos: Quorum intersection revisited"
+
+The paper [Flexible Paxos: Quorum intersection revisited](https://arxiv.org/pdf/1608.06696v1) describes a way to improve 
+the performance of Paxos by allowing the leader to accept values without waiting for a majority of responses. 
+
+This codebase supports this by making `QuorumStrategy` an interface. There is a `SimpleQuorumStrategy` that implements a
+standard majority quorum strategy. There is also a `FlexibleQuorumStrategy` where each server may have a voting weight
+and the quorum size for prepare messages or accept messages may be set to a different values. This is particularly useful 
+when you want to run pairs of servers in cloud resilience zones or different datacenters. 
+
+The two different quorums are validated to satisfy the safety property that 
+$$|P|+|A|>N$$ where N is the total number of nodes, $$|P|$$ is the number of nodes that made promises, and $$|A|$$ is 
+the number of nodes that accepted values. 
+
+See [FPaxos](FPaxos.md) for more details. 
+
+## UPaxos
 
 The [UPaxos](https://davecturner.github.io/2016/06/09/unbounded-pipelining-paxos.html) technical paper describes a way 
-to change the cluster membership without any stalls. The following blog posts discuss it: 
-
-1. [Paxos Reconfiguration Stalls](https://simbo1905.wordpress.com/2016/12/15/paxos-reconfiguration-stalls/)
-2. [UPaxos: Unbounded Paxos Reconfigurations](https://simbo1905.wordpress.com/2016/12/16/upaxos-unbounded-paxos-reconfigurations/)
-3. [Paxos Voting Weights](https://simbo1905.wordpress.com/2017/03/16/paxos-voting-weights/)
-
-The key idea is that we introduce an optional highest set of era bits to the `N` value. This means that our actual 
+to change the cluster membership without any stalls. To support this in a future update our actual 
 ballot number record has an optional era: 
 
 ```java
@@ -493,9 +503,10 @@ The list of tasks:
 - [x] Write extensive documentation, including detailed JavaDoc.
 - [x] Write a `Network` for a demo. Kwik does not support connection fail-over. So will make something QUIC-like over
   UDP.
+- [x] Implement Voting Weights for Flexible Paxos.
 - [ ] Implement cluster membership changes as UPaxos.
 - [ ] Implement corfu distributed shared log as a full demo.
-- [ ] Add in phi acculmulator for leader failure detection.
+- [ ] Add in phi accumulator for leader failure detection.
 
 ## Attribution
 

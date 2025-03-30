@@ -1,6 +1,8 @@
 # The FPaxos "Even Nodes" Optimisation
 
-by simbo1905
+by simbo1905 September 30, 2016
+
+This was originally published on my blog at [The FPaxos “Even Nodes” Optimisation ](https://simbo1905.wordpress.com/2016/09/30/the-fpaxos-even-nodes-optimisation/)
 
 Up until 2016, it was well understood that the optimal size for typical Paxos clusters is three or five nodes. With typical replication workloads, it was known that four or six nodes clusters are no better, and in fact worse, than having one less node. The FPaxos "Flexible Paxos" paper changes the rules of the consensus game with the "even nodes" optimisation.
 
@@ -16,7 +18,7 @@ Just because it is inadvisable not to have an even number of nodes doesn't mean 
 
 Back to the even nodes optimisation. The remarkable discovery with Flexible Paxos is that with four nodes you don't need to wait for a majority response to accept messages; only the prepare messages. The leader does not have to wait for two accept responses it only needs to wait for a single response. So the throughput and latency of a four node cluster under steady state running can be more like a three node cluster than a five node cluster. Why?
 
-It turns out that simple majorities are only one way of ensuring correctness. Yet it isn't optimal one for many scenarios such as when you have an even number of nodes. What you actually need is any set of quorums which satisfies $$|P|+|A|>N$$ where N is the total number of nodes, $$|P|$$ is the number of nodes that made promises, and $$|A|$$ is the number of nodes that acceped values. Why?
+It turns out that simple majorities are only one way of ensuring correctness. Yet it isn't optimal one for many scenarios such as when you have an even number of nodes. What you actually need is any set of quorums which satisfies $$|P|+|A|>N$$ where N is the total number of nodes, $$|P|$$ is the number of nodes that made promises, and $$|A|$$ is the number of nodes that accepted values. Why?
 
 What you need to ensure correctness is that a new leader must be guaranteed to see the highest accepted value of the previous leader. If I have four nodes, and two accepted the last value sent by a dead leader (the leader and one other), and the new leader obtains promises from three live nodes (everyone but the dead leader), then one of those promises will include the last value proposed by the previous leader. Putting the figures into the formula we see $$3 + 2 > 4$$ which confirms our reasoning.
 
