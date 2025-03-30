@@ -696,6 +696,7 @@ public class TrexNode {
 
   /// This method is for testing purposes only so that we can write unit tests that do not require a TrexEngine.
   /// It is not expected that users of the library will make subclasses of TrexNode in order to use this method.
+  /// FIXME add @TestOnly annotation. 
   @SuppressWarnings("SameParameterValue")
   protected void setRole(TrexRole role) {
     this.role = role;
@@ -790,9 +791,8 @@ public class TrexNode {
     return role == FOLLOW;
   }
 
-  /**
-   * A record of the votes received by a node from other cluster members.
-   */
+  /// A record of the votes received by a node from other cluster members.
+  /// FIXME rename accept to SlotTerm and check when loaded from the journal
   public record AcceptVotes(SlotTerm accept, Map<Short, AcceptResponse> responses, boolean chosen) {
     public AcceptVotes(SlotTerm slotTerm) {
       this(slotTerm, new HashMap<>(), false);
