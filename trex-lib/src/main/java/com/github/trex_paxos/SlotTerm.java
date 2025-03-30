@@ -15,7 +15,7 @@ public record SlotTerm(long logIndex, BallotNumber number) implements Comparable
       throw new IllegalArgumentException("number must not be null");
     }
   }
-
+  // FIXME this needs to compare number()
   @Override
   public int compareTo(SlotTerm o) {
     return Long.compare(logIndex, o.logIndex);
