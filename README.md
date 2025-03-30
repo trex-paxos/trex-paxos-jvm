@@ -3,12 +3,12 @@
 ### TL;DR
 
 This repository contains a Java library that implements the Paxos algorithm as described in Leslie Lamport's 2001
-paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf).
-It aims to be rigorous in terms of safety preferring to mark a node as crashed rather than ignoring any possible safety
-violation.
+paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) that optionally supports [Flexible Paxos: Quorum intersection revisited](https://arxiv.org/pdf/1608.06696v1). This implementation aims to be rigorous in terms of safety preferring to mark a node as crashed rather than ignoring any possible safety violation.
 
 The library is a toolkit to help you to embed logic to replicate an ordered sequence of application commands
-over a network. You can us the full set of features or just the core algorithm code.
+over a network. You can use the full set of features or just the core algorithm code. It has a pluggable journal for 
+persistence that allows you to use your main application database or an embedded database. It has a pluggable network 
+transport layer that allows you to use your own application messaging or an optional a low latency encrypted UDP protocol 
 
 To use this library:
 
@@ -16,19 +16,18 @@ To use this library:
   documents or key-values) in your main database.
 * At this time you will need to set up the cluster membership manually. You will need to assign a unique node identifier
   to each node in the cluster.
-* This library is designed to be transport agnostic. Examples of plugging in network transport as either QUIC, TCP and
-  a lean UDP implementation inspired by QUIC are planned.
+* This library is designed to be transport agnostic when passing protocol messages between nodes in the cluster. You can 
+  use your own application messaging layer (e.g. REST or gRPC). There is an encrypted UDP protocol in this repository. 
 
 At this the time:
 
 1. There are exhaustive brute force tests that the algorithm is never violated.
 2. There are runtime checks that the algorithm is never violated.
-3. The library will mark itself as crashed if it spots problems.
+3. The library will mark itself as crashed if it spots problems such a journal write errors.
 4. There are junit tests that simulate randomized rolling network partitions 1,000 times.
-5. There is a UDP based encrypted network protocol inspired by QUIC yet you can use your own RPC messaging or TCP.
-6. There is support for Flexible Paxos (FPaxos) quorum strategies.
+5. There is support for Flexible Paxos (FPaxos) quorum strategies.
 
-The library is therefore at the stage where the bold and brave could try it out.
+There is a UDP based encrypted network protocol inspired by QUIC called [PAXE](./trex-paxe/PAXE.md).
 
 See the Architecture section for a more detailed explanation of how to use the library.
 
@@ -65,7 +64,7 @@ entirely. This can lead to data loss or data corruption.
 
 Paxos solves this by turning our servers into a distributed state machine where:
 
-1. Every change is treated as a command (like "Add Server-5 to cluster" or "Assign Partition-3 to Server-2")
+1. Every change is treated as a command (like "Set Key 4 to Value 5" or "Assign Partition-3 to Server-2")
 2. A leader server puts these commands in a specific order
 3. All servers apply these commands in exactly the same order
 
