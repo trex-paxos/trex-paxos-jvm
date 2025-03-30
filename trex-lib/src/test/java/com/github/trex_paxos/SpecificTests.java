@@ -61,7 +61,7 @@ public class SpecificTests {
   /// The current leader can fix values for slots that the isolated node is not aware of.
   /// When the isolated node rejoins it will abdicate and request a catchup. When the response is received
   /// the node should respect the invariant and ignore any values for slots that it has already been fixed.
-  /// it should also learn the id for the slot that it has not yet fixed and slotTerm that id even though
+  /// it should also learn the id for the slot that it has not yet fixed and accept that id even though
   /// it has self promised a higher ballot number.
   @Test
   public void testCatchupDoesNotViolateInvariantsYetDoesLearnDespiteHigherSelfPromise() {
@@ -96,7 +96,7 @@ public class SpecificTests {
     // Then the fixed id should not have changed after processing the catchup.
     assertEquals(acceptPreviouslyFixedSlot1, journal.fakeJournal.get(1L),
         "The fixed id should not have changed after processing the catchup.");
-    // And the node should slotTerm the second slot id even having made a higher
+    // And the node should accept the second slot id even having made a higher
     // self-promise
     assertEquals(freshAcceptSlot2, journal.fakeJournal.get(2L),
         "The node should accepted the second slot id even having made a higher self-promise");
@@ -110,7 +110,7 @@ public class SpecificTests {
   /// An isolated node will increment its term when it times out and will be higher than a stable leader.
   /// When the isolated node rejoins it will request a catchup. The leader will respond with the current term.
   /// The leader must also increment its term to be higher than the isolated node. This is because otherwise
-  /// the isolated noe will not slotTerm the term and will keep on asking for catch-ups which is wasted network
+  /// the isolated noe will not accept the term and will keep on asking for catch-ups which is wasted network
   /// traffic.
   @Test
   public void testCatchupWithHigherBallotNumberAndLowerFixedSlotCausesLeaderToIncrementTheTerm() {
@@ -150,6 +150,5 @@ public class SpecificTests {
 
   // FIXME make sure you test explicitly all the abdication scenarios
 
-  // FIXME other tests around making sure fixed messages are issued for every
-  // slotTerm
+  // FIXME other tests around making sure fixed messages are issued for every accept
 }

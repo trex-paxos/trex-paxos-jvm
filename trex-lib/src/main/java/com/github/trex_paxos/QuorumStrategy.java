@@ -30,12 +30,12 @@ import java.util.stream.Collectors;
 /// what we need is that any two quorums must overlap in at least one node. This is trivially the case for when we change
 /// voting weights by one.
 ///
-/// We can use different quorum strategies for the prepare and slotTerm phases as long as they overlap. The even node gambit
+/// We can use different quorum strategies for the prepare and accept phases as long as they overlap. The even node gambit
 /// is:
 ///
 /// - Use four servers that are two pairs in two resilience zones `{A1, A2, B1, B2}`.
 /// - Set the `prepare` quorum size to be 3
-/// - Set the `slotTerm` quorum size to be 2
+/// - Set the `accept` quorum size to be 2
 ///
 /// If the link between the resilience zones fails then the cluster can still make progress. The leader only needs a
 /// single response to know a value is fixed. Yet a split brain cannot occur as the leader takeover protocol needs

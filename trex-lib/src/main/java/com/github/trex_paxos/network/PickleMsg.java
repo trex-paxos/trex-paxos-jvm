@@ -230,7 +230,7 @@ public class PickleMsg implements Pickler<TrexMessage> {
   }
 
   private static int calculateAcceptInnerSize(Accept m) {
-    return Short.BYTES + calculateAcceptSize(m); // from + slotTerm size
+    return Short.BYTES + calculateAcceptSize(m); // from + accept
   }
 
   public static Accept readAccept(ByteBuffer buffer, short from) {

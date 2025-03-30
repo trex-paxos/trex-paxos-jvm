@@ -83,7 +83,7 @@ public class AcceptPropertyTests {
       };
     }};
 
-    // Create slotTerm message
+    // Create accept message
     final var accept = new Accept(otherNodeId, otherIndex, otherNumber, cmd);
 
     // Execute
@@ -91,7 +91,7 @@ public class AcceptPropertyTests {
 
     // Verify
     if (result instanceof TrexResult(final var messages, final var commands)) {
-      // No results should be generated from slotTerm
+      // No results should be generated from accept
       assert commands.isEmpty();
 
       assert messages.size() == 1;

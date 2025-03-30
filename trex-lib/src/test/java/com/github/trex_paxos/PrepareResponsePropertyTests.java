@@ -47,7 +47,7 @@ public class PrepareResponsePropertyTests {
     final var slotAtomic = new AtomicLong(thisFixed + 1);
     final var journalWritten = new AtomicBoolean(false);
 
-    //  only on a WIN will the algorithm recurse and write to the journal to process the self-slotTerm.
+    //  only on a WIN will the algorithm recurse and write to the journal to process the self-accept.
     final var journal = new FakeJournal(thisPromise, thisFixed) {
       @Override
       public void writeProgress(Progress progress) {

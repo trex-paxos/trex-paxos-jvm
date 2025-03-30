@@ -20,7 +20,7 @@ import com.github.trex_paxos.SlotTerm;
 
 /// The Prepare message is the first message in the Paxos protocol named in the paper Paxos Made Simple by Leslie Lamport.
 ///
-/// @param from     The node identifier of the proposer used to route the message and self-slotTerm.
+/// @param from     The node identifier of the proposer used to route the message and self-accept.
 /// @param slotTerm  This is the `{S,N}` where a successful leader will select the highest `V`.
 public record Prepare(
   short from,
