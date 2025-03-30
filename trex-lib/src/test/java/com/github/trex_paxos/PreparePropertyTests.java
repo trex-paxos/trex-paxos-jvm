@@ -125,8 +125,8 @@ public class PreparePropertyTests {
           assert vote.vote();
           assert vote.from() == nodeId;
           assert vote.to() == otherNodeId;
-          assert vote.logIndex() == otherIndex;
-          assert vote.number().equals(otherNumber);
+          assert vote.slotTerm().logIndex() == otherIndex;
+          assert vote.slotTerm().number().equals(otherNumber);
 
           // Verify that highest accepted id is returned
           if (cmd != null) {

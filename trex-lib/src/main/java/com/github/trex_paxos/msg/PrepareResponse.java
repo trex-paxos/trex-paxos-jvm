@@ -16,6 +16,7 @@
 package com.github.trex_paxos.msg;
 
 import com.github.trex_paxos.BallotNumber;
+import com.github.trex_paxos.SlotTerm;
 
 import java.util.Optional;
 
@@ -39,9 +40,8 @@ public record PrepareResponse(
       short from,
       // spookily intellij says there are no usages of this field, but if I remove it everything breaks
       short to,
-      long logIndex,
-      boolean vote,
-      BallotNumber number
+      SlotTerm slotTerm,
+      boolean vote
   ) {
   }
 }
