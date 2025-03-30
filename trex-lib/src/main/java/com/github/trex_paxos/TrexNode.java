@@ -105,7 +105,7 @@ public class TrexNode {
   /// The durable storage and durable log.
   final Journal journal;
 
-  /// The quorum strategy that may be trivial or may be cluster membership aware to implement UPaxos. You can manage that using Paxos itself.
+  /// The quorum strategy that may be a SimpleMakority or a FlexiblePaxosQuorumStrategy.
   final QuorumStrategy quorumStrategy;
 
   /// If we have rebooted then we start off as a follower.
