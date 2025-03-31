@@ -28,17 +28,17 @@ public record BallotNumber(short era, int counter, short nodeIdentifier) impleme
 
   @Override
   public int compareTo(BallotNumber that) {
-    // First compare by era
+    // First compare by era which is incremented for cluster reconfigurations. This will lock out message that have an obsolete cluster configuration.
     int eraComparison = Short.compare(this.era, that.era);
     if (eraComparison != 0) {
       return eraComparison;
     }
-    // Then compare by counter
+    // Then compare by counter which is incremented when a follower times out and is running the leader takeover protocol.
     int counterComparison = Integer.compare(this.counter, that.counter);
     if (counterComparison != 0) {
       return counterComparison;
     }
-    // Finally compare by node identifier
+    // Finally compare by node identifier which is a tie-breaker which ensures that all nodes in a cluster have unique ballot numbers.
     return Short.compare(this.nodeIdentifier, that.nodeIdentifier);
   }
 

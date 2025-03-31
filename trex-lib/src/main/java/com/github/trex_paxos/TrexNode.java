@@ -221,10 +221,10 @@ public class TrexNode {
               // does this change our prior self vote?
               Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex))
                   .ifPresent(acceptVotes -> {
-                    final var oldNumber = acceptVotes.accept().number();
+                    final var oldNumber = acceptVotes.slotTerm().number();
                     if (oldNumber.lessThan(number)) {
                       // we have accepted a higher accept which is a promise as per https://stackoverflow.com/a/29929052
-                      acceptVotes.responses().put(nodeIdentifier(), nack(acceptVotes.accept()));
+                      acceptVotes.responses().put(nodeIdentifier(), nack(acceptVotes.slotTerm()));
                       Set<AcceptResponse.Vote> vs = acceptVotes.responses().values().stream()
                           .map(AcceptResponse::vote).collect(Collectors.toSet());
                       final var quorumOutcome =
@@ -458,49 +458,59 @@ public class TrexNode {
     abdicate();
   }
 
+  /// Due to lost messages it may be the case that we have gaps such that we are awaiting responses for lower slots.
+  /// This will lead to values in the response map that are marked as chosen. So we:
+  /// - Ignore any responses where there is no entry in the map for the slot.
+  /// - Ignore responses where we have already seen enough responses to know that the value is chosen.
+  /// - Ignore any responses that do not have a slotTerm {S,N} that is equal to the original {S,N} that we sent out.
   private void processAcceptResponse(AcceptResponse acceptResponse, Map<Long, AbstractCommand> commands, List<TrexMessage> messages) {
     final var vote = acceptResponse.vote();
     final var logIndex = vote.slotTerm().logIndex();
     Optional.ofNullable(this.acceptVotesByLogIndex.get(logIndex)).ifPresent(acceptVotes -> {
-      assert acceptVotes.accept.logIndex() == logIndex;
-      if (!acceptVotes.chosen()) {
+      if (!acceptVotes.chosen() && acceptVotes.slotTerm().equals(vote.slotTerm())) {
+        // record this vote
         acceptVotes.responses().put(acceptResponse.from(), acceptResponse);
+        // grab all the votes
         Set<AcceptResponse.Vote> vs = acceptVotes.responses().values().stream()
             .map(AcceptResponse::vote).collect(Collectors.toSet());
+        // check whether we have a quorum.
         final var quorumOutcome =
             quorumStrategy.assessAccepts(logIndex, vs);
+        // process the outcome
         switch (quorumOutcome) {
           case WIN -> {
             LOGGER.log(logAtLevel, () ->
-                "WIN logIndex==" + logIndex +
-                    " nodeIdentifier==" + nodeIdentifier() +
-                    " number==" + acceptVotes.accept().number() +
+                "WIN nodeIdentifier==" + nodeIdentifier() +
+                    " slotTerm==" + acceptVotes.slotTerm().number() +
                     " vs==" + vs);
 
-            acceptVotesByLogIndex.put(logIndex, AcceptVotes.chosen(acceptVotes.accept()));
+            // mark the slot as chosen in case we have a gap at a lower slot as we must up-call in log index order
+            acceptVotesByLogIndex.put(logIndex, AcceptVotes.chosen(acceptVotes.slotTerm()));
 
-            // only if we have some contiguous slots that have been accepted we can fix them
-            final var fixed = acceptVotesByLogIndex.values().stream()
+            // only if we have some contiguous slots that have been accepted we can fix them so here we `takeWhile`
+            final var contiguousChosenSlotTerms = acceptVotesByLogIndex.values().stream()
                 .takeWhile(AcceptVotes::chosen)
-                .map(AcceptVotes::accept)
+                .map(AcceptVotes::slotTerm)
                 .filter(a -> a.logIndex() > progress.highestFixedIndex())
                 .toList();
 
-            if (!fixed.isEmpty()) {
+            // if we have a gap then we must await messages for a lower slot
+            if (!contiguousChosenSlotTerms.isEmpty()) {
               // record any fixed commands and remove the state tracking of accept responses
-              for (var slotTerm : fixed) {
+              for (var slotTerm : contiguousChosenSlotTerms) {
                 final var accept = journal.readAccept(slotTerm.logIndex()).orElseThrow();
                 // log and record the chosen command which may be either a NOOP or a true client command.
+                // here we add the chosen command into the output command map and the caller will run the host up-call application callback
                 logFixed(accept, commands);
-                // free the memory and stop heartbeating out the accepts
+                // free the memory and stop heartbeating out the accepts due to missing responses for this slow.
                 acceptVotesByLogIndex.remove(slotTerm.logIndex());
               }
 
-              // we have logFixed slots
-              this.progress = progress.withHighestFixed(fixed.getLast().logIndex());
+              // update our progress that we have committed a range of slots
+              this.progress = progress.withHighestFixed(contiguousChosenSlotTerms.getLast().logIndex());
               this.journal.writeProgress(progress);
 
-              // let the cluster know
+              // let the cluster know that a range of slots are committed
               messages.add(currentFixedMessage());
             }
           }
@@ -512,10 +522,12 @@ public class TrexNode {
               abdicate(messages);
         }
       }
+
     });
   }
 
-  private void logFixed(Accept accept, Map<Long, AbstractCommand> commands) {
+  /// Here we do not log the number `N` as due to lost messages or running UPaxos the number `N` may be different at each node.
+  void logFixed(Accept accept, Map<Long, AbstractCommand> commands) {
     final var cmd = accept.command();
     final var logIndex = accept.slot();
     LOGGER.log(logAtLevel, () ->
@@ -793,7 +805,7 @@ public class TrexNode {
 
   /// A record of the votes received by a node from other cluster members.
   /// FIXME rename accept to SlotTerm and check when loaded from the journal
-  public record AcceptVotes(SlotTerm accept, Map<Short, AcceptResponse> responses, boolean chosen) {
+  public record AcceptVotes(SlotTerm slotTerm, Map<Short, AcceptResponse> responses, boolean chosen) {
     public AcceptVotes(SlotTerm slotTerm) {
       this(slotTerm, new HashMap<>(), false);
     }
