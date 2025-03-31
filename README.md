@@ -3,12 +3,17 @@
 ### TL;DR
 
 This repository contains a Java library that implements the Paxos algorithm as described in Leslie Lamport's 2001
-paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) that optionally supports [Flexible Paxos: Quorum intersection revisited](https://arxiv.org/pdf/1608.06696v1). This implementation aims to be rigorous in terms of safety preferring to mark a node as crashed rather than ignoring any possible safety violation.
+paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) that optionally supports [Flexible Paxos: Quorum intersection revisited](https://arxiv.org/pdf/1608.06696v1). 
+This implementation aims to be rigorous in terms of safety preferring to mark a node as crashed rather than ignoring any possible safety violation.
+The core library has brute force property tests that check all branches and all input permutations to confirm the algorithm invariants are never violated.
 
 The library is a toolkit to help you to embed logic to replicate an ordered sequence of application commands
 over a network. You can use the full set of features or just the core algorithm code. It has a pluggable journal for 
 persistence that allows you to use your main application database or an embedded database. It has a pluggable network 
-transport layer that allows you to use your own application messaging or an optional a low latency encrypted UDP protocol 
+transport layer that allows you to use your own application messaging or an optional low-latency encrypted UDP protocol.
+
+The host process using this library must supply an application 
+callback that will be invoked when command values are chosen by the algorithm. 
 
 To use this library:
 
@@ -17,7 +22,7 @@ To use this library:
 * At this time you will need to set up the cluster membership manually. You will need to assign a unique node identifier
   to each node in the cluster.
 * This library is designed to be transport agnostic when passing protocol messages between nodes in the cluster. You can 
-  use your own application messaging layer (e.g. REST or gRPC). There is an encrypted UDP protocol in this repository. 
+  use your own application messaging layer (e.g. REST or gRPC). There is an optional encrypted UDP network protocol in this repository. 
 
 At this the time:
 
@@ -27,7 +32,8 @@ At this the time:
 4. There are junit tests that simulate randomized rolling network partitions 1,000 times.
 5. There is support for Flexible Paxos (FPaxos) quorum strategies.
 
-There is a UDP based encrypted network protocol inspired by QUIC called [PAXE](./trex-paxe/PAXE.md).
+This repository includes a low-overhead UDP based encrypted network protocol inspired by QUIC called [PAXE](./trex-paxe/PAXE.md).
+This can be optionally be embedded into your application to perform the Paxos message enchanges.
 
 See the Architecture section for a more detailed explanation of how to use the library.
 
@@ -38,15 +44,15 @@ The ambition of this documentation is to:
 1. Provide sufficient detail about the invariants described in the original paper to transcribe them into rigorous
    tests.
 2. Clarify that the approach taken in this implementation is based on a careful and thorough reading of the original
-   papers, watching Lamport's videos, and careful research about other implementations.
+   papers, watching Lamport's videos, and careful research of other implementations.
 3. Provide sufficient detail around the "learning" messages used by this implementation to understand that they are
    minimal and do not harm correctness.
 4. Provide enough documentation so that someone can carefully study the code, the tests, and the papers to verify this
    implementation with far less overall effort than it would take them to write any equivalent implementation.
 5. Explicitly explain the design decisions in this implementation.
 
-The description below refers to server processes as "nodes" within a cluster. This helps to disambiguate the code
-running the algorithm from the physical server or host process.
+The description below refers to server processes as "nodes" within a cluster. This helps to disambiguate the library code
+running the algorithm from the physical server or host process. 
 
 ## The Problem We're Solving
 
