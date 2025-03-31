@@ -12,9 +12,8 @@ over a network. You can use the full set of features or just the core algorithm 
 persistence that allows you to use your main application database or an embedded database. It has a pluggable network 
 transport layer that allows you to use your own application messaging or an optional low-latency encrypted UDP protocol.
 
-The he host process uses this library must supply application 
-logic that will be called when command values are chosen by the algorithm. Invoking the host application callback is referred to as 
-the “up-call” in the codebase.
+The host process using this library must supply an application 
+callback that will be invoked when command values are chosen by the algorithm. 
 
 To use this library:
 
