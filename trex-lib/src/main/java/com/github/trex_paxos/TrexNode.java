@@ -83,7 +83,7 @@ public class TrexNode {
 
   /// Create a new TrexNode that will load the current progress from the journal. The journal must have been pre-initialised.
   ///
-  /// @param logAtLevel     The level to log when values are known to be chosen which is logged as "WIN" and when are know to be sequentially logFixed with is logged as "FIXED".
+  /// @param logAtLevel     The level to log when values are known to be chosen which is logged as "WIN" and when are know to be sequentially fixed with is logged as "FIXED".
   /// @param nodeIdentifier The unique node identifier. This must be unique across the cluster and across enough time for prior messages to have been forgotten.
   /// @param quorumStrategy The quorum strategy that may be a countVotes majority, else things like FPaxos or UPaxos
   /// @param journal        The durable storage and durable log. This must be pre-initialised.
@@ -152,7 +152,7 @@ public class TrexNode {
     }
     // This will hold any outbound message that must only be sent after the journal has been flushed to durable storage.
     List<TrexMessage> messages = new ArrayList<>();
-    // This will hold any logFixed results. These may be written to the data store under the same translation as the journal.stat.
+    // This will hold any fixed results. These may be written to the data store under the same translation as the journal.stat.
     TreeMap<Long, AbstractCommand> commands = new TreeMap<>();
     // This tracks what our old state was so that we can crash if we change the state for the wrong message types.
     final var priorProgress = progress;
@@ -194,10 +194,10 @@ public class TrexNode {
   ///
   /// @param input    The message to process.
   /// @param messages This is an out argument that gathers the list of messages to send out to the cluster.
-  /// @param commands This is an out argument of chosen command values by slot to up-call to the host application.
+  /// @param chosenCommands This is an out argument of chosen command values by slot to up-call to the host application.
   private void algorithm(TrexMessage input,
                          List<TrexMessage> messages,
-                         TreeMap<Long, AbstractCommand> commands) {
+                         TreeMap<Long, AbstractCommand> chosenCommands) {
     if (closed) {
       LOGGER.warning("This node has been closed so has shutdown and will not process any more messages.");
       return;
@@ -208,7 +208,7 @@ public class TrexNode {
         final var logIndex = accept.slotTerm().logIndex();
         if (lowerAccept(accept) || fixedSlot(accept.slot())) {
           messages.add(nack(accept.slotTerm()));
-          // if the other node is behind tell them that the slot is logFixed. this will force them to catchup.
+          // if the other node is behind tell them that the slot is fixed. this will force them to catchup.
           sendFixedToBehindNode(accept.slot(), messages);
         } else if (equalOrHigherAccept(accept)) {
           // always journal first
@@ -251,9 +251,9 @@ public class TrexNode {
       case Prepare prepare -> {
         final var number = prepare.slotTerm().number();
         if (number.lessThan(progress.highestPromised()) || fixedSlot(prepare.slot())) {
-          // nack a low nextPrepareMessage else any nextPrepareMessage for a logFixed slot sending any accepts they are missing
+          // nack a low nextPrepareMessage else any nextPrepareMessage for a fixed slot sending any accepts they are missing
           messages.add(nack(prepare));
-          // if the other node is behind tell them that the slot is logFixed. this will force them to catchup.
+          // if the other node is behind tell them that the slot is fixed. this will force them to catchup.
           sendFixedToBehindNode(prepare.slot(), messages);
         } else if (number.greaterThan(progress.highestPromised())) {
           // ack a higher nextPrepareMessage
@@ -283,7 +283,7 @@ public class TrexNode {
             abdicate(messages);
           } else {
             // Both Leader and Recoverer can receive AcceptResponses
-            processAcceptResponse(acceptResponse, commands, messages);
+            processAcceptResponse(acceptResponse, chosenCommands, messages);
           }
         }
       }
@@ -292,26 +292,23 @@ public class TrexNode {
           processPrepareResponse(prepareResponse, messages);
         }
       }
-      case Fixed(final var fixedFrom, SlotTerm(final var fixedSlot, final var fixedNumber)) -> {
-        if (fixedSlot == highestFixed() + 1) {
-          // we must have the correct number at the slot
-          final var fixedAccept = journal.readAccept(fixedSlot)
-              .filter(accept -> accept.number().equals(fixedNumber))
-              .orElse(null);
-
-          // make the callback to the main application
-          Optional.ofNullable(fixedAccept).ifPresent(accept -> {
-            logFixed(accept, commands);
-            progress = progress.withHighestFixed(fixedSlot);
-            journal.writeProgress(progress);
-            if (!role.equals(FOLLOW)) {
-              // the leader is the distinguished learner that recurses so this is positive confirmation of another live leader.
-              abdicate(messages);
-            }
-          });
+      case Fixed(final var fixedFrom, final var fixedSlotTerm) -> {
+        final var fixedSlot = fixedSlotTerm.logIndex();
+        // only if it is the happy path that we are seeing a fixed message for a contiguous slot to the last we know was chosen
+        if (fixedSlotTerm.logIndex() == highestFixed() + 1) {
+          final var fixedAccept = journal.readAccept(fixedSlot);
+          if( fixedAccept.isPresent() && fixedAccept.get().slotTerm().equals(fixedSlotTerm)) {
+            // make the callback to the main application
+              recordAcceptForHostUpCall(fixedAccept.get(), chosenCommands);
+              progress = progress.withHighestFixed(fixedSlotTerm.logIndex());
+              journal.writeProgress(progress);
+              if (!role.equals(FOLLOW)) {
+                // the leader is the distinguished learner that recurses so this is positive confirmation of another live leader.
+                abdicate(messages);
+              }
+          }
         }
-
-        // if we have not logFixed the slot then we must catch up
+        // if we have not fixed the slot then we must catch up
         final var highestFixedIndex = progress.highestFixedIndex();
 
         if (fixedSlot > highestFixedIndex) {
@@ -319,7 +316,7 @@ public class TrexNode {
         }
       }
       case Catchup(final var replyTo, _, final var otherFixedIndex, final var otherHighestPromised) -> {
-        // load the slots they do not know that they are missing
+        // load the accepts at the slots the other node is needing
         final var missingAccepts = LongStream.rangeClosed(otherFixedIndex + 1, progress.highestFixedIndex())
             .mapToObj(journal::readAccept)
             .flatMap(Optional::stream)
@@ -351,18 +348,17 @@ public class TrexNode {
           return;
         }
 
-        // Eliminate any breaks. This reduce is by Claud 3.5
-        // "Returns the second number (b) if it follows the first (a+1), Otherwise keeps the first number (a)"
+        // Eliminate any breaks. This reduce is by Claud 3.5 "Returns the second number (b) if it follows the first (a+1), Otherwise keeps the first number (a)"
         final var highestContiguous = catchup.stream()
             .map(Accept::slot)
             .reduce((a, b) -> (a + 1 == b) ? b : a)
-            // if we have nothing in the list we return the zero slot which must always be logFixed as NOOP
+            // if we have nothing in the list we return the zero slot which must always be fixed as NOOP
             .orElse(0L);
 
         final var priorProgress = progress;
 
         // here we do not check our promise as we trust that the leader knows that the
-        // values are logFixed so it does not matter if we have a higher promise as it
+        // values are fixed so it does not matter if we have a higher promise as it
         // a majority of the nodes have accepted the that message.
         catchup.stream()
             .dropWhile(a -> fixedSlot(a.slot()))
@@ -370,7 +366,7 @@ public class TrexNode {
             .forEach(accept -> {
               journal.writeAccept(accept);
               progress = progress.withHighestFixed(accept.slot());
-              logFixed(accept, commands);
+              recordAcceptForHostUpCall(accept, chosenCommands);
             });
 
         if (progress != priorProgress) {
@@ -417,7 +413,7 @@ public class TrexNode {
       LOGGER.severe(message);
     }
 
-    // the logFixed slot index must only ever increase
+    // the fixed slot index must only ever increase
     if (priorProgress.highestFixedIndex() > progress.highestFixedIndex()) {
       this.crashed = true;
       final var message = ErrorStrings.PROTOCOL_VIOLATION_INDEX + " input=" + input + " priorProgress=" + priorProgress + " progress=" + progress;
@@ -443,7 +439,7 @@ public class TrexNode {
     // "Returns the second number (b) if it follows the first (a+1), Otherwise keeps the first number (a)"
     final var highestContiguous = commands.keySet().stream()
         .reduce((a, b) -> (a + 1 == b) ? b : a)
-        // if we have nothing in the list we return the zero slot which must always be logFixed as NOOP
+        // if we have nothing in the list we return the zero slot which must always be fixed as NOOP
         .orElse(0L);
 
     if (highestContiguous != progress.highestFixedIndex()) {
@@ -501,7 +497,7 @@ public class TrexNode {
                 final var accept = journal.readAccept(slotTerm.logIndex()).orElseThrow();
                 // log and record the chosen command which may be either a NOOP or a true client command.
                 // here we add the chosen command into the output command map and the caller will run the host up-call application callback
-                logFixed(accept, commands);
+                recordAcceptForHostUpCall(accept, commands);
                 // free the memory and stop heartbeating out the accepts due to missing responses for this slow.
                 acceptVotesByLogIndex.remove(slotTerm.logIndex());
               }
@@ -526,10 +522,14 @@ public class TrexNode {
     });
   }
 
-  /// Here we do not log the number `N` as due to lost messages or running UPaxos the number `N` may be different at each node.
-  void logFixed(Accept accept, Map<Long, AbstractCommand> commands) {
+  /// We will record commands as fixed if:
+  /// - We are the leader when we see a contiguous range of slots that are fixed.
+  /// - We see a Fixed message where we have previously seen the matching accept message.
+  /// - We see a CatchupResponse where we have been told that a range of slots were fixed by the leader.
+  void recordAcceptForHostUpCall(Accept accept, Map<Long, AbstractCommand> commands) {
     final var cmd = accept.command();
     final var logIndex = accept.slot();
+    // Here we do not log the number `N` as due to lost messages or running UPaxos the number `N` may be different at each node.
     LOGGER.log(logAtLevel, () ->
         "FIXED logIndex==" + logIndex +
             " nodeIdentifier==" + nodeIdentifier() +
@@ -841,7 +841,7 @@ public class TrexNode {
 class ErrorStrings {
   static final String PROTOCOL_VIOLATION_PROMISES = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED Paxos Protocol Violation the promise has been changed when the message is not a PaxosMessage type.";
   static final String PROTOCOL_VIOLATION_NUMBER = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the promise has decreased.";
-  static final String PROTOCOL_VIOLATION_INDEX = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the logFixed slot index has decreased.";
+  static final String PROTOCOL_VIOLATION_INDEX = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the fixed slot index has decreased.";
   static final String PROTOCOL_VIOLATION_SLOT_FIXING = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the promise has been changed when the message is not a LearningMessage type.";
   static final String CRASHED = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted) is now the only source of truth.";
   static final String COMMAND_INDEXES = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued results that do not align to its committed slot index: ";
