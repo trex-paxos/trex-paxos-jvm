@@ -277,15 +277,11 @@ public class TrexNode {
         }
       }
       case AcceptResponse acceptResponse -> {
-        if (FOLLOW != role && acceptResponse.to() == nodeIdentifier) {
+        if (FOLLOW != role && acceptResponse.to() == nodeIdentifier && progress.era() == acceptResponse.era()) {
           // An isolated leader rejoining must back down
           if (LEAD == role && acceptResponse.highestFixedIndex() > progress.highestFixedIndex()) {
             abdicate(messages);
-          } else if (progress.era() != acceptResponse.era() ){
-            // If the response is for a different cluster configuratoin we must ignore it.
-            return;
-          }
-          else {
+          } else {
             // Both Leader and Recoverer can receive AcceptResponses
             processAcceptResponse(acceptResponse, chosenCommands, messages);
           }
