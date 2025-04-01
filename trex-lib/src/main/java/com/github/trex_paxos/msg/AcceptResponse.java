@@ -24,13 +24,16 @@ import com.github.trex_paxos.SlotTerm;
 ///
 /// @param from                  see {@link TrexMessage}
 /// @param to                    see {@link DirectMessage}
+/// @param era                   the current era of the node.
 /// @param vote                  whether wre have voted for or voted against the Prepare message based on our past promises.
 /// @param highestFixedIndex additional information about the highest accepted index so that a leader will abdicate if it is behind.
 public record AcceptResponse(short from,
                              short to,
+                             short era,
                              Vote vote,
                              long highestFixedIndex
 ) implements TrexMessage, DirectMessage, LearningMessage {
+
   public record Vote(
       // spookily intellij says there are no usages of this field, but if I remove it everything breaks
       short from,

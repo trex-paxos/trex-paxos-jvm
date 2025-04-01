@@ -37,4 +37,8 @@ public record Prepare(
   public BallotNumber number() {
     return slotTerm().number();
   }
+
+  public short era() {
+    return this.slotTerm.number().era();
+  }
 }

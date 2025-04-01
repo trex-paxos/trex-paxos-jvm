@@ -100,7 +100,7 @@ public class PrepareResponsePropertyTests {
 
     final var slotTerm = new SlotTerm(slot, thisPromise);
     final var vote = new PrepareResponse.Vote(otherNodeId, thisNodeId, slotTerm, otherVote);
-    final var prepareResponse = new PrepareResponse(otherNodeId, thisNodeId, vote,
+    final var prepareResponse = new PrepareResponse(otherNodeId, thisNodeId, slotTerm.era(), vote,
         Optional.of(new Accept(otherNodeId, slot, thisPromise, NoOperation.NOOP)),
         highestAcceptedIndex);
 
@@ -136,7 +136,7 @@ public class PrepareResponsePropertyTests {
   private PrepareResponse createPrepareResponse(long slot, boolean vote) {
     final var slotTerm = new SlotTerm(slot, new BallotNumber((short) 0, 100, (short) 2));
     final var v = new PrepareResponse.Vote((short) 2, (short) 2, slotTerm, vote);
-    return new PrepareResponse((short) 2, (short) 2, v, Optional.empty(), slot);
+    return new PrepareResponse((short) 2, (short) 2, slotTerm.era(), v, Optional.empty(), slot);
   }
 
   @Provide

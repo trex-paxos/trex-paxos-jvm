@@ -15,7 +15,6 @@
  */
 package com.github.trex_paxos.msg;
 
-import com.github.trex_paxos.BallotNumber;
 import com.github.trex_paxos.SlotTerm;
 
 import java.util.Optional;
@@ -29,8 +28,9 @@ import java.util.Optional;
 /// @param journaledAccept      the highest unfixed log entry if any.
 /// @param highestAcceptedIndex additional information about the highest accepted index so that a leader can learn of more slots that it needs to recover.
 public record PrepareResponse(
-  short from,
-  short to,
+    short from,
+    short to,
+    short era,
     Vote vote,
     Optional<Accept> journaledAccept,
     long highestAcceptedIndex
@@ -43,5 +43,6 @@ public record PrepareResponse(
       SlotTerm slotTerm,
       boolean vote
   ) {
+
   }
 }

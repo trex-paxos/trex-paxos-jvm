@@ -16,6 +16,19 @@ import static com.github.trex_paxos.TrexLogger.LOGGER;
 import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
 import static com.github.trex_paxos.network.SystemChannel.PROXY;
 
+/// Main entry point for applications using Trex Paxos consensus.
+///
+/// TrexApp manages the lifecycle of a Paxos consensus node, handling network communication,
+/// command submission, and result delivery. It coordinates between the network layer and
+/// the consensus engine.
+///
+/// The class is parameterized by:
+/// - COMMAND - The application-specific command type that will be submitted for consensus
+/// - RESULT - The application-specific result type produced after a command is chosen
+///
+/// @param <COMMAND> The type of commands submitted to the consensus algorithm
+/// @param <RESULT> The type of results produced after commands are chosen
+/// TODO the proxying to the leader has no resilience i am in two minds whether that is okay
 public class TrexApp<COMMAND, RESULT> {
 
   protected class LeaderTracker {
@@ -34,7 +47,7 @@ public class TrexApp<COMMAND, RESULT> {
     }
   }
 
-  private class ResponseTracker<R> {
+  protected class ResponseTracker<R> {
     private final Map<UUID, CompletableFuture<R>> pending = new ConcurrentHashMap<>();
 
     void track(UUID id, CompletableFuture<R> future) {
@@ -66,11 +79,17 @@ public class TrexApp<COMMAND, RESULT> {
   protected final TrexEngine<RESULT> engine;
   protected final NetworkLayer networkLayer;
   protected final Supplier<NodeEndpoint> nodeEndpointSupplier;
-  final protected LeaderTracker leaderTracker = new LeaderTracker();
-  final ResponseTracker<RESULT> responseTracker = new ResponseTracker<>();
+  protected final LeaderTracker leaderTracker = new LeaderTracker();
+  protected final ResponseTracker<RESULT> responseTracker = new ResponseTracker<>();
   protected final Pickler<COMMAND> valuePickler;
   public final NodeId nodeId;
 
+  /// Constructs a new TrexApp instance.
+  ///
+  /// @param nodeEndpointSupplier Supplies the node endpoints for the cluster
+  /// @param engine The consensus engine that implements the Paxos algorithm
+  /// @param networkLayer The network communication layer
+  /// @param valuePickler Serializer/deserializer for commands
   public TrexApp(
       Supplier<NodeEndpoint> nodeEndpointSupplier,
       TrexEngine<RESULT> engine,
@@ -83,8 +102,13 @@ public class TrexApp<COMMAND, RESULT> {
     this.nodeId = new NodeId(engine.nodeIdentifier());
   }
 
+  /// Starts the Paxos node. It initializes network subscriptions and starts the network layer. There are two default
+  /// subscriptions:
+  /// - `CONSENSUS` for receiving consensus messages
+  /// - `PROXY` for receiving proxied messages that nodes forward to what they estimate is the leader node
   public void start() {
     if (engine.isLeader()) {
+      // normally a node is started before it can become leader this scenario happens during unit tests
       leaderTracker.updateFromFixed(new Fixed(engine.nodeIdentifier(), 0L, BallotNumber.MIN));
     }
     networkLayer.subscribe(CONSENSUS.value(), this::handleConsensusMessage, "consensus-" + engine.nodeIdentifier());
@@ -92,17 +116,23 @@ public class TrexApp<COMMAND, RESULT> {
     networkLayer.start();
   }
 
-  private List<TrexMessage> createLeaderMessages(Command cmd) {
+  protected List<TrexMessage> createLeaderMessages(Command cmd) {
     return engine.nextLeaderBatchOfMessages(List.of(cmd));
   }
 
-  void handleConsensusMessage(TrexMessage msg) {
+  /// Handles incoming consensus messages. It processes the message using the Paxos algorithm and transmits any resulting
+  /// messages. The host application up-call is triggered for any fixed messages, catchup messages or accept response
+  /// messages. Messages are dropped if they are from the current node (to avoid self-loops). If the node gets any
+  /// `Fixed` messages from another leader node it updates its estimate of where the leader is to proxy client commands.
+  /// Finally it transmits the resulting messages to the network.
+  protected void handleConsensusMessage(TrexMessage msg) {
     if (msg == null || msg.from() == engine.nodeIdentifier()) {
       LOGGER.finer(() -> engine.nodeIdentifier() + " is dropping consensus message " + msg);
       return;
     }
 
     var messages = paxosThenUpCall(List.of(msg));
+
     LOGGER.finer(() -> engine.nodeIdentifier() + " has processed " + msg + " and is responding with " + messages);
     messages.stream()
         .filter(m -> m instanceof Fixed)
@@ -112,13 +142,17 @@ public class TrexApp<COMMAND, RESULT> {
     transmitTrexMessages(messages);
   }
 
-  void handleProxyMessage(Command cmd) {
+  /// Notes that are not the leader will proxy the client commands to the node that they estimate is the leader.
+  /// This method handler is called when a node receives a proxied message from another node.
+  protected void handleProxyMessage(Command cmd) {
     if (!engine.isLeader()) {
+      // TODO: should we add a nack to the proxy message?
       LOGGER.finest(() -> String.format("[Node %d] Not leader, dropping proxy: %s", nodeId.id(), cmd.uuid()));
       return;
     }
     LOGGER.fine(() -> engine.nodeIdentifier() + " leader is has received proxied message " + cmd.uuid());
     try {
+      // TODO: should we add an ack to the proxy message and tell them who we think is the leader?
       var messages = createLeaderMessages(cmd);
       transmitTrexMessages(messages);
     } catch (Exception e) {
@@ -126,12 +160,46 @@ public class TrexApp<COMMAND, RESULT> {
     }
   }
 
+  /// Submits a command for consensus with default type (0). If the current node is a leader it will transmit accept
+  /// messages. If it is not the leader it will attempt to proxy the messages to the current leader. A timeout on the
+  /// future does not mean that the message has not been chosen but rather that the application has not received a
+  /// any information about whether the command has been chosen or not.
+  ///
+  /// @param value The application command to submit for consensus
+  /// @param future A future that will be completed with the result when the command is chosen
+  /// @see #submitValue
   public void submitValue(COMMAND value, CompletableFuture<RESULT> future){
     submitValue(value, future, (byte) 0);
   }
 
+  /// Submits a command for consensus with a specified type. This allows a host application to share a paxos cluster
+  /// between different applications. If the current node is a leader it will transmit accept
+  /// messages. If it is not the leader it will attempt to proxy the messages to the current leader.
+  /// A timeout on the
+  /// future does not mean that the message has not been chosen but rather that the application has not received a
+  /// any information about whether the command has been chosen or not.
+  ///
+  /// @param value The application command to submit for consensus
+  /// @param future A future that will be completed with the result when the command is chosen
+  /// @param type A non-negative byte value representing the command type
+  /// @throws IllegalArgumentException if type is negative
+  /// @see #startConsensusProtocolOrProxyToLeader
   public void submitValue(COMMAND value, CompletableFuture<RESULT> future, byte type) {
     if( type < 0 ) throw new IllegalArgumentException("type must be non-negative as negative values are reserved for internal use");
+    startConsensusProtocolOrProxyToLeader(value, future, type);
+  }
+
+  /// If the current node is a leader it will transmit accept messages. If it is not the leader it will attempt to proxy
+  /// the messages to the current leader.
+  /// A timeout on the
+  /// future does not mean that the message has not been chosen but rather that the application has not received a
+  /// any information about whether the command has been chosen or not.
+  ///
+  /// @param value The application command to submit for consensus
+  /// @param future A future that will be completed with the result when the command is chosen
+  /// @param type A byte value representing the command type where a negative type is reserved for internal use.
+  /// @see #startConsensusProtocolOrProxyToLeader
+  protected void startConsensusProtocolOrProxyToLeader(COMMAND value, CompletableFuture<RESULT> future, byte type) {
     final var uuid = UUIDGenerator.generateUUID();
     try {
       responseTracker.track(uuid, future);
@@ -169,7 +237,7 @@ public class TrexApp<COMMAND, RESULT> {
   /// callback if any commands are fixed.
   /// @param messages The input TrexMessages to process
   /// @return List of outbound TrexMessages to be sent to other nodes
-  List<TrexMessage> paxosThenUpCall(List<TrexMessage> messages) {
+  protected List<TrexMessage> paxosThenUpCall(List<TrexMessage> messages) {
     LOGGER.finer(() -> engine.nodeIdentifier() + " paxosThenUpCall input: " + messages);
     EngineResult<RESULT> result = engine.paxos(messages);
     result.results().forEach(hostResult -> {
@@ -186,7 +254,7 @@ public class TrexApp<COMMAND, RESULT> {
   /// Delegates to the NetworkLayer to handle actual transmission and NodeEndpoint for broadcasts.
   ///
   /// @param messages The list of Trex messages to be transmitted
-  private void transmitTrexMessages(List<TrexMessage> messages) {
+  protected void transmitTrexMessages(List<TrexMessage> messages) {
     messages.forEach(message -> {
       if (message instanceof DirectMessage directMessage) {
         LOGGER.finer(() -> engine.nodeIdentifier() + " sending direct message " + directMessage);
@@ -198,6 +266,7 @@ public class TrexApp<COMMAND, RESULT> {
     });
   }
 
+  /// Stops the Paxos node, shutting down the network layer and closing the engine.
   public void stop() {
     try {
       networkLayer.close();
@@ -208,6 +277,9 @@ public class TrexApp<COMMAND, RESULT> {
     }
   }
 
+  /// This method is called in unit tests to force a node to be leader when the network is started.
+  /// It is completely safe to have two nodes attempting to be lead however this method is not expected to be using by
+  /// normal application logic.
   @SuppressWarnings("SameParameterValue")
   @TestOnly
   protected void setLeader(short i) {

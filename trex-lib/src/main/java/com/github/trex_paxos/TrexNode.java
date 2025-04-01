@@ -281,14 +281,23 @@ public class TrexNode {
           // An isolated leader rejoining must back down
           if (LEAD == role && acceptResponse.highestFixedIndex() > progress.highestFixedIndex()) {
             abdicate(messages);
-          } else {
+          } else if (progress.era() != acceptResponse.era() ){
+            // If the response is for a different cluster configuratoin we must ignore it.
+            return;
+          }
+          else {
             // Both Leader and Recoverer can receive AcceptResponses
             processAcceptResponse(acceptResponse, chosenCommands, messages);
           }
         }
       }
       case PrepareResponse prepareResponse -> {
-        if (RECOVER == role && prepareResponse.to() == nodeIdentifier) {
+        // we only track prepare responses during the leader takeover protocol
+        // the message must be to the current node
+        // and the era which is the cluster configuration must match
+        if (RECOVER == role
+            && prepareResponse.to() == nodeIdentifier
+            && prepareResponse.era() == progress.era()) {
           processPrepareResponse(prepareResponse, messages);
         }
       }
@@ -552,6 +561,7 @@ public class TrexNode {
   final AcceptResponse ack(Accept accept) {
     return new AcceptResponse(
         nodeIdentifier, accept.number().nodeIdentifier(),
+        accept.era(),
         new AcceptResponse.Vote(nodeIdentifier,
             accept.number().nodeIdentifier(),
             accept.slotTerm(), true),
@@ -567,6 +577,7 @@ public class TrexNode {
     return new AcceptResponse(
         nodeIdentifier,
         slotTerm.number().nodeIdentifier(),
+        slotTerm.era(),
         new AcceptResponse.Vote(nodeIdentifier,
             slotTerm.number().nodeIdentifier(),
             slotTerm,
@@ -582,6 +593,7 @@ public class TrexNode {
   final PrepareResponse ack(Prepare prepare) {
     return new PrepareResponse(
         nodeIdentifier, prepare.number().nodeIdentifier(),
+        prepare.era(),
         new PrepareResponse.Vote(nodeIdentifier,
             prepare.number().nodeIdentifier(),
             prepare.slotTerm(),
@@ -599,6 +611,7 @@ public class TrexNode {
   final PrepareResponse nack(Prepare prepare) {
     return new PrepareResponse(
         nodeIdentifier, prepare.number().nodeIdentifier(),
+        prepare.era(),
         new PrepareResponse.Vote(nodeIdentifier,
             prepare.number().nodeIdentifier(),
             prepare.slotTerm(),

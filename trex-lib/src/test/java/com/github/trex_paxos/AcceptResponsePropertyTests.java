@@ -104,7 +104,7 @@ public class AcceptResponsePropertyTests {
       private CreatedData createAcceptVotes(long s) {
         final var a = new Accept(thisNodeId, s, thisPromise, NoOperation.NOOP);
         final Map<Short, AcceptResponse> responses = new TreeMap<>();
-        responses.put(thisNodeId, new AcceptResponse(thisNodeId, thisNodeId,
+        responses.put(thisNodeId, new AcceptResponse(thisNodeId, thisNodeId, a.era(),
             new AcceptResponse.Vote(thisNodeId, thisNodeId, a.slotTerm(), thisVote), s));
         AcceptVotes votes = new AcceptVotes(a.slotTerm(), responses, false);
         return new CreatedData(a, votes);
@@ -122,7 +122,7 @@ public class AcceptResponsePropertyTests {
     final var slot = slotAtomic.get();
     final SlotTerm slotTerm = new SlotTerm(slot, thisPromise);
     final var vote = new AcceptResponse.Vote(otherNodeId, thisNodeId, slotTerm, otherVote);
-    final var acceptResponse = new AcceptResponse(otherNodeId, thisNodeId, vote,
+    final var acceptResponse = new AcceptResponse(otherNodeId, thisNodeId, slotTerm.era(), vote,
         slot);
 
     // now that we have set up based on our role, the other nodeIdentifier relation, the vote outcome
