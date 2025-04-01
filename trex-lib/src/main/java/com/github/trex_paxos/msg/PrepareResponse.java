@@ -17,6 +17,7 @@ package com.github.trex_paxos.msg;
 
 import com.github.trex_paxos.SlotTerm;
 
+import java.util.Objects;
 import java.util.Optional;
 
 /// A PrepareResponse is a response to a {@link Prepare} message. It contains the vote and the highest unfixed log entry if any.
@@ -35,6 +36,17 @@ public record PrepareResponse(
     Optional<Accept> journaledAccept,
     long highestAcceptedIndex
 ) implements TrexMessage, DirectMessage {
+  public PrepareResponse{
+    Objects.requireNonNull(vote);
+    Objects.requireNonNull(journaledAccept);
+    journaledAccept.ifPresent(Objects::requireNonNull);
+    if( vote.from() != from) {
+      throw new IllegalArgumentException("Vote from must be the same as the from field");
+    }
+    if( vote.to() != to) {
+      throw new IllegalArgumentException("Vote to must be the same as the to field");
+    }
+  }
   public record Vote(
       // spookily intellij says there are no usages of this field, but if I remove it everything breaks
       short from,
@@ -43,6 +55,5 @@ public record PrepareResponse(
       SlotTerm slotTerm,
       boolean vote
   ) {
-
   }
 }

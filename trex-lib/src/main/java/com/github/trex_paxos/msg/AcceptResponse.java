@@ -17,6 +17,8 @@ package com.github.trex_paxos.msg;
 
 import com.github.trex_paxos.SlotTerm;
 
+import java.util.Objects;
+
 /// An AcceptResponse response back to a {@link Accept} message. We add the highestFixedIndex as more information
 /// to cause a leader to abdicate if it is behind. If the leader gets a NO vote it will abdicate.
 /// We do not attempt to send any information
@@ -33,7 +35,15 @@ public record AcceptResponse(short from,
                              Vote vote,
                              long highestFixedIndex
 ) implements TrexMessage, DirectMessage, LearningMessage {
-
+  public AcceptResponse{
+    Objects.requireNonNull(vote);
+    if (vote.from() != from) {
+      throw new IllegalArgumentException("Vote from must be the same as the from field");
+    }
+    if (vote.to() != to) {
+      throw new IllegalArgumentException("Vote to must be the same as the to field");
+    }
+  }
   public record Vote(
       // spookily intellij says there are no usages of this field, but if I remove it everything breaks
       short from,
