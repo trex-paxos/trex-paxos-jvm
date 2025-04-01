@@ -11,9 +11,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 
+// FIXME we need to test era
 public class AcceptResponsePropertyTests {
-
-
   record TestCase(
       ArbitraryValues.RoleState role,
       ArbitraryValues.NodeIdentifierRelation nodeIdentifierRelation,
