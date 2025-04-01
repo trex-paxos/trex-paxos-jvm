@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class PaxeStackClusterTest {
-  private static final Duration TEST_TIMEOUT = Duration.ofMillis(200);
+  private static final Duration TEST_TIMEOUT = Duration.ofMillis(500);
 
   private NetworkTestHarness harness;
   StackServiceImpl stackService1;

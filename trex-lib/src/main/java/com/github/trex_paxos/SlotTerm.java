@@ -20,4 +20,8 @@ public record SlotTerm(long logIndex, BallotNumber number) implements Comparable
   public int compareTo(SlotTerm o) {
     return Long.compare(logIndex, o.logIndex);
   }
+
+  public short era() {
+    return number().era();
+  }
 }

@@ -43,4 +43,8 @@ public record Accept(short from,
   public BallotNumber number() {
     return slotTerm().number();
   }
+
+  public short era() {
+    return slotTerm.era();
+  }
 }

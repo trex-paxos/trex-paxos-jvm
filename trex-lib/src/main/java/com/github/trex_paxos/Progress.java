@@ -52,4 +52,8 @@ public record Progress(
   public String toString() {
     return "P(p={" + highestPromised + "},c={" + highestFixedIndex + "}";
   }
+
+  public short era() {
+    return this.highestPromised.era();
+  }
 }

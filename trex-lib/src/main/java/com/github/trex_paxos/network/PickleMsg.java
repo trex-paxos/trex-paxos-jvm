@@ -91,15 +91,8 @@ public class PickleMsg implements Pickler<TrexMessage> {
     }
   }
 
-  public static void write(PrepareResponse m, ByteBuffer buffer) {
-    write(m.vote(), buffer);
-    buffer.putLong(m.highestAcceptedIndex());
-    buffer.put((byte) (m.journaledAccept().isPresent() ? 1 : 0));
-    m.journaledAccept().ifPresent(accept -> writeInner(accept, buffer));
-  }
-
   private static int calculatePrepareResponseSize(PrepareResponse m) {
-    int size = Long.BYTES + 1; // highestAcceptedIndex + isPresent flag
+    int size = Long.BYTES + Short.BYTES + 1; // highestAcceptedIndex + era + isPresent flag
     size += calculateVotePrepareSize();
     if (m.journaledAccept().isPresent()) {
       size += calculateAcceptInnerSize(m.journaledAccept().get());
@@ -107,12 +100,21 @@ public class PickleMsg implements Pickler<TrexMessage> {
     return size;
   }
 
+  public static void write(PrepareResponse m, ByteBuffer buffer) {
+    buffer.putShort(m.era()); // 3
+    write(m.vote(), buffer);
+    buffer.putLong(m.highestAcceptedIndex());//1234213424
+    buffer.put((byte) (m.journaledAccept().isPresent() ? 1 : 0));// true
+    m.journaledAccept().ifPresent(accept -> writeInner(accept, buffer));
+  }
+
   public static PrepareResponse readPrepareResponse(ByteBuffer buffer, short from, short to) {
+    final var era = buffer.getShort();
     final var vote = readVotePrepare(buffer, from, to);
     long highestFixedIndex = buffer.getLong();
     Optional<Accept> highestUnfixed = buffer.get() == 1 ?
         Optional.of(readAcceptInner(buffer)) : Optional.empty();
-    return new PrepareResponse(from, to, vote, highestUnfixed, highestFixedIndex);
+    return new PrepareResponse(from, to, era, vote, highestUnfixed, highestFixedIndex);
   }
 
   public static void write(AbstractCommand c, ByteBuffer buffer) {
@@ -142,19 +144,21 @@ public class PickleMsg implements Pickler<TrexMessage> {
     return new Command(new UUID(mostSigBits, leastSigBits), bytes, buffer.get());
   }
 
+  private static int calculateAcceptResponseSize() {
+    return calculateVoteAcceptSize() + Long.BYTES + Short.BYTES; // highestFixedIndex + era
+  }
+
   public static void write(AcceptResponse m, ByteBuffer buffer) {
+    buffer.putShort(m.era());
     write(m.vote(), buffer);
     buffer.putLong(m.highestFixedIndex());
   }
 
-  private static int calculateAcceptResponseSize() {
-    return calculateVoteAcceptSize() + Long.BYTES;
-  }
-
   public static AcceptResponse readAcceptResponse(ByteBuffer buffer, short from, short to) {
+    final var era = buffer.getShort();
     final var vote = readVoteAccept(buffer);
     final long highestFixedIndex = buffer.getLong();
-    return new AcceptResponse(from, to, vote, highestFixedIndex);
+    return new AcceptResponse(from, to, era, vote, highestFixedIndex);
   }
 
   public static void write(SlotTerm slotTerm, ByteBuffer buffer){
