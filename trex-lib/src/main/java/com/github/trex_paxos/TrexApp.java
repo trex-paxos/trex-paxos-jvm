@@ -160,32 +160,14 @@ public class TrexApp<COMMAND, RESULT> {
     }
   }
 
-  /// Submits a command for consensus with default type (0). If the current node is a leader it will transmit accept
-  /// messages. If it is not the leader it will attempt to proxy the messages to the current leader. A timeout on the
-  /// future does not mean that the message has not been chosen but rather that the application has not received a
-  /// any information about whether the command has been chosen or not.
-  ///
-  /// @param value The application command to submit for consensus
-  /// @param future A future that will be completed with the result when the command is chosen
-  /// @see #submitValue
-  public void submitValue(COMMAND value, CompletableFuture<RESULT> future){
+  public void submitValue(COMMAND value, CompletableFuture<RESULT> future) {
     submitValue(value, future, (byte) 0);
   }
 
-  /// Submits a command for consensus with a specified type. This allows a host application to share a paxos cluster
-  /// between different applications. If the current node is a leader it will transmit accept
-  /// messages. If it is not the leader it will attempt to proxy the messages to the current leader.
-  /// A timeout on the
-  /// future does not mean that the message has not been chosen but rather that the application has not received a
-  /// any information about whether the command has been chosen or not.
-  ///
-  /// @param value The application command to submit for consensus
-  /// @param future A future that will be completed with the result when the command is chosen
-  /// @param type A non-negative byte value representing the command type
-  /// @throws IllegalArgumentException if type is negative
-  /// @see #startConsensusProtocolOrProxyToLeader
   public void submitValue(COMMAND value, CompletableFuture<RESULT> future, byte type) {
-    if( type < 0 ) throw new IllegalArgumentException("type must be non-negative as negative values are reserved for internal use");
+    if (type < 0) {
+      throw new IllegalArgumentException("type must be non-negative as it is reserved for internal use");
+    }
     startConsensusProtocolOrProxyToLeader(value, future, type);
   }
 
