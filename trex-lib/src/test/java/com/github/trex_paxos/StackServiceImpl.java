@@ -14,6 +14,9 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
+import static com.github.trex_paxos.network.SystemChannel.PROXY;
+
 public class StackServiceImpl implements StackService {
   // This is public as we will use it in jshell to demo the stack service. As this is a test class here is no risk to expose it.
   public static final Logger LOGGER = Logger.getLogger(StackServiceImpl.class.getName());
@@ -108,8 +111,11 @@ public class StackServiceImpl implements StackService {
         valuePickler
     );
     app.setLeader((short) 1);
-    app.start();
-    LOGGER.fine(() -> "Node " + index + " started successfully");
+    app.init();
+    networkLayer.subscribe(CONSENSUS.value(), app::handleConsensusMessage, "consensus-" + engine.nodeIdentifier());
+    networkLayer.subscribe(PROXY.value(), app::handleProxyMessage, "proxy-" + engine.nodeIdentifier());
+    networkLayer.start();
+    LOGGER.info(() -> "Node " + index + " started successfully");
   }
 
   @Override

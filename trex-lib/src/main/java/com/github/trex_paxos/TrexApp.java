@@ -102,18 +102,12 @@ public class TrexApp<COMMAND, RESULT> {
     this.nodeId = new NodeId(engine.nodeIdentifier());
   }
 
-  /// Starts the Paxos node. It initializes network subscriptions and starts the network layer. There are two default
-  /// subscriptions:
-  /// - `CONSENSUS` for receiving consensus messages
-  /// - `PROXY` for receiving proxied messages that nodes forward to what they estimate is the leader node
-  public void start() {
+  // TODO delete this
+  public void init() {
     if (engine.isLeader()) {
       // normally a node is started before it can become leader this scenario happens during unit tests
       leaderTracker.updateFromFixed(new Fixed(engine.nodeIdentifier(), 0L, BallotNumber.MIN));
     }
-    networkLayer.subscribe(CONSENSUS.value(), this::handleConsensusMessage, "consensus-" + engine.nodeIdentifier());
-    networkLayer.subscribe(PROXY.value(), this::handleProxyMessage, "proxy-" + engine.nodeIdentifier());
-    networkLayer.start();
   }
 
   protected List<TrexMessage> createLeaderMessages(Command cmd) {
@@ -250,13 +244,7 @@ public class TrexApp<COMMAND, RESULT> {
 
   /// Stops the Paxos node, shutting down the network layer and closing the engine.
   public void stop() {
-    try {
-      networkLayer.close();
-    } catch (Exception e) {
-      // ignore
-    } finally {
       engine.close();
-    }
   }
 
   /// This method is called in unit tests to force a node to be leader when the network is started.

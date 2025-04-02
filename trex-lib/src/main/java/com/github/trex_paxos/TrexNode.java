@@ -51,6 +51,7 @@ import static com.github.trex_paxos.TrexNode.TrexRole.*;
 /// AssertionError see {@link #isCrashed()}.
 public class TrexNode {
   ///  We are using JUL logging to reduce dependencies. You can configure JUL logging to bridge to your chosen logging framework.
+  /// TODO use TrexLogger?
   static final Logger LOGGER = Logger.getLogger("");
 
   /// We log when we win
@@ -123,7 +124,20 @@ public class TrexNode {
 
   /// The term of a node is the id that it will use with either the next `prepare` or `accept` message.
   /// It is only used by the leader and recoverer. It will be null for a follower.
-  BallotNumber term = null;
+  volatile BallotNumber term = null;
+
+  /// During cluster reconfigurations we need to increment the term number of a leader to lock out messages from old
+  /// configurations without interrupting the leader.
+  public void setNextEra(short nextEra){
+    if( term != null ){
+      if( term.era() + 1 == nextEra ){
+        final var counter = term.counter();
+        final var newTerm = new BallotNumber(nextEra, counter, nodeIdentifier());
+        term = newTerm;
+        progress = progress.promise(newTerm);
+      }
+    }
+  }
 
   /// This method wraps the main algorithm method with guards to ensure safety. The node will mark itself as crashed
   /// if the main algorithm threw an error trying to use the journal else was given corrupted data. It will also mark
@@ -142,7 +156,7 @@ public class TrexNode {
   /// application. The journal state must be made crash durable before sending out any messages.
   /// @throws IllegalStateException If the node has been marked as crashed it will always throw an exception and will
   /// need rebooting. See {@link #isCrashed()}.
-  TrexResult paxos(TrexMessage input) {
+  public TrexResult paxos(TrexMessage input) {
     if (crashed) {
       // We are in an undefined or corrupted state. See {@link #isCrashed()}
       LOGGER.severe(CRASHED);
@@ -215,7 +229,7 @@ public class TrexNode {
           journal.writeAccept(accept);
           if (higherAccept(accept)) {
             // we must update promise on a higher accept http://stackoverflow.com/q/29880949/329496
-            this.progress = progress.withHighestPromised(number);
+            this.progress = progress.promise(number);
             // we must change our own vote if we are an old leader
             if (this.role == LEAD) {
               // does this change our prior self vote?
@@ -257,7 +271,7 @@ public class TrexNode {
           sendFixedToBehindNode(prepare.slot(), messages);
         } else if (number.greaterThan(progress.highestPromised())) {
           // ack a higher nextPrepareMessage
-          final var newProgress = progress.withHighestPromised(number);
+          final var newProgress = progress.promise(number);
           journal.writeProgress(newProgress);
           final var ack = ack(prepare);
           messages.add(ack);
