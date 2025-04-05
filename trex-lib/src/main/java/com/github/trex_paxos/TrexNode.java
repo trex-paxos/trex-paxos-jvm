@@ -124,20 +124,7 @@ public class TrexNode {
 
   /// The term of a node is the id that it will use with either the next `prepare` or `accept` message.
   /// It is only used by the leader and recoverer. It will be null for a follower.
-  volatile BallotNumber term = null;
-
-  /// During cluster reconfigurations we need to increment the term number of a leader to lock out messages from old
-  /// configurations without interrupting the leader.
-  public void setNextEra(short nextEra){
-    if( term != null ){
-      if( term.era() + 1 == nextEra ){
-        final var counter = term.counter();
-        final var newTerm = new BallotNumber(nextEra, counter, nodeIdentifier());
-        term = newTerm;
-        progress = progress.promise(newTerm);
-      }
-    }
-  }
+  BallotNumber term = null;
 
   /// This method wraps the main algorithm method with guards to ensure safety. The node will mark itself as crashed
   /// if the main algorithm threw an error trying to use the journal else was given corrupted data. It will also mark
