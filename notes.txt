@@ -43,3 +43,12 @@ jshell> stack.pop()
 jshell> stack.pop()
 jshell> stack.shutdown()
 ```
+
+# add license header to all java files
+find . -path './.git' -prune -o -type f -name '*.java' -print0 | xargs -0 grep -L "LICENSE" | while read -r file; do
+    { cat banner.txt; cat "$file"; } > temp_file && mv temp_file "$file"
+done
+
+Copyright 2024 Simon Massey
+# add license header to all java files
+find . -path './.git' -prune -o -type f -name '*.java' -exec sed -i 's/Copyright 2024 Simon Massey/Copyright 2024 - 2025 Simon Massey/g' {} \;
