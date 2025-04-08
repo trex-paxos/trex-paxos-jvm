@@ -6,7 +6,6 @@ import com.github.trex_paxos.msg.PrepareResponse;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * Implementation of QuorumStrategy for U-Paxos.
@@ -50,9 +49,9 @@ public class UPaxosQuorumStrategy implements QuorumStrategy {
     @Override
     public QuorumOutcome assessPromises(long logIndex, Set<PrepareResponse.Vote> votes) {
         List<Boolean> voteResults = votes.stream()
-                .map(vote -> vote.vote())
+                .map(PrepareResponse.Vote::vote)
                 .collect(Collectors.toList());
-      
+        
         // Simple majority for now - will be enhanced in future iterations
         return countVotes(voteResults.size() / 2 + 1, voteResults);
     }
@@ -67,7 +66,7 @@ public class UPaxosQuorumStrategy implements QuorumStrategy {
     @Override
     public QuorumOutcome assessAccepts(long logIndex, Set<AcceptResponse.Vote> votes) {
         List<Boolean> voteResults = votes.stream()
-                .map(vote -> vote.vote())
+                .map(AcceptResponse.Vote::vote)
                 .collect(Collectors.toList());
         
         // Simple majority for now - will be enhanced in future iterations
