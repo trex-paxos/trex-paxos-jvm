@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
+import java.util.stream.IntStream;
 
 class UPaxosQuorumStrategyTest {
 
@@ -45,26 +46,24 @@ class UPaxosQuorumStrategyTest {
         assertEquals(3, UPaxosQuorumStrategy.calculateTotalWeight(weights));
     }
 
-    @Test
-    void assessPromises_shouldReturnWinWithMajority() {
-        UPaxosQuorumStrategy strategy = new UPaxosQuorumStrategy();
-        Set<PrepareResponse.Vote> votes = new HashSet<>();
-        
-        // Create a SlotTerm for the votes
-        SlotTerm slotTerm = new SlotTerm(1L, new BallotNumber((short)1, 1, (short)1));
-        
-        // Add 3 positive votes
-        for (short i = 0; i < 3; i++) {
-            votes.add(new PrepareResponse.Vote(i, i, slotTerm, true));
-        }
-        
-        // Add 2 negative votes
-        for (short i = 3; i < 5; i++) {
-            votes.add(new PrepareResponse.Vote(i, i, slotTerm, false));
-        }
-        
-        assertEquals(QuorumStrategy.QuorumOutcome.WIN, strategy.assessPromises(1L, votes));
-    }
+@Test
+void assessPromises_shouldReturnWinWithMajority() {
+    UPaxosQuorumStrategy strategy = new UPaxosQuorumStrategy();
+    Set<PrepareResponse.Vote> votes = new HashSet<>();
+
+    // Create a SlotTerm for the votes
+    SlotTerm slotTerm = new SlotTerm(1L, new BallotNumber((short)1, 1, (short)1));
+
+    // Add 3 positive votes
+    IntStream.range(0, 3)
+        .forEach(i -> votes.add(new PrepareResponse.Vote((short)i, (short)i, slotTerm, true)));
+
+    // Add 2 negative votes
+    IntStream.range(3, 5)
+        .forEach(i -> votes.add(new PrepareResponse.Vote((short)i, (short)i, slotTerm, false)));
+
+    assertEquals(QuorumStrategy.QuorumOutcome.WIN, strategy.assessPromises(1L, votes));
+}
 
     @Test
     void assessAccepts_shouldReturnLoseWithoutMajority() {

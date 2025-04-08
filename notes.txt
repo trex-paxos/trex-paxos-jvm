@@ -1,4 +1,6 @@
 
+mvn -DskipTests clean install && mvn test -pl trex-lib
+
 # tests
 mvn clean package
 
