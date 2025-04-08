@@ -49,7 +49,7 @@ public class UPaxosQuorumStrategy implements QuorumStrategy {
     @Override
     public QuorumOutcome assessPromises(long logIndex, Set<PrepareResponse.Vote> votes) {
         List<Boolean> voteResults = votes.stream()
-                .map(vote -> vote.promised())
+                .map(PrepareResponse.Vote::promised)
                 .collect(Collectors.toList());
         
         // Simple majority for now - will be enhanced in future iterations
@@ -66,7 +66,7 @@ public class UPaxosQuorumStrategy implements QuorumStrategy {
     @Override
     public QuorumOutcome assessAccepts(long logIndex, Set<AcceptResponse.Vote> votes) {
         List<Boolean> voteResults = votes.stream()
-                .map(vote -> vote.accepted())
+                .map(AcceptResponse.Vote::accepted)
                 .collect(Collectors.toList());
         
         // Simple majority for now - will be enhanced in future iterations
