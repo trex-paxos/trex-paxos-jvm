@@ -165,10 +165,9 @@ public class UPaxosQuorumStrategy {
 
     private static boolean isValidIncrementOperation(Set<VotingWeight> weights, IncrementNodeOp op) {
         // Check if node exists
-        boolean nodeExists = weights.stream()
-                .anyMatch(w -> w.nodeId().id() == op.nodeId());
-        
-        return nodeExists;
+
+      return weights.stream()
+              .anyMatch(w -> w.nodeId().id() == op.nodeId());
     }
 
     private static boolean isValidDecrementOperation(Set<VotingWeight> weights, DecrementNodeOp op) {
