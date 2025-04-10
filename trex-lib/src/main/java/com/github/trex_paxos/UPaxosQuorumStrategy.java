@@ -114,7 +114,10 @@ public class UPaxosQuorumStrategy {
             case DeleteNodeOp deleteOp -> isValidDeleteOperation(weights, deleteOp);
             case IncrementNodeOp incOp -> isValidIncrementOperation(weights, incOp);
             case DecrementNodeOp decOp -> isValidDecrementOperation(weights, decOp);
+            // IntelliJ will warn about unused cases, but it is wrong the tests cover them
+            //noinspection unused
             case DoubleAllOp doubleOp -> isValidDoubleAllOperation(weights);
+            //noinspection unused
             case HalveAllOp halveOp -> isValidHalveAllOperation(weights);
         };
     }
@@ -137,7 +140,10 @@ public class UPaxosQuorumStrategy {
             case DeleteNodeOp deleteOp -> applyDeleteOperation(weights, deleteOp);
             case IncrementNodeOp incOp -> applyIncrementOperation(weights, incOp);
             case DecrementNodeOp decOp -> applyDecrementOperation(weights, decOp);
+            // IntelliJ will warn about unused cases, but it is wrong the tests cover them
+            //noinspection unused
             case DoubleAllOp doubleOp -> applyDoubleAllOperation(weights);
+            //noinspection unused
             case HalveAllOp halveOp -> applyHalveAllOperation(weights);
         };
     }
