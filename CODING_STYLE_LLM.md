@@ -7,7 +7,7 @@
 * Default to package-private scope
 * Package-by-feature, not package-by-layer
 * Use public only when cross-package access is required
-* Create cohesive, wide packages that are few in number (functionality modules or protocol records)
+* Create fewer, cohesive, wide packages (functionality modules or records as protocols)
 * Use JEP 467 Markdown documentation examples: `/// good markdown` not legacy `/** bad html */`
 * Apply Data-Oriented Programming principles, avoid OOP except for public APIs
 * Use Stream operations instead of traditional loops
