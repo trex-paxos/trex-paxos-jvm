@@ -15,7 +15,7 @@ The following coding styles must be applied to all code in this repository. In s
 - Always use sealed interfaces to avoid using a default case in switch expressions
 - Always use anonymous variables in record distructuring and switch expressions to avoid unnecessary variable names
 - Always use `final var` for local variables, method parameters and destructured record fields
-- Use `JEP 371` “Local Classes and Interfaces” to keep logic within one Java file with a narrow public API for the file. 
+- Use `JEP 371` “Local Classes and Interfaces” to keep logic within one Java file with a narrow public API for the file.
 
 ## Java Data-Oriented Programming (DOP)
 
@@ -147,3 +147,14 @@ More specifically, when discussing Java’s evolution, these older approaches ar
 
 This transition is part of Java’s broader evolution toward functional programming principles which leads to less 
 complexity and more maintainable code.
+
+## JEP References
+
+[JEP 467](https://openjdk.org/jeps/467): Markdown Documentation in JavaDoc
+[JEP 371](https://openjdk.org/jeps/371): Local Classes and Interfaces
+[JEP 395](https://openjdk.org/jeps/395): Records
+[JEP 409](https://openjdk.org/jeps/409): Sealed Classes
+[JEP 440](https://openjdk.org/jeps/440): Record Patterns
+[JEP 427](https://openjdk.org/jeps/427): Pattern Matching for Switch
+
+End. 
