@@ -1,5 +1,7 @@
 # Java DOP Coding Standards ####################
 
+This file is a Gen AI summary of CODEING_STYLE.md to use less tokens of context window. Read the original file for full details.
+
 ## Core Principles
 
 * Use Records for all data structures
