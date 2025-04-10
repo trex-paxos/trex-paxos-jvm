@@ -44,9 +44,10 @@ public class UPaxosQuorumStrategy {
         UPaxosQuorumStrategy.HalveAllOp {
     }
 
-    /**
-     * Operation to add a new node with specified weight.
-     */
+    /// Operation to add a new node with specified weight.
+    /// 
+    /// @param nodeId the ID of the node to add
+    /// @param weight the initial weight of the node
     public record AddNodeOp(short nodeId, byte weight) implements QuorumOperation {
         public AddNodeOp {
             if (nodeId <= 0) {
@@ -58,9 +59,9 @@ public class UPaxosQuorumStrategy {
         }
     }
 
-    /**
-     * Operation to delete an existing node.
-     */
+    /// Operation to delete an existing node.
+    /// 
+    /// @param nodeId the ID of the node to delete
     public record DeleteNodeOp(short nodeId) implements QuorumOperation {
         public DeleteNodeOp {
             if (nodeId <= 0) {
@@ -69,9 +70,9 @@ public class UPaxosQuorumStrategy {
         }
     }
 
-    /**
-     * Operation to increment a node's weight by 1.
-     */
+    /// Operation to increment a node's weight by 1.
+    /// 
+    /// @param nodeId the ID of the node to increment
     public record IncrementNodeOp(short nodeId) implements QuorumOperation {
         public IncrementNodeOp {
             if (nodeId <= 0) {
@@ -80,9 +81,9 @@ public class UPaxosQuorumStrategy {
         }
     }
 
-    /**
-     * Operation to decrement a node's weight by 1.
-     */
+    /// Operation to decrement a node's weight by 1.
+    /// 
+    /// @param nodeId the ID of the node to decrement
     public record DecrementNodeOp(short nodeId) implements QuorumOperation {
         public DecrementNodeOp {
             if (nodeId <= 0) {
@@ -91,23 +92,17 @@ public class UPaxosQuorumStrategy {
         }
     }
 
-    /**
-     * Operation to double the weight of all nodes.
-     */
+    /// Operation to double the weight of all nodes.
     public record DoubleAllOp() implements QuorumOperation {}
 
-    /**
-     * Operation to halve the weight of all nodes.
-     */
+    /// Operation to halve the weight of all nodes.
     public record HalveAllOp() implements QuorumOperation {}
 
-    /**
-     * Validates if an operation is valid for the given set of weights.
-     *
-     * @param weights the current set of voting weights
-     * @param op the operation to validate
-     * @return true if the operation is valid, false otherwise
-     */
+    /// Validates if an operation is valid for the given set of weights.
+    /// 
+    /// @param weights the current set of voting weights
+    /// @param op the operation to validate
+    /// @return true if the operation is valid, false otherwise
     public static boolean isValidOperation(Set<VotingWeight> weights, QuorumOperation op) {
         return switch (op) {
             case AddNodeOp addOp -> isValidAddOperation(weights, addOp);
@@ -122,14 +117,12 @@ public class UPaxosQuorumStrategy {
         };
     }
 
-    /**
-     * Applies an operation to a set of weights.
-     *
-     * @param weights the current set of voting weights
-     * @param op the operation to apply
-     * @return a new set of voting weights after applying the operation
-     * @throws IllegalArgumentException if the operation is invalid
-     */
+    /// Applies an operation to a set of weights.
+    /// 
+    /// @param weights the current set of voting weights
+    /// @param op the operation to apply
+    /// @return a new set of voting weights after applying the operation
+    /// @throws IllegalArgumentException if the operation is invalid
     public static Set<VotingWeight> applyOperation(Set<VotingWeight> weights, QuorumOperation op) {
         if (!isValidOperation(weights, op)) {
             throw new IllegalArgumentException("Invalid operation for the given weights");
