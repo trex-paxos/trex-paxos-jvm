@@ -15,7 +15,7 @@ The following coding styles must be applied to all code in this repository. In s
 - Always use sealed interfaces to avoid using a default case in switch expressions
 - Always use anonymous variables in record distructuring and switch expressions to avoid unnecessary variable names
 - Always use `final var` for local variables, method parameters and destructured record fields
-- Use `JEP 371` “Local Classes and Interfaces” to keep logic within one Java file with a narrow public API for the file. 
+- Use `JEP 371` “Local Classes and Interfaces” to keep logic within one Java file with a narrow public API for the file.
 
 ## Java Data-Oriented Programming (DOP)
 
@@ -29,7 +29,7 @@ Data-Oriented Programming in Java represents a paradigm shift focusing on separa
 Java 21+ features enabling DOP:
 •	Records for immutable data representation
 •	Pattern matching for structural decomposition
-•	Sealed classes for controlled hierarchies
+•	Sealed classes for exhaustive switch statements
 •	Virtual threads for concurrent data processing
 
 Benefits include simpler testing, better concurrency support, and more maintainable code through reduced coupling. This approach aligns with functional programming principles while leveraging Java’s type system.
@@ -55,7 +55,7 @@ Key points about this compact coding feature:
 3. The public class must have the same name as the source file. 
 4. Non-public classes are accessible only within the same package.
 
-This feature compliments enhances code organization and encapsulation, especially for smaller, related classes that don’t need to be exposed outside their package. This reduces the cognitive load on developers and allows for a more modular design and 
+This feature compliments and enhances code organization and encapsulation, especially for smaller, related classes that don’t need to be exposed outside their package. This reduces the cognitive load on developers and allows for a more modular design and 
 a flatter package structure. This then avoid spaghetti code and the need for excessive package namespacing. It then allows
 for a very minimalistic public API to any package that makes it far easier to understand and use.
 
@@ -84,7 +84,7 @@ The combination of:
 * Static methods that operate on these records
 * Package-level encapsulation
 
-Creates a programming model similar to what’s found in functional languages. This approach:
+Creates a programming model similar to what is found in functional languages. This approach:
 
 * Emphasizes immutability (records are immutable)
 * Separates data (records) from behavior (static methods)
@@ -92,7 +92,15 @@ Creates a programming model similar to what’s found in functional languages. T
 * Leads to fewer packages where the unit test code can be in the same package as the code being tested
 * Improves testability through pure functions without complex mocking frameworks or boilerplate test configuration code
 
-This pattern resembles Algebraic Data Types from functional languages, combined with Function Modules that operate on them.
+This pattern resembles Algebraic Data Types from functional languages, combined with Function Modules that operate on them. 
+This far better aligning with best practices in modern software development:
+
+1.	Separation of Concerns: ADTs separate data representation from behavior, allowing developers to focus on each aspect independently. This separation reduces cognitive load and makes the code easier to understand and maintain.
+2.	Modularity: Function Modules operating on ADTs promote a modular design, enhancing code reusability and reducing duplication. This modularity leads to less overall code and easier maintenance.
+3. Type Safety: ADTs provide strong typing, which helps catch errors at compile-time rather than runtime. This early detection of errors significantly reduces the number of bugs that make it to production.
+4. Immutability: ADTs often encourage immutable data structures, which reduce side effects and make code behavior more predictable. This immutability contributes to fewer bugs related to unexpected state changes.
+5. Exhaustiveness Checking: When combined with pattern matching, ADTs enable exhaustive checks on all possible cases, ensuring that no edge cases are overlooked. This comprehensive handling of cases leads to more robust and reliable code.
+6. Extensibility: ADTs make it easy to add new functionality for existing types without modifying the original code. This extensibility allows for easier evolution of the codebase over time.
 
 ## Modern Java Stream-Based Programming
 
@@ -139,3 +147,14 @@ More specifically, when discussing Java’s evolution, these older approaches ar
 
 This transition is part of Java’s broader evolution toward functional programming principles which leads to less 
 complexity and more maintainable code.
+
+## JEP References
+
+[JEP 467](https://openjdk.org/jeps/467): Markdown Documentation in JavaDoc
+[JEP 371](https://openjdk.org/jeps/371): Local Classes and Interfaces
+[JEP 395](https://openjdk.org/jeps/395): Records
+[JEP 409](https://openjdk.org/jeps/409): Sealed Classes
+[JEP 440](https://openjdk.org/jeps/440): Record Patterns
+[JEP 427](https://openjdk.org/jeps/427): Pattern Matching for Switch
+
+End. 
