@@ -293,4 +293,52 @@ class UPaxosQuorumStrategyTest {
         assertThrows(IllegalArgumentException.class, () -> 
                 UPaxosQuorumStrategy.applyOperation(weights, invalidOp));
     }
+
+    @Test
+    void validateDoubleAllOperation_shouldAcceptValidDouble() {
+        Set<VotingWeight> weights = Set.of(
+                new VotingWeight((short)1, 1),
+                new VotingWeight((short)2, 0)
+        );
+        
+        UPaxosQuorumStrategy.DoubleAllOp validOp = new UPaxosQuorumStrategy.DoubleAllOp();
+        
+        assertTrue(UPaxosQuorumStrategy.isValidOperation(weights, validOp));
+    }
+
+    @Test
+    void validateDoubleAllOperation_shouldRejectInvalidDouble() {
+        Set<VotingWeight> weights = Set.of(
+                new VotingWeight((short)1, 2),
+                new VotingWeight((short)2, 0)
+        );
+        
+        UPaxosQuorumStrategy.DoubleAllOp invalidOp = new UPaxosQuorumStrategy.DoubleAllOp();
+        
+        assertFalse(UPaxosQuorumStrategy.isValidOperation(weights, invalidOp));
+    }
+
+    @Test
+    void validateHalveAllOperation_shouldAcceptValidHalve() {
+        Set<VotingWeight> weights = Set.of(
+                new VotingWeight((short)1, 2),
+                new VotingWeight((short)2, 0)
+        );
+        
+        UPaxosQuorumStrategy.HalveAllOp validOp = new UPaxosQuorumStrategy.HalveAllOp();
+        
+        assertTrue(UPaxosQuorumStrategy.isValidOperation(weights, validOp));
+    }
+
+    @Test
+    void validateHalveAllOperation_shouldRejectInvalidHalve() {
+        Set<VotingWeight> weights = Set.of(
+                new VotingWeight((short)1, 1),
+                new VotingWeight((short)2, 0)
+        );
+        
+        UPaxosQuorumStrategy.HalveAllOp invalidOp = new UPaxosQuorumStrategy.HalveAllOp();
+        
+        assertFalse(UPaxosQuorumStrategy.isValidOperation(weights, invalidOp));
+    }
 }
