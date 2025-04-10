@@ -3,7 +3,9 @@ Fully Concurrent Configuration Changes
 
 Pipelining is when work is started on new requests before existing requests have completed. Paxos 
 allows us to pipeline by streaming accept messages from the leader to the cluster without needing 
-to await any responses. In the "UPaxos" paper [Unbounded Pipelining in Dynamically Reconfigurable Paxos Clusters](http://tessanddave.com/paxos-reconf-latest.pdf) the section "Fully Concurrent Configuration Changes" describes how cluster reconfigurations can be performed in Paxos without limiting pipeline concurrency. This is safe as long as quorums overlap across configuration eras.
+to await any responses. In the "UPaxos" paper [Unbounded Pipelining in Dynamically Reconfigurable Paxos Clusters](http://tessanddave.com/paxos-reconf-latest.pdf)
+also in [this repo](https://github.com/trex-paxos/trex-paxos-jvm/blob/8f2966896b5c1c428f1daa6655efb753bbf8a30d/papers/Unbounded_Pipelining_in_Dynamically_Reconfigurable_Paxos_Clusters.pdf)
+the section "Fully Concurrent Configuration Changes" describes how cluster reconfigurations can be performed in Paxos without limiting pipeline concurrency. This is safe as long as quorums overlap across configuration eras.
 
 The advantages over alternatives are: 
 
