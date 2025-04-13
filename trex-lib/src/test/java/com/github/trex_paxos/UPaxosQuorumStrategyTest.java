@@ -17,7 +17,7 @@ package com.github.trex_paxos;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Set;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -293,4 +293,113 @@ class UPaxosQuorumStrategyTest {
         assertThrows(IllegalArgumentException.class, () -> 
                 UPaxosQuorumStrategy.applyOperation(weights, invalidOp));
     }
+
+  @Test
+  void testSplitThreeNodesEqualWeights() {
+    // Setup voting weights
+    Map<Short, VotingWeight> weights = Map.of(
+        (short)1, new VotingWeight((short)1, 1),
+        (short)2, new VotingWeight((short)2, 1),
+        (short)3, new VotingWeight((short)3, 1)
+    );
+
+    short leaderId = (short)1;
+    List<Set<Short>> result = UPaxosQuorumStrategy.splitQuorumsWithLeaderCastingVote(leaderId, weights);
+
+    // Verify we got two valid quorums
+    assertEquals(2, result.size());
+
+    Set<Short> setA = result.get(0);
+    Set<Short> setB = result.get(1);
+
+    // Verify both sets are valid quorums when combined with leader
+    int totalWeight = weights.values().stream().mapToInt(VotingWeight::weight).sum();
+    int quorumThreshold = (totalWeight / 2) + 1;
+
+    int setAWeight = setA.stream().mapToInt(node -> weights.get(node).weight()).sum();
+    int setBWeight = setB.stream().mapToInt(node -> weights.get(node).weight()).sum();
+
+    // Leader's weight is added to both sets
+    int leaderWeight = weights.get(leaderId).weight();
+
+    assertTrue(setAWeight + leaderWeight >= quorumThreshold);
+    assertTrue(setBWeight + leaderWeight >= quorumThreshold);
+  }
+
+  @Test
+  void testSplitThreeNodesVaryingWeights() {
+    // Setup voting weights
+    Map<Short, VotingWeight> weights = Map.of(
+        (short)1, new VotingWeight((short)1, 2),
+        (short)2, new VotingWeight((short)2, 1),
+        (short)3, new VotingWeight((short)3, 1)
+    );
+
+    short leaderId = (short)1;
+    List<Set<Short>> result = UPaxosQuorumStrategy.splitQuorumsWithLeaderCastingVote(leaderId, weights);
+
+    assertEquals(2, result.size());
+
+    Set<Short> setA = result.get(0);
+    Set<Short> setB = result.get(1);
+
+    int totalWeight = weights.values().stream().mapToInt(VotingWeight::weight).sum();
+    int quorumThreshold = (totalWeight / 2) + 1; // = 3;
+
+    int leaderWeight = 2;
+
+    int setAWeight = setA.stream().mapToInt(node -> weights.get(node).weight()).sum();
+    int setBWeight = setB.stream().mapToInt(node -> weights.get(node).weight()).sum();
+
+    assertTrue(setAWeight + leaderWeight >= quorumThreshold);
+    assertTrue(setBWeight + leaderWeight >= quorumThreshold);
+  }
+
+  @Test
+  void testSplitSixNodesRandomWeights() {
+    // Generate random weights for 6 nodes (0, 1, or 2)
+    Random random = new Random();
+    Map<Short, VotingWeight> weights = new HashMap<>();
+
+    for (short i = 1; i <= 6; i++) {
+      int weight = random.nextInt(3); // 0, 1, or 2
+      weights.put(i, new VotingWeight(i, weight));
+    }
+
+    short leaderId = (short)1;
+    List<Set<Short>> result = UPaxosQuorumStrategy.splitQuorumsWithLeaderCastingVote(leaderId, weights);
+
+    if (!result.get(0).isEmpty() && !result.get(1).isEmpty()) {
+      int totalWeight = weights.values().stream().mapToInt(VotingWeight::weight).sum();
+      int quorumThreshold = (totalWeight / 2) + 1;
+
+      int leaderWeight = weights.get(leaderId).weight();
+
+      int setAWeight = result.get(0).stream()
+          .mapToInt(node -> weights.get(node).weight())
+          .sum();
+      int setBWeight = result.get(1).stream()
+          .mapToInt(node -> weights.get(node).weight())
+          .sum();
+
+      assertTrue(setAWeight + leaderWeight >= quorumThreshold);
+      assertTrue(setBWeight + leaderWeight >= quorumThreshold);
+    }
+  }
+
+  @Test
+  void testNoValidSplit() {
+    // Setup where no valid split is possible
+    Map<Short, VotingWeight> weights = Map.of(
+        (short)1, new VotingWeight((short)1, 1),
+        (short)2, new VotingWeight((short)2, 1)
+    );
+    short leaderId = (short)1;
+
+    List<Set<Short>> result = UPaxosQuorumStrategy.splitQuorumsWithLeaderCastingVote(leaderId, weights);
+
+    // Should return empty sets
+    assertTrue(result.get(0).isEmpty());
+    assertTrue(result.get(1).isEmpty());
+  }
 }

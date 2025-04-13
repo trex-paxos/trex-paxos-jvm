@@ -16,9 +16,9 @@
  */
 package com.github.trex_paxos;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /// # UPaxosQuorumStrategy
 ///
@@ -227,4 +227,91 @@ public class UPaxosQuorumStrategy {
                 .map(w -> new VotingWeight(w.nodeId(), w.weight() / 2))
                 .collect(Collectors.toUnmodifiableSet());
     }
+
+  public static List<Set<Short>> splitQuorumsWithLeaderCastingVote(short leaderId,
+                                                                   Map<Short, VotingWeight> votingWeights) {
+    var filteredWeights = votingWeights.entrySet().stream()
+        .filter(entry -> entry.getValue().weight() > 0 && entry.getKey() != leaderId)
+        .collect(Collectors.toUnmodifiableMap(
+            Map.Entry::getKey,
+            Map.Entry::getValue
+        ));
+
+    if (filteredWeights.isEmpty()) {
+      return List.of(Set.of(), Set.of());
+    }
+
+    var totalWeight = filteredWeights.values().stream()
+        .mapToInt(VotingWeight::weight)
+        .sum();
+
+    var quorumThreshold = (totalWeight / 2) + 1;
+
+    var nodes = filteredWeights.keySet();
+
+    // Pass leaderId to the method
+    var splitOpt = QuorumSplitGenerator.generateSplit(nodes, quorumThreshold, filteredWeights, votingWeights.get(leaderId));
+
+    if (splitOpt.isPresent()) {
+      var splitResult = splitOpt.get();
+      return List.of(splitResult.setA(), splitResult.setB());
+    }
+
+    return List.of(Set.of(), Set.of());
+  }
 }
+
+class QuorumSplitGenerator {
+  private QuorumSplitGenerator() {} // Package-private constructor
+
+  static Optional<SplitResult> generateSplit(Set<Short> nodes,
+                                             int quorumThreshold,
+                                             Map<Short, VotingWeight> votingWeights,
+                                             VotingWeight laderVote) {
+    // For small node sets, try all possible partitions
+    List<Short> nodesList = new ArrayList<>(nodes);
+    int n = nodesList.size();
+
+    // This outer loop iterates through all binary numbers from 0 to 2^n - 1.
+    // 	•	`1 << n` is a bit shift operation that calculates 2^n
+    // 	•	For example, if n=3, this loop runs from 0 to 7 (binary: 000, 001, 010, 011, 100, 101, 110, 111)
+    for (int i = 0; i < (1 << n); i++) {
+      Set<Short> setA = new HashSet<>();
+      Set<Short> setB = new HashSet<>();
+
+      // Assign nodes to sets based on bits
+      // `(i & (1 << j)) != 0` checks if the j-th bit of i is set (equals 1)
+      for (int j = 0; j < n; j++) {
+        if ((i & (1 << j)) != 0) {
+          setA.add(nodesList.get(j));
+        } else {
+          setB.add(nodesList.get(j));
+        }
+      }
+
+      // Calculate weights
+      int setAWeight = setA.stream()
+          .mapToInt(node -> votingWeights.get(node).weight())
+          .sum();
+
+      int setBWeight = setB.stream()
+          .mapToInt(node -> votingWeights.get(node).weight())
+          .sum();
+
+      // Check if both sets form valid quorums with leader
+      if (setAWeight + laderVote.weight() >= quorumThreshold &&
+          setBWeight + laderVote.weight() >= quorumThreshold) {
+        return Optional.of(new SplitResult(
+            Set.copyOf(setA),
+            Set.copyOf(setB)
+        ));
+      }
+    }
+
+    return Optional.empty();
+  }
+}
+
+record SplitResult(Set<Short> setA, Set<Short> setB) {
+}
+
