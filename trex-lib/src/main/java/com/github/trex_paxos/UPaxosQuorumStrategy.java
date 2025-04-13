@@ -18,7 +18,6 @@ package com.github.trex_paxos;
 
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /// # UPaxosQuorumStrategy
 ///
@@ -267,7 +266,7 @@ class QuorumSplitGenerator {
   static Optional<SplitResult> generateSplit(Set<Short> nodes,
                                              int quorumThreshold,
                                              Map<Short, VotingWeight> votingWeights,
-                                             VotingWeight laderVote) {
+                                             VotingWeight leaderVote) {
     // For small node sets, try all possible partitions
     List<Short> nodesList = new ArrayList<>(nodes);
     int n = nodesList.size();
@@ -299,8 +298,8 @@ class QuorumSplitGenerator {
           .sum();
 
       // Check if both sets form valid quorums with leader
-      if (setAWeight + laderVote.weight() >= quorumThreshold &&
-          setBWeight + laderVote.weight() >= quorumThreshold) {
+      if (setAWeight + leaderVote.weight() >= quorumThreshold &&
+          setBWeight + leaderVote.weight() >= quorumThreshold) {
         return Optional.of(new SplitResult(
             Set.copyOf(setA),
             Set.copyOf(setB)
