@@ -268,19 +268,19 @@ class QuorumSplitGenerator {
                                              Map<Short, VotingWeight> votingWeights,
                                              VotingWeight leaderVote) {
     // For small node sets, try all possible partitions
-    List<Short> nodesList = new ArrayList<>(nodes);
-    int n = nodesList.size();
+    final List<Short> nodesList = nodes.stream().toList();
+    final var otherNodeCount = nodesList.size();
 
     // This outer loop iterates through all binary numbers from 0 to 2^n - 1.
     // 	•	`1 << n` is a bit shift operation that calculates 2^n
     // 	•	For example, if n=3, this loop runs from 0 to 7 (binary: 000, 001, 010, 011, 100, 101, 110, 111)
-    for (int i = 0; i < (1 << n); i++) {
-      Set<Short> setA = new HashSet<>();
-      Set<Short> setB = new HashSet<>();
+    for (int i = 0; i < (1 << otherNodeCount); i++) {
+      final var setA = new HashSet<Short>();
+      final var setB = new HashSet<Short>();
 
       // Assign nodes to sets based on bits
       // `(i & (1 << j)) != 0` checks if the j-th bit of i is set (equals 1)
-      for (int j = 0; j < n; j++) {
+      for (int j = 0; j < otherNodeCount; j++) {
         if ((i & (1 << j)) != 0) {
           setA.add(nodesList.get(j));
         } else {
@@ -289,7 +289,7 @@ class QuorumSplitGenerator {
       }
 
       // Calculate weights
-      int setAWeight = setA.stream()
+      final var setAWeight = setA.stream()
           .mapToInt(node -> votingWeights.get(node).weight())
           .sum();
 
