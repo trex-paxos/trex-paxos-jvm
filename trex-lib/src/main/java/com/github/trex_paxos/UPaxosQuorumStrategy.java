@@ -18,6 +18,7 @@ package com.github.trex_paxos;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /// # UPaxosQuorumStrategy
 ///
@@ -270,47 +271,62 @@ class QuorumSplitGenerator {
     // For small node sets, try all possible partitions
     final List<Short> nodesList = nodes.stream().toList();
     final var otherNodeCount = nodesList.size();
+    // `1 << n` is a bit shift operation that calculates 2^n
+    final int bitPerNode = (1 << otherNodeCount);
 
-    // This outer loop iterates through all binary numbers from 0 to 2^n - 1.
-    // 	•	`1 << n` is a bit shift operation that calculates 2^n
-    // 	•	For example, if n=3, this loop runs from 0 to 7 (binary: 000, 001, 010, 011, 100, 101, 110, 111)
-    for (int i = 0; i < (1 << otherNodeCount); i++) {
-      final var setA = new HashSet<Short>();
-      final var setB = new HashSet<Short>();
+    // Counting in binary from 0 to an int that is one bit set for every node gives all possible partitions
+    // For example, if n=3, this loop runs from 1 to 7 (binary: 001, 010, 011, 100, 101, 110, 111)
+    return IntStream.range(1, bitPerNode).mapToObj(i -> {
+          // Assign nodes to sets based on bits that are 0/1
+          final Set<Short> leftQuorum = new HashSet<>();
+          final Set<Short> rightQuorum = new HashSet<>();
 
-      // Assign nodes to sets based on bits
-      // `(i & (1 << j)) != 0` checks if the j-th bit of i is set (equals 1)
-      for (int j = 0; j < otherNodeCount; j++) {
-        if ((i & (1 << j)) != 0) {
-          setA.add(nodesList.get(j));
-        } else {
-          setB.add(nodesList.get(j));
-        }
-      }
+          // based on each bit in the integer we assign nodes to left or right quorum
+          for (int j = 0; j < otherNodeCount; j++) {
+            final int nodeBitMask = (1 << j);
+            final int nodeBit = i & nodeBitMask;
+            if (nodeBit != 0) {
+              leftQuorum.add(nodesList.get(j));
+            } else {
+              rightQuorum.add(nodesList.get(j));
+            }
+          }
+          return List.of(leftQuorum, rightQuorum);
+        })
+        .filter(set -> {
+          // filter out empty sets
+          return !set.get(0).isEmpty() && !set.get(1).isEmpty();
+        })
+        .filter(set -> {
+          final var left = set.get(0);
+          final var right = set.get(1);
 
-      // Calculate weights
-      final var setAWeight = setA.stream()
-          .mapToInt(node -> votingWeights.get(node).weight())
-          .sum();
+          final var setAWeight = left.stream()
+              .mapToInt(node -> votingWeights.get(node).weight())
+              .sum();
 
-      int setBWeight = setB.stream()
-          .mapToInt(node -> votingWeights.get(node).weight())
-          .sum();
+          int setBWeight = right.stream()
+              .mapToInt(node -> votingWeights.get(node).weight())
+              .sum();
 
-      // Check if both sets form valid quorums with leader
-      if (setAWeight + leaderVote.weight() >= quorumThreshold &&
-          setBWeight + leaderVote.weight() >= quorumThreshold) {
-        return Optional.of(new SplitResult(
-            Set.copyOf(setA),
-            Set.copyOf(setB)
-        ));
-      }
-    }
-
-    return Optional.empty();
+          return setAWeight + leaderVote.weight() >= quorumThreshold &&
+              setBWeight + leaderVote.weight() >= quorumThreshold;
+        })
+        .map(SplitResult::of)
+        .findFirst()
+        ;
   }
 }
 
 record SplitResult(Set<Short> setA, Set<Short> setB) {
+  SplitResult {
+    if (setA.isEmpty() || setB.isEmpty()) {
+      throw new IllegalArgumentException("Both sets must be non-empty");
+    }
+  }
+
+  static SplitResult of(List<Set<Short>> sets){
+    return new SplitResult(sets.get(0), sets.get(1));
+  }
 }
 
