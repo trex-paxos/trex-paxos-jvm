@@ -55,7 +55,8 @@ class UPaxosQuorumStrategyTest {
     void validateDeleteOperation_shouldAcceptValidDelete() {
         Set<VotingWeight> weights = Set.of(
                 new VotingWeight((short)1, 1),
-                new VotingWeight((short)2, 0)
+                new VotingWeight((short)2, 1),
+                new VotingWeight((short)3, 1)
         );
         
         UPaxosQuorumStrategy.DeleteNodeOp validOp = new UPaxosQuorumStrategy.DeleteNodeOp((short)1);
@@ -64,7 +65,7 @@ class UPaxosQuorumStrategyTest {
     }
 
     @Test
-    void validateDeleteOperation_shouldRejectInvalidDelete() {
+    void validateDeleteOperation_shouldRejectInvalidDeleteNotExist() {
         Set<VotingWeight> weights = Set.of(
                 new VotingWeight((short)1, 1),
                 new VotingWeight((short)2, 0)
@@ -75,6 +76,19 @@ class UPaxosQuorumStrategyTest {
         
         assertFalse(UPaxosQuorumStrategy.isValidOperation(weights, invalidOp));
     }
+
+  @Test
+  void validateDeleteOperation_shouldRejectInvalidDeleteNotTooFew() {
+    Set<VotingWeight> weights = Set.of(
+        new VotingWeight((short)1, 1),
+        new VotingWeight((short)2, 1)
+    );
+
+    // Node doesn't exist
+    UPaxosQuorumStrategy.DeleteNodeOp invalidOp = new UPaxosQuorumStrategy.DeleteNodeOp((short)1);
+
+    assertFalse(UPaxosQuorumStrategy.isValidOperation(weights, invalidOp));
+  }
 
     @Test
     void validateIncrementOperation_shouldAcceptValidIncrement() {
@@ -104,8 +118,8 @@ class UPaxosQuorumStrategyTest {
     @Test
     void validateDecrementOperation_shouldAcceptValidDecrement() {
         Set<VotingWeight> weights = Set.of(
-                new VotingWeight((short)1, 1),
-                new VotingWeight((short)2, 0)
+                new VotingWeight((short)1, 2),
+                new VotingWeight((short)2, 1)
         );
         
         UPaxosQuorumStrategy.DecrementNodeOp validOp = new UPaxosQuorumStrategy.DecrementNodeOp((short)1);
@@ -195,14 +209,15 @@ class UPaxosQuorumStrategyTest {
     void applyDeleteOperation_shouldRemoveNode() {
         Set<VotingWeight> weights = Set.of(
                 new VotingWeight((short)1, 1),
-                new VotingWeight((short)2, 0)
+                new VotingWeight((short)2, 1),
+                new VotingWeight((short)3, 1)
         );
         
         UPaxosQuorumStrategy.DeleteNodeOp op = new UPaxosQuorumStrategy.DeleteNodeOp((short)1);
         
         Set<VotingWeight> result = UPaxosQuorumStrategy.applyOperation(weights, op);
         
-        assertEquals(1, result.size());
+        assertEquals(2, result.size());
         assertFalse(result.stream().anyMatch(w -> w.nodeId().id() == 1));
     }
 
@@ -226,8 +241,8 @@ class UPaxosQuorumStrategyTest {
     @Test
     void applyDecrementOperation_shouldDecrementWeight() {
         Set<VotingWeight> weights = Set.of(
-                new VotingWeight((short)1, 1),
-                new VotingWeight((short)2, 0)
+                new VotingWeight((short)1, 2),
+                new VotingWeight((short)2, 1)
         );
         
         UPaxosQuorumStrategy.DecrementNodeOp op = new UPaxosQuorumStrategy.DecrementNodeOp((short)1);
@@ -237,7 +252,7 @@ class UPaxosQuorumStrategyTest {
         assertEquals(2, result.size());
         assertTrue(result.stream()
                 .filter(w -> w.nodeId().id() == 1)
-                .anyMatch(w -> w.weight() == 0));
+                .anyMatch(w -> w.weight() == 1));
     }
 
     @Test
