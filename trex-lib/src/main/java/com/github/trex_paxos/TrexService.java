@@ -16,6 +16,7 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.DirectMessage;
+import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
 import com.github.trex_paxos.network.NetworkAddress;
 import com.github.trex_paxos.network.NetworkLayer;
@@ -265,7 +266,7 @@ public interface TrexService<C, R> {
         
         @Override
         public void handleConsensusMessage(ByteBuffer buffer) {
-            TrexMessage msg = PickleMsg.instance.deserialize(buffer);
+            TrexMessage msg = MessagePickler.deserialize(buffer);
             if (msg == null || msg.from() == engine.nodeIdentifier()) {
                 LOGGER.finer(() -> engine.nodeIdentifier() + " dropping consensus message " + msg);
                 return;
@@ -284,7 +285,7 @@ public interface TrexService<C, R> {
         
         @Override
         public void handleProxyMessage(ByteBuffer buffer) {
-            Command cmd = Pickle.instance.deserialize(buffer);
+            Command cmd = CommandPickler.deserialize(buffer);
             if (!engine.isLeader()) {
                 LOGGER.finest(() -> String.format("[Node %d] Not leader, dropping proxy: %s", 
                     config.nodeId().id(), cmd.uuid()));
