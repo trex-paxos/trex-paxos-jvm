@@ -18,6 +18,8 @@ npx repomix@latest
 mvn -DskipTests clean package && \
     mvn test -Dtest=PickleHandshakeTest -pl trex-paxe
 
+mvn -DskipTests clean package && mvn test -pl trex-lib
+
 # just run subpackage tests
 mvn -DskipTests clean install && \
     mvn test -pl trex-paxe
