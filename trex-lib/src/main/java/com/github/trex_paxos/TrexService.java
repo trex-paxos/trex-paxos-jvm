@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
-import java.util.logging.Level;
+import static com.github.trex_paxos.TrexLogger.LOGGER;
 
 public interface TrexService<C, R> {
     CompletableFuture<R> submit(C command);
@@ -139,10 +139,10 @@ public interface TrexService<C, R> {
             responseTracker.register(commandId, responseFuture);
             
             // If we're the leader, process directly
-            if (leaderTracker.isLeader()) {
+            if (leaderTracker.isLeader(this.engine.nodeId)) {
                 try {
                     // Serialize the command
-                    byte[] serializedCommand = config.pickler().pickle(command);
+                    byte[] serializedCommand = config.pickler().serialize(command);
                     
                     // Submit to the consensus engine
                     engine.submit(serializedCommand, commandId);
@@ -197,10 +197,10 @@ public interface TrexService<C, R> {
                 
                 running = true;
                 
-                TrexLogger.info("TrexService started with node ID: " + 
+                LOGGER.info("TrexService started with node ID: " +
                     config.nodeId().id());
             } catch (Exception e) {
-                TrexLogger.error("Failed to start TrexService", e);
+                LOGGER.severe(() -> "Failed to start TrexService "+ e.getMessage());
                 stop();
                 throw new RuntimeException("Failed to start TrexService", e);
             }
@@ -228,7 +228,7 @@ public interface TrexService<C, R> {
                 try {
                     engine.close();
                 } catch (Exception e) {
-                    TrexLogger.warn("Error closing TrexEngine", e);
+                    LOGGER.warning(()->"Error closing TrexEngine: "+e);
                 }
             }
             
@@ -236,7 +236,7 @@ public interface TrexService<C, R> {
             responseTracker.completeAllExceptionally(
                 new IllegalStateException("Service stopped"));
             
-            TrexLogger.info("TrexService stopped");
+            LOGGER.info("TrexService stopped");
         }
         
         private TrexNode createTrexNode() {
@@ -280,7 +280,7 @@ public interface TrexService<C, R> {
      * Tracks the current leader in the cluster
      */
     class LeaderTracker {
-        private final AtomicReference<NodeId> currentLeaderId = new AtomicReference<>(null);
+        final AtomicReference<NodeId> currentLeaderId = new AtomicReference<>(null);
         
         void setLeader(NodeId nodeId) {
             currentLeaderId.set(nodeId);
@@ -294,9 +294,9 @@ public interface TrexService<C, R> {
             return currentLeaderId.get();
         }
         
-        boolean isLeader() {
+        boolean isLeader(NodeId thisId) {
             NodeId leaderId = currentLeaderId.get();
-            return leaderId != null && leaderId.equals(TrexServiceImpl.this.config.nodeId());
+            return leaderId != null && leaderId.equals(thisId);
         }
     }
     
