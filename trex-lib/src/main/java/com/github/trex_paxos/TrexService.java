@@ -68,14 +68,14 @@ public interface TrexService<C, R> {
      * 
      * @param buffer The message data
      */
-    void handleConsensusMessage(ByteBuffer buffer);
+    void handleConsensusMessage(TrexMessage msg);
     
     /**
      * Handle incoming proxy messages
      * 
      * @param buffer The message data
      */
-    void handleProxyMessage(ByteBuffer buffer);
+    void handleProxyMessage(Command cmd);
     
     /**
      * Get the pickler used by this service
@@ -265,8 +265,7 @@ public interface TrexService<C, R> {
         }
         
         @Override
-        public void handleConsensusMessage(ByteBuffer buffer) {
-            TrexMessage msg = MessagePickler.deserialize(buffer);
+        public void handleConsensusMessage(TrexMessage msg) {
             if (msg == null || msg.from() == engine.nodeIdentifier()) {
                 LOGGER.finer(() -> engine.nodeIdentifier() + " dropping consensus message " + msg);
                 return;
@@ -284,8 +283,7 @@ public interface TrexService<C, R> {
         }
         
         @Override
-        public void handleProxyMessage(ByteBuffer buffer) {
-            Command cmd = CommandPickler.deserialize(buffer);
+        public void handleProxyMessage(Command cmd) {
             if (!engine.isLeader()) {
                 LOGGER.finest(() -> String.format("[Node %d] Not leader, dropping proxy: %s", 
                     config.nodeId().id(), cmd.uuid()));

@@ -71,7 +71,7 @@ public class StackServiceImpl2 implements StackService {
     /**
      * Factory method to create a new StackServiceImpl2 instance
      */
-    public static StackServiceImpl2 create(short nodeId, Supplier<NodeEndpoint> endpointSupplier, NetworkLayer networkLayer) {
+    public static StackServiceImpl2 create(short nodeId, Supplier<NodeEndpoint> endpointSupplier, TestNetworkLayer networkLayer) {
         LOGGER.info(() -> "Creating StackServiceImpl2 node " + nodeId);
         return new StackServiceImpl2(nodeId, endpointSupplier, networkLayer);
     }
@@ -79,7 +79,7 @@ public class StackServiceImpl2 implements StackService {
     /**
      * Private constructor - use factory method instead
      */
-    private StackServiceImpl2(short nodeId, Supplier<NodeEndpoint> endpointSupplier, NetworkLayer networkLayer) {
+    private StackServiceImpl2(short nodeId, Supplier<NodeEndpoint> endpointSupplier, TestNetworkLayer networkLayer) {
         LOGGER.fine(() -> "Creating node " + nodeId);
 
         // Create pickler for Value objects
@@ -151,13 +151,13 @@ public class StackServiceImpl2 implements StackService {
         
         // Create TrexService
         this.service = config.build();
-        
+
         // Set up network listeners
         networkLayer.subscribe(CONSENSUS.value(), 
-            data -> service.handleConsensusMessage(data), 
+            service::handleConsensusMessage,
             "consensus-" + nodeId);
         networkLayer.subscribe(PROXY.value(), 
-            data -> service.handleProxyMessage(data), 
+            service::handleProxyMessage,
             "proxy-" + nodeId);
         
         // Start the service

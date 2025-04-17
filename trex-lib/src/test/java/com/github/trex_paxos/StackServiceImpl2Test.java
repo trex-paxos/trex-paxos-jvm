@@ -1,17 +1,6 @@
 /*
- * Copyright 2024 - 2025 Simon Massey
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * // SPDX-FileCopyrightText: 2024 - 2025 Simon Massey
+ * // SPDX-License-Identifier: Apache-2.0
  */
 package com.github.trex_paxos;
 
@@ -46,10 +35,10 @@ public class StackServiceImpl2Test {
         Map.of(new NodeId((short) 1), new NetworkAddress("localhost", 5000),
             new NodeId((short) 2), new NetworkAddress("localhost", 5001)));
 
-    NetworkLayer networkLayer1 = new TestNetworkLayer(new NodeId((short) 1),
+    TestNetworkLayer networkLayer1 = new TestNetworkLayer(new NodeId((short) 1),
         Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), Pickle.instance)
     );
-    NetworkLayer networkLayer2 = new TestNetworkLayer(new NodeId((short) 1),
+    TestNetworkLayer networkLayer2 = new TestNetworkLayer(new NodeId((short) 1),
         Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), Pickle.instance)
     );
 
