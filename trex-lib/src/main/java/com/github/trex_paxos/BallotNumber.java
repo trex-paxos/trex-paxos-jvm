@@ -15,17 +15,26 @@
  */
 package com.github.trex_paxos;
 
-/// A ballot number is the proposal number used in the Paxos algorithm. Here we are using eight bytes.
-/// To support UPaxos cluster reconfigurations we have an optional `era` field in the most significant byte.
-/// Next `counter` is used to create higher [com.github.trex_paxos.msg.Prepare] messages.
-/// Next `nodeIdentifier` is used to break ties and to ensure no node in a cluster generates the same number so that we
-/// have a total order. The `counter` is incremented as an integer when a node wishes to run the leader takeover protocol.
-/// The `era` is only incremented by a leader to be able to send messages to fix a new cluster configuration as per the
-/// UPaxos paper [Unbounded Pipelining in Dynamically Reconfigurable Paxos Clusters](http://tessanddave.com/paxos-reconf-latest.pdf).
+/// A ballot number is the proposal number used in the Paxos algorithm. Here we are using eight bytes.Nodes make
+/// promises to not accept any mny protocol messages with a number less than the one they have promised. The [BallotNumber#compareTo(com.github.trex_paxos.BallotNumber)]
+///
+/// See {@link Progress#promise(BallotNumber)} and {@link com.github.trex_paxos.msg.PaxosMessage}.
+///
+/// If you can shut down the cluster to reconfigure it then you do not need to increment the era. If you want to
+/// reconfigure the cluster while noes are running the `era` should be incremented.
+///
+/// @param era The cluster configuration number. This is incremented when the cluster configuration changes.
+/// @param counter The counter is incremented when a node wishes to take over the leadership and run the leader takeover protocol.
+/// @param nodeIdentifier The node identifier is used to break ties and to ensure no node in a cluster generates the same number.
 public record BallotNumber(short era, int counter, short nodeIdentifier) implements Comparable<BallotNumber> {
 
   public static final BallotNumber MIN = new BallotNumber(Short.MIN_VALUE, Integer.MIN_VALUE, Short.MIN_VALUE);
 
+  /// The ballot number is a 64-bit number. The first 16 bits are the era, the next 32 bits are the counter and the last 16 bits are the node identifier.
+  /// The comparison is done in the following order:
+  /// 1. Compare the era which is incremented for cluster reconfigurations. This will lock out message that have an obsolete cluster configuration.
+  /// 2. Compare the counter which is incremented when a follower times out to run the leader takeover protocol.
+  /// 3. Finally compare by node identifier which is a tie-breaker which ensures that all nodes in a cluster have unique ballot numbers.
   @Override
   public int compareTo(BallotNumber that) {
     // First compare by era which is incremented for cluster reconfigurations. This will lock out message that have an obsolete cluster configuration.
@@ -40,6 +49,12 @@ public record BallotNumber(short era, int counter, short nodeIdentifier) impleme
     }
     // Finally compare by node identifier which is a tie-breaker which ensures that all nodes in a cluster have unique ballot numbers.
     return Short.compare(this.nodeIdentifier, that.nodeIdentifier);
+  }
+
+  ///  increment era
+  ///  @return a new ballot number with the era incremented by one.
+  public BallotNumber incrementEra() {
+    return new BallotNumber((short) (era + 1), counter, nodeIdentifier);
   }
 
   @Override

@@ -61,6 +61,19 @@ public class TrexEngine<RESULT> implements AutoCloseable {
   /// - Automatic release on close/crash
   private final Semaphore mutex = new Semaphore(1);
 
+  /// In order to perform cluster reconfiguration we need to be able to perform some operations holding the mutex
+  protected void withMutex(Runnable runnable) {
+    try {
+      mutex.acquire();
+      runnable.run();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException("Thread was interrupted while acquiring mutex", e);
+    } finally {
+      mutex.release();
+    }
+  }
+
   /// The main entry point for the Trex paxos algorithm. This method is thread safe and allows only one thread at a
   /// time. The following may happen:
   ///

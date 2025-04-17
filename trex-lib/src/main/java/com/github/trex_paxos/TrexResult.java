@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 ///
 /// @param results A possibly empty list of sequentially chosen commands aka fixed values.
 /// @param messages A possibly empty list of messages that were generated to be sent out after the journal is made crash durable.
- record TrexResult(List<TrexMessage> messages, TreeMap<Long, AbstractCommand> results) {
+ public record TrexResult(List<TrexMessage> messages, TreeMap<Long, AbstractCommand> results) {
   public TrexResult {
     messages = List.copyOf(messages);
     results = new TreeMap<>(results);

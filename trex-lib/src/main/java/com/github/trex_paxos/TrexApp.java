@@ -117,18 +117,12 @@ public class TrexApp<COMMAND, RESULT> {
     this.nodeId = new NodeId(engine.nodeIdentifier());
   }
 
-  /// Starts the Paxos node. It initializes network subscriptions and starts the network layer. There are two default
-  /// subscriptions:
-  /// - `CONSENSUS` for receiving consensus messages
-  /// - `PROXY` for receiving proxied messages that nodes forward to what they estimate is the leader node
-  public void start() {
+  // TODO delete this
+  public void init() {
     if (engine.isLeader()) {
       // normally a node is started before it can become leader this scenario happens during unit tests
       leaderTracker.updateFromFixed(new Fixed(engine.nodeIdentifier(), 0L, BallotNumber.MIN));
     }
-    networkLayer.subscribe(CONSENSUS.value(), this::handleConsensusMessage, "consensus-" + engine.nodeIdentifier());
-    networkLayer.subscribe(PROXY.value(), this::handleProxyMessage, "proxy-" + engine.nodeIdentifier());
-    networkLayer.start();
   }
 
   protected List<TrexMessage> createLeaderMessages(Command cmd) {
@@ -175,32 +169,14 @@ public class TrexApp<COMMAND, RESULT> {
     }
   }
 
-  /// Submits a command for consensus with default type (0). If the current node is a leader it will transmit accept
-  /// messages. If it is not the leader it will attempt to proxy the messages to the current leader. A timeout on the
-  /// future does not mean that the message has not been chosen but rather that the application has not received a
-  /// any information about whether the command has been chosen or not.
-  ///
-  /// @param value The application command to submit for consensus
-  /// @param future A future that will be completed with the result when the command is chosen
-  /// @see #submitValue
-  public void submitValue(COMMAND value, CompletableFuture<RESULT> future){
+  public void submitValue(COMMAND value, CompletableFuture<RESULT> future) {
     submitValue(value, future, (byte) 0);
   }
 
-  /// Submits a command for consensus with a specified type. This allows a host application to share a paxos cluster
-  /// between different applications. If the current node is a leader it will transmit accept
-  /// messages. If it is not the leader it will attempt to proxy the messages to the current leader.
-  /// A timeout on the
-  /// future does not mean that the message has not been chosen but rather that the application has not received a
-  /// any information about whether the command has been chosen or not.
-  ///
-  /// @param value The application command to submit for consensus
-  /// @param future A future that will be completed with the result when the command is chosen
-  /// @param type A non-negative byte value representing the command type
-  /// @throws IllegalArgumentException if type is negative
-  /// @see #startConsensusProtocolOrProxyToLeader
   public void submitValue(COMMAND value, CompletableFuture<RESULT> future, byte type) {
-    if( type < 0 ) throw new IllegalArgumentException("type must be non-negative as negative values are reserved for internal use");
+    if (type < 0) {
+      throw new IllegalArgumentException("type must be non-negative as it is reserved for internal use");
+    }
     startConsensusProtocolOrProxyToLeader(value, future, type);
   }
 
@@ -283,13 +259,7 @@ public class TrexApp<COMMAND, RESULT> {
 
   /// Stops the Paxos node, shutting down the network layer and closing the engine.
   public void stop() {
-    try {
-      networkLayer.close();
-    } catch (Exception e) {
-      // ignore
-    } finally {
       engine.close();
-    }
   }
 
   /// This method is called in unit tests to force a node to be leader when the network is started.

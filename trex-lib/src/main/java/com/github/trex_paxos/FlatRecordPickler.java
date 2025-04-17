@@ -20,9 +20,8 @@ import java.lang.reflect.RecordComponent;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
-/// This is a countVotes pickler for flat records. It only supports records that have components that are
+/// This is a pickler for flat Record types. It only supports records that have components that are
 /// primitive types, strings, and Optional<String>. This is good enough for all the messages in Trex.
-/// Core java is working on making records serializable by default, but until then, this is good enough. 
 public class FlatRecordPickler {
 
   public static <T extends Record> Pickler<T> createPickler(Class<T> recordClass) {
@@ -88,7 +87,7 @@ public class FlatRecordPickler {
     };
   }
 
-  private static boolean isSupportedType(Class<?> type) {
+  public static boolean isSupportedType(Class<?> type) {
     return type == int.class ||
         type == long.class ||
         type == boolean.class ||
@@ -96,7 +95,7 @@ public class FlatRecordPickler {
         type == Optional.class;
   }
 
-  private static int sizeOf(Class<?> type, Object value) {
+  public static int sizeOf(Class<?> type, Object value) {
     if (type == int.class) return Integer.BYTES;
     if (type == long.class) return Long.BYTES;
     if (type == boolean.class) return 1;
@@ -118,7 +117,7 @@ public class FlatRecordPickler {
     throw new IllegalArgumentException("Unsupported type: " + type);
   }
 
-  private static void writeToBuffer(ByteBuffer buffer, Class<?> type, Object value) {
+  public static void writeToBuffer(ByteBuffer buffer, Class<?> type, Object value) {
     if (type == int.class) {
       buffer.putInt((Integer) value);
     } else if (type == long.class) {
@@ -146,7 +145,7 @@ public class FlatRecordPickler {
     }
   }
 
-  private static Object readFromBuffer(ByteBuffer buffer, Class<?> type) {
+  public static Object readFromBuffer(ByteBuffer buffer, Class<?> type) {
     if (type == int.class) {
       return buffer.getInt();
     } else if (type == long.class) {

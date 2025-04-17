@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 
-// FIXME: Add era as a parameter to the test case
+// FIXME we need to test era
 public class PrepareResponsePropertyTests {
 
   enum SlotExpansion {

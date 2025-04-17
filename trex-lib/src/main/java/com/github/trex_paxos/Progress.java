@@ -38,14 +38,16 @@ public record Progress(
     this(nodeIdentifier, BallotNumber.MIN, 0);
   }
 
-  // Java may get `with` so that we can retire this method.
+  // Java may get withers so that we can retire this method.
   public Progress withHighestFixed(long fixedLogIndex) {
     return new Progress(nodeIdentifier, highestPromised, fixedLogIndex);
   }
 
-  // Java may get `withers` so that we can retire this method.
-  public Progress withHighestPromised(BallotNumber p) {
-    return new Progress(nodeIdentifier, p, highestFixedIndex);
+  public Progress promise(BallotNumber ballotNumber) {
+    if (ballotNumber.compareTo(highestPromised) > 0) {
+      return new Progress(nodeIdentifier, ballotNumber, highestFixedIndex);
+    }
+    return this;
   }
 
   @Override
