@@ -6,8 +6,13 @@ import lombok.With;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
+import java.util.logging.Level;
 
 public interface TrexService<C, R> {
     CompletableFuture<R> submit(C command);
@@ -86,6 +91,245 @@ public interface TrexService<C, R> {
 
             // Create and return the service implementation
             return new TrexServiceImpl<>(this);
+        }
+    }
+
+    /**
+     * Implementation of TrexService that manages the consensus process
+     */
+    class TrexServiceImpl<C, R> implements TrexService<C, R> {
+        // Configuration
+        final Config<C, R> config;
+        
+        // Core components
+        TrexEngine<R> engine;
+        TrexNode node;
+        
+        // Trackers
+        final LeaderTracker leaderTracker;
+        final ResponseTracker<R> responseTracker;
+        
+        // Scheduling
+        ScheduledFuture<?> heartbeatTask;
+        ScheduledFuture<?> electionTask;
+        
+        // State
+        volatile boolean running;
+        
+        TrexServiceImpl(Config<C, R> config) {
+            this.config = config;
+            this.leaderTracker = new LeaderTracker();
+            this.responseTracker = new ResponseTracker<>();
+            this.running = false;
+        }
+        
+        @Override
+        public CompletableFuture<R> submit(C command) {
+            if (!running) {
+                CompletableFuture<R> future = new CompletableFuture<>();
+                future.completeExceptionally(new IllegalStateException("Service not running"));
+                return future;
+            }
+            
+            // Generate a unique ID for this command
+            String commandId = UUID.randomUUID().toString();
+            
+            // Create a future to track the response
+            CompletableFuture<R> responseFuture = new CompletableFuture<>();
+            responseTracker.register(commandId, responseFuture);
+            
+            // If we're the leader, process directly
+            if (leaderTracker.isLeader()) {
+                try {
+                    // Serialize the command
+                    byte[] serializedCommand = config.pickler().pickle(command);
+                    
+                    // Submit to the consensus engine
+                    engine.submit(serializedCommand, commandId);
+                } catch (Exception e) {
+                    responseTracker.completeExceptionally(commandId, e);
+                }
+            } else {
+                // Forward to the leader if we know who it is
+                NodeId leaderId = leaderTracker.getLeaderId();
+                if (leaderId != null) {
+                    try {
+                        // Forward the command to the leader
+                        // Implementation would depend on the network layer
+                        // and message format
+                        NetworkAddress leaderAddress = config.endpoints().get(leaderId);
+                        if (leaderAddress != null) {
+                            // Forward command to leader
+                            // This is a placeholder for the actual forwarding logic
+                        } else {
+                            responseTracker.completeExceptionally(commandId, 
+                                new IllegalStateException("Leader address not found"));
+                        }
+                    } catch (Exception e) {
+                        responseTracker.completeExceptionally(commandId, e);
+                    }
+                } else {
+                    responseTracker.completeExceptionally(commandId, 
+                        new IllegalStateException("No leader available"));
+                }
+            }
+            
+            return responseFuture;
+        }
+        
+        @Override
+        public void start() {
+            if (running) {
+                return;
+            }
+            
+            try {
+                // Initialize the node and engine
+                node = createTrexNode();
+                engine = createTrexEngine();
+                
+                // Set up network listeners
+                setupNetworkListeners();
+                
+                // Schedule heartbeats and election timeouts
+                scheduleHeartbeat();
+                scheduleElection();
+                
+                running = true;
+                
+                TrexLogger.info("TrexService started with node ID: " + 
+                    config.nodeId().id());
+            } catch (Exception e) {
+                TrexLogger.error("Failed to start TrexService", e);
+                stop();
+                throw new RuntimeException("Failed to start TrexService", e);
+            }
+        }
+        
+        @Override
+        public void stop() {
+            if (!running) {
+                return;
+            }
+            
+            running = false;
+            
+            // Cancel scheduled tasks
+            if (heartbeatTask != null) {
+                heartbeatTask.cancel(true);
+            }
+            
+            if (electionTask != null) {
+                electionTask.cancel(true);
+            }
+            
+            // Close the engine
+            if (engine != null) {
+                try {
+                    engine.close();
+                } catch (Exception e) {
+                    TrexLogger.warn("Error closing TrexEngine", e);
+                }
+            }
+            
+            // Complete any pending responses with exceptions
+            responseTracker.completeAllExceptionally(
+                new IllegalStateException("Service stopped"));
+            
+            TrexLogger.info("TrexService stopped");
+        }
+        
+        private TrexNode createTrexNode() {
+            // Create and configure the TrexNode based on config
+            // This would include setting up the node with the proper
+            // configuration, journal, etc.
+            return null; // Placeholder
+        }
+        
+        private TrexEngine<R> createTrexEngine() {
+            // Create and configure the TrexEngine based on config
+            // This would include setting up the engine with the node,
+            // command handler, etc.
+            return null; // Placeholder
+        }
+        
+        private void setupNetworkListeners() {
+            // Set up listeners for network messages
+            // This would include registering handlers for different
+            // message types with the network layer
+        }
+        
+        private void scheduleHeartbeat() {
+            // Schedule heartbeat messages to be sent periodically
+            // This would use the configured heartbeat interval
+        }
+        
+        private void scheduleElection() {
+            // Schedule election timeout checks
+            // This would use the configured election timeout
+        }
+        
+        private void handleMessage(Object message) {
+            // Handle different types of messages
+            // This would include handling consensus messages,
+            // forwarded commands, etc.
+        }
+    }
+    
+    /**
+     * Tracks the current leader in the cluster
+     */
+    class LeaderTracker {
+        private final AtomicReference<NodeId> currentLeaderId = new AtomicReference<>(null);
+        
+        void setLeader(NodeId nodeId) {
+            currentLeaderId.set(nodeId);
+        }
+        
+        void clearLeader() {
+            currentLeaderId.set(null);
+        }
+        
+        NodeId getLeaderId() {
+            return currentLeaderId.get();
+        }
+        
+        boolean isLeader() {
+            NodeId leaderId = currentLeaderId.get();
+            return leaderId != null && leaderId.equals(TrexServiceImpl.this.config.nodeId());
+        }
+    }
+    
+    /**
+     * Tracks responses to submitted commands
+     */
+    class ResponseTracker<R> {
+        private final ConcurrentHashMap<String, CompletableFuture<R>> pendingResponses = 
+            new ConcurrentHashMap<>();
+        
+        void register(String commandId, CompletableFuture<R> future) {
+            pendingResponses.put(commandId, future);
+        }
+        
+        void complete(String commandId, R result) {
+            CompletableFuture<R> future = pendingResponses.remove(commandId);
+            if (future != null) {
+                future.complete(result);
+            }
+        }
+        
+        void completeExceptionally(String commandId, Throwable exception) {
+            CompletableFuture<R> future = pendingResponses.remove(commandId);
+            if (future != null) {
+                future.completeExceptionally(exception);
+            }
+        }
+        
+        void completeAllExceptionally(Throwable exception) {
+            for (CompletableFuture<R> future : pendingResponses.values()) {
+                future.completeExceptionally(exception);
+            }
+            pendingResponses.clear();
         }
     }
 }
