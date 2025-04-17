@@ -1,10 +1,15 @@
 package com.github.trex_paxos;
 
+import com.github.trex_paxos.msg.Command;
+import com.github.trex_paxos.msg.DirectMessage;
+import com.github.trex_paxos.msg.TrexMessage;
 import com.github.trex_paxos.network.NetworkAddress;
 import com.github.trex_paxos.network.NetworkLayer;
+import com.github.trex_paxos.network.SystemChannel;
 import lombok.With;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -13,6 +18,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import static com.github.trex_paxos.TrexLogger.LOGGER;
+import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
+import static com.github.trex_paxos.network.SystemChannel.PROXY;
 
 public interface TrexService<C, R> {
     CompletableFuture<R> submit(C command);
@@ -73,7 +80,10 @@ public interface TrexService<C, R> {
          * Convenience method to set both timing parameters at once
          */
         public Config<C, R> withTiming(Duration heartbeat, Duration election) {
-            return this.withHeartbeatInterval(heartbeat).withElectionTimeout(election);
+            return new Config<>(
+                nodeId, endpoints, quorumStrategy, journal, commandHandler,
+                networkLayer, pickler, heartbeat, election, applicationManagesTransactions
+            );
         }
 
         /**
@@ -133,19 +143,24 @@ public interface TrexService<C, R> {
             
             // Generate a unique ID for this command
             String commandId = UUID.randomUUID().toString();
+            UUID uuid = UUID.fromString(commandId);
             
             // Create a future to track the response
             CompletableFuture<R> responseFuture = new CompletableFuture<>();
             responseTracker.register(commandId, responseFuture);
             
             // If we're the leader, process directly
-            if (leaderTracker.isLeader(this.engine.nodeId)) {
+            if (leaderTracker.isLeader(this.engine.nodeId())) {
                 try {
                     // Serialize the command
                     byte[] serializedCommand = config.pickler().serialize(command);
                     
-                    // Submit to the consensus engine
-                    engine.submit(serializedCommand, commandId);
+                    // Create a Command object
+                    Command cmd = new Command(uuid, serializedCommand, (byte)0);
+                    
+                    // Generate consensus messages and transmit them
+                    List<TrexMessage> messages = engine.nextLeaderBatchOfMessages(List.of(cmd));
+                    transmitMessages(messages);
                 } catch (Exception e) {
                     responseTracker.completeExceptionally(commandId, e);
                 }
@@ -155,12 +170,16 @@ public interface TrexService<C, R> {
                 if (leaderId != null) {
                     try {
                         // Forward the command to the leader
-                        // Implementation would depend on the network layer
-                        // and message format
                         NetworkAddress leaderAddress = config.endpoints().get(leaderId);
                         if (leaderAddress != null) {
-                            // Forward command to leader
-                            // This is a placeholder for the actual forwarding logic
+                            // Serialize command
+                            byte[] serializedCommand = config.pickler().serialize(command);
+                            
+                            // Create a Command object to send to the leader
+                            Command cmd = new Command(uuid, serializedCommand, (byte)0);
+                            
+                            // Send to leader via proxy channel
+                            config.networkLayer().send(PROXY.value(), leaderId, cmd);
                         } else {
                             responseTracker.completeExceptionally(commandId, 
                                 new IllegalStateException("Leader address not found"));
@@ -175,6 +194,20 @@ public interface TrexService<C, R> {
             }
             
             return responseFuture;
+        }
+        
+        // Helper method to transmit TrexMessages
+        private void transmitMessages(List<TrexMessage> messages) {
+            // Implementation similar to TrexApp.transmitTrexMessages
+            for (TrexMessage message : messages) {
+                if (message instanceof DirectMessage directMessage) {
+                    config.networkLayer().send(CONSENSUS.value(), new NodeId(directMessage.to()), message);
+                } else {
+                    // Broadcast to all nodes
+                    config.endpoints().forEach((nodeId, address) -> 
+                        config.networkLayer().send(CONSENSUS.value(), nodeId, message));
+                }
+            }
         }
         
         @Override
