@@ -1,11 +1,9 @@
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.msg.Command;
 import com.github.trex_paxos.msg.DirectMessage;
 import com.github.trex_paxos.msg.TrexMessage;
 import com.github.trex_paxos.network.NetworkAddress;
 import com.github.trex_paxos.network.NetworkLayer;
-import com.github.trex_paxos.network.SystemChannel;
 import lombok.With;
 
 import java.time.Duration;
@@ -204,7 +202,7 @@ public interface TrexService<C, R> {
                     config.networkLayer().send(CONSENSUS.value(), new NodeId(directMessage.to()), message);
                 } else {
                     // Broadcast to all nodes
-                    config.endpoints().forEach((nodeId, address) -> 
+                    config.endpoints().forEach((nodeId, _) ->
                         config.networkLayer().send(CONSENSUS.value(), nodeId, message));
                 }
             }
