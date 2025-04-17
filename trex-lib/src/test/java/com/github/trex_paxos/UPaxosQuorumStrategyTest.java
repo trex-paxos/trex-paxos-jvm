@@ -422,12 +422,15 @@ class UPaxosQuorumStrategyTest {
         int weight = random.nextInt(3); // 0, 1, or 2
         weights.put(i, new VotingWeight(i, weight));
       }
-      System.out.println(weights);
+
       short leaderId = weights.values().stream()
           .filter(n -> n.weight() > 1)
           .findFirst()
           .or(() -> weights.values().stream()
               .filter(n -> n.weight() > 0)
+              .findFirst())
+          .or(() -> weights.values().stream()
+              .filter(n -> n.weight() == 0)
               .findFirst())
           .orElseThrow()
           .nodeId().id();
