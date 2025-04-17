@@ -189,7 +189,7 @@ public class UPaxosQuorumStrategy {
     boolean willBecomeZeo =  node != null && node.weight() == 1;
     if( willBecomeZeo ) {
       // if valid then check whether decrementing the node would leave only one node with weight > 0
-      valid &= valid &&
+      valid = valid &&
           weights.stream()
               .filter(n -> !node.equals(n))
               .filter(n -> n.weight() > 0)
@@ -252,6 +252,12 @@ public class UPaxosQuorumStrategy {
 
   public static List<Set<Short>> splitQuorumsWithLeaderCastingVote(short leaderId,
                                                                    Map<Short, VotingWeight> votingWeights) {
+    var totalWeight = votingWeights.values().stream()
+        .mapToInt(VotingWeight::weight)
+        .sum();
+
+    var quorumThreshold = (totalWeight / 2) + 1;
+
     var filteredWeights = votingWeights.entrySet().stream()
         .filter(entry -> entry.getValue().weight() > 0 && entry.getKey() != leaderId)
         .collect(Collectors.toUnmodifiableMap(
@@ -259,47 +265,22 @@ public class UPaxosQuorumStrategy {
             Map.Entry::getValue
         ));
 
-    if (filteredWeights.isEmpty()) {
+    // In order to have a leader casting a vote, we need at least 2 nodes who are not the leader with a none voting weight
+    if (filteredWeights.size() < 2) {
       return List.of(Set.of(), Set.of());
     }
 
-    var totalWeight = filteredWeights.values().stream()
-        .mapToInt(VotingWeight::weight)
-        .sum();
-
-    var quorumThreshold = (totalWeight / 2) + 1;
-
-    var nodes = filteredWeights.keySet();
-
     // Pass leaderId to the method
-    var splitOpt = QuorumSplitGenerator.generateSplit(nodes, quorumThreshold, filteredWeights, votingWeights.get(leaderId));
-
-    if (splitOpt.isPresent()) {
-      var splitResult = splitOpt.get();
-      return List.of(splitResult.setA(), splitResult.setB());
-    }
-
-    return List.of(Set.of(), Set.of());
-  }
-}
-
-class QuorumSplitGenerator {
-  private QuorumSplitGenerator() {
-  } // Package-private constructor
-
-  static Optional<SplitResult> generateSplit(Set<Short> nodes,
-                                             int quorumThreshold,
-                                             Map<Short, VotingWeight> votingWeights,
-                                             VotingWeight leaderVote) {
+    VotingWeight leaderVote = votingWeights.get(leaderId);
     // For small node sets, try all possible partitions
-    final List<Short> nodesList = nodes.stream().toList();
+    final List<Short> nodesList = votingWeights.keySet().stream().toList();
     final var otherNodeCount = nodesList.size();
     // `1 << n` is a bit shift operation that calculates 2^n
     final int bitPerNode = (1 << otherNodeCount);
 
     // Counting in binary from 0 to an int that is one bit set for every node gives all possible partitions
     // For example, if n=3, this loop runs from 1 to 7 (binary: 001, 010, 011, 100, 101, 110, 111)
-    return IntStream.range(1, bitPerNode).mapToObj(i -> {
+    var splitOpt = IntStream.range(1, bitPerNode).mapToObj(i -> {
           // Assign nodes to sets based on bits that are 0/1
           final Set<Short> leftQuorum = new HashSet<>();
           final Set<Short> rightQuorum = new HashSet<>();
@@ -336,8 +317,14 @@ class QuorumSplitGenerator {
               setBWeight + leaderVote.weight() >= quorumThreshold;
         })
         .map(SplitResult::of)
-        .findFirst()
-        ;
+        .findFirst();
+
+    if (splitOpt.isPresent()) {
+      var splitResult = splitOpt.get();
+      return List.of(splitResult.setA(), splitResult.setB());
+    }
+
+    return List.of(Set.of(), Set.of());
   }
 }
 
