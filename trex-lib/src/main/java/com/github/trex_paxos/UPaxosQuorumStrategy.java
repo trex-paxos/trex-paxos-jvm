@@ -185,17 +185,21 @@ public class UPaxosQuorumStrategy {
         .findFirst()
         .orElse(null);
 
-    boolean valid = node != null && node.weight() > 0;
-    boolean willBecomeZeo =  node != null && node.weight() == 1;
-    if( willBecomeZeo ) {
+    // cannot decrement a node that doesn't exist or has weight <= 0
+    if (node == null || node.weight() <= 0) {
+      return false;
+    }
+
+    if( node.weight() == 1 ) {
       // if valid then check whether decrementing the node would leave only one node with weight > 0
-      valid = valid &&
-          weights.stream()
+      return weights.stream()
               .filter(n -> !node.equals(n))
               .filter(n -> n.weight() > 0)
               .count() > 1;
     }
-    return valid;
+
+    // else we can decrement as weight > 1
+    return true;
   }
 
   private static boolean isValidDoubleAllOperation(Set<VotingWeight> weights) {
