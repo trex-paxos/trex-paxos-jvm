@@ -1,3 +1,18 @@
+/*
+ * Copyright 2024 - 2025 Simon Massey
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.DirectMessage;
@@ -6,6 +21,7 @@ import com.github.trex_paxos.network.NetworkAddress;
 import com.github.trex_paxos.network.NetworkLayer;
 import lombok.With;
 
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -15,14 +31,57 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
+
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
 import static com.github.trex_paxos.network.SystemChannel.PROXY;
 
+/**
+ * Main entry point for applications using Trex Paxos consensus.
+ * 
+ * TrexService manages the lifecycle of a Paxos consensus node, handling network communication,
+ * command submission, and result delivery.
+ */
 public interface TrexService<C, R> {
+    /**
+     * Submit a command for consensus processing
+     * 
+     * @param command The command to process
+     * @return A future that will be completed with the result
+     */
     CompletableFuture<R> submit(C command);
+    
+    /**
+     * Start the service
+     */
     void start();
+    
+    /**
+     * Stop the service
+     */
     void stop();
+    
+    /**
+     * Handle incoming consensus messages
+     * 
+     * @param buffer The message data
+     */
+    void handleConsensusMessage(ByteBuffer buffer);
+    
+    /**
+     * Handle incoming proxy messages
+     * 
+     * @param buffer The message data
+     */
+    void handleProxyMessage(ByteBuffer buffer);
+    
+    /**
+     * Get the pickler used by this service
+     * 
+     * @return The pickler
+     */
+    Pickler<C> pickler();
 
     /**
      * Create a new configuration builder with default settings
@@ -43,7 +102,7 @@ public interface TrexService<C, R> {
 
         // Integration points
         Journal journal,
-        BiFunction<Long, C, R> commandHandler,
+        BiFunction<Long, Command, R> commandHandler,
 
         // Network and serialization
         NetworkLayer networkLayer,
@@ -129,6 +188,16 @@ public interface TrexService<C, R> {
             this.leaderTracker = new LeaderTracker();
             this.responseTracker = new ResponseTracker<>();
             this.running = false;
+            
+            // Initialize the node and engine
+            this.node = new TrexNode(
+                TrexLogger.LOGGER.getLevel(),
+                config.nodeId().id(),
+                config.quorumStrategy(),
+                config.journal()
+            );
+            
+            this.engine = new TrexEngine<>(node, config.commandHandler());
         }
         
         @Override
@@ -140,15 +209,15 @@ public interface TrexService<C, R> {
             }
             
             // Generate a unique ID for this command
-            String commandId = UUID.randomUUID().toString();
-            UUID uuid = UUID.fromString(commandId);
+            UUID uuid = UUIDGenerator.generateUUID();
+            String commandId = uuid.toString();
             
             // Create a future to track the response
             CompletableFuture<R> responseFuture = new CompletableFuture<>();
             responseTracker.register(commandId, responseFuture);
             
             // If we're the leader, process directly
-            if (leaderTracker.isLeader(this.engine.nodeId())) {
+            if (leaderTracker.isLeader(config.nodeId())) {
                 try {
                     // Serialize the command
                     byte[] serializedCommand = config.pickler().serialize(command);
@@ -194,9 +263,44 @@ public interface TrexService<C, R> {
             return responseFuture;
         }
         
+        @Override
+        public void handleConsensusMessage(ByteBuffer buffer) {
+            TrexMessage msg = PickleMsg.instance.deserialize(buffer);
+            if (msg == null || msg.from() == engine.nodeIdentifier()) {
+                LOGGER.finer(() -> engine.nodeIdentifier() + " dropping consensus message " + msg);
+                return;
+            }
+
+            var messages = paxosThenUpCall(List.of(msg));
+
+            LOGGER.finer(() -> engine.nodeIdentifier() + " processed " + msg + " responding with " + messages);
+            messages.stream()
+                .filter(m -> m instanceof Fixed)
+                .map(m -> (Fixed) m)
+                .forEach(leaderTracker::updateFromFixed);
+
+            transmitMessages(messages);
+        }
+        
+        @Override
+        public void handleProxyMessage(ByteBuffer buffer) {
+            Command cmd = Pickle.instance.deserialize(buffer);
+            if (!engine.isLeader()) {
+                LOGGER.finest(() -> String.format("[Node %d] Not leader, dropping proxy: %s", 
+                    config.nodeId().id(), cmd.uuid()));
+                return;
+            }
+            LOGGER.fine(() -> engine.nodeIdentifier() + " leader received proxied message " + cmd.uuid());
+            try {
+                var messages = engine.nextLeaderBatchOfMessages(List.of(cmd));
+                transmitMessages(messages);
+            } catch (Exception e) {
+                LOGGER.severe(() -> engine.nodeIdentifier() + " handleProxyMessage failed: " + e.getMessage());
+            }
+        }
+        
         // Helper method to transmit TrexMessages
         private void transmitMessages(List<TrexMessage> messages) {
-            // Implementation similar to TrexApp.transmitTrexMessages
             for (TrexMessage message : messages) {
                 if (message instanceof DirectMessage directMessage) {
                     config.networkLayer().send(CONSENSUS.value(), new NodeId(directMessage.to()), message);
@@ -208,6 +312,21 @@ public interface TrexService<C, R> {
             }
         }
         
+        /**
+         * Processes messages through Paxos and handles results.
+         */
+        private List<TrexMessage> paxosThenUpCall(List<TrexMessage> messages) {
+            LOGGER.finer(() -> engine.nodeIdentifier() + " paxosThenUpCall input: " + messages);
+            EngineResult<R> result = engine.paxos(messages);
+            result.results().forEach(hostResult -> {
+                LOGGER.fine(() -> engine.nodeIdentifier() + " completing callback for " + hostResult.uuid());
+                responseTracker.complete(hostResult.uuid().toString(), hostResult.result());
+            });
+            final var response = result.messages();
+            LOGGER.finer(() -> engine.nodeIdentifier() + " paxosThenUpCall output: " + response);
+            return response;
+        }
+        
         @Override
         public void start() {
             if (running) {
@@ -215,17 +334,6 @@ public interface TrexService<C, R> {
             }
             
             try {
-                // Initialize the node and engine
-                node = createTrexNode();
-                engine = createTrexEngine();
-                
-                // Set up network listeners
-                setupNetworkListeners();
-                
-                // Schedule heartbeats and election timeouts
-                scheduleHeartbeat();
-                scheduleElection();
-                
                 running = true;
                 
                 LOGGER.info("TrexService started with node ID: " +
@@ -270,40 +378,17 @@ public interface TrexService<C, R> {
             LOGGER.info("TrexService stopped");
         }
         
-        private TrexNode createTrexNode() {
-            // Create and configure the TrexNode based on config
-            // This would include setting up the node with the proper
-            // configuration, journal, etc.
-            return null; // Placeholder
+        @Override
+        public Pickler<C> pickler() {
+            return config.pickler();
         }
         
-        private TrexEngine<R> createTrexEngine() {
-            // Create and configure the TrexEngine based on config
-            // This would include setting up the engine with the node,
-            // command handler, etc.
-            return null; // Placeholder
-        }
-        
-        private void setupNetworkListeners() {
-            // Set up listeners for network messages
-            // This would include registering handlers for different
-            // message types with the network layer
-        }
-        
-        private void scheduleHeartbeat() {
-            // Schedule heartbeat messages to be sent periodically
-            // This would use the configured heartbeat interval
-        }
-        
-        private void scheduleElection() {
-            // Schedule election timeout checks
-            // This would use the configured election timeout
-        }
-        
-        private void handleMessage(Object message) {
-            // Handle different types of messages
-            // This would include handling consensus messages,
-            // forwarded commands, etc.
+        /**
+         * Set this node as the leader (for testing)
+         */
+        public void setLeader() {
+            engine.setLeader();
+            leaderTracker.setLeader(config.nodeId());
         }
     }
     
@@ -312,6 +397,10 @@ public interface TrexService<C, R> {
      */
     class LeaderTracker {
         final AtomicReference<NodeId> currentLeaderId = new AtomicReference<>(null);
+        
+        void updateFromFixed(Fixed msg) {
+            setLeader(new NodeId(msg.leader()));
+        }
         
         void setLeader(NodeId nodeId) {
             currentLeaderId.set(nodeId);
