@@ -41,61 +41,7 @@ public class StackServiceImpl2 implements StackService {
 
   // TrexService for consensus
   private final TrexService<Value, Response> service;
-  
-  // Create pickler for Value objects
-  final Pickler<Value> valuePickler = SealedRecordsPickler.createPickler(Value.class);
 
-  private final short nodeId;
-
-  @SuppressWarnings("unchecked") // Type erasure is the original sin of Java
-  <T> BiFunction<Long, Command, T> createCommandHandler() {
-    return (slot, cmd) -> {
-      final var value = valuePickler.deserialize(cmd.operationBytes());
-      LOGGER.fine(() -> "Node " + nodeId + " processing command: " + value.getClass().getSimpleName());
-
-      // Synchronize on the stack to ensure thread safety
-      synchronized (stack) {
-        try {
-          // Use exhaustive pattern matching with switch expression
-          return switch (value) {
-            case Push p -> {
-              LOGGER.fine(() -> String.format("Node %d pushing: %s, current size: %d",
-                  nodeId, p.item(), stack.size()));
-              stack.push(p.item());
-              LOGGER.fine(() -> String.format("Node %d push complete, new size: %d",
-                  nodeId, stack.size()));
-              yield (T) new Response(Optional.empty());
-            }
-            case Pop _ -> {
-              if (stack.isEmpty()) {
-                LOGGER.fine(() -> "Node " + nodeId + " attempted pop on empty stack");
-                yield (T) new Response(Optional.of("Stack is empty"));
-              }
-              var item = stack.pop();
-              LOGGER.fine(() -> String.format("Node %d popped: %s, new size: %d",
-                  nodeId, item, stack.size()));
-              yield (T) new Response(Optional.of(item));
-            }
-            case Peek _ -> {
-              if (stack.isEmpty()) {
-                LOGGER.fine(() -> "Node " + nodeId + " attempted peek on empty stack");
-                yield (T) new Response(Optional.of("Stack is empty"));
-              }
-              var item = stack.peek();
-              LOGGER.fine(() -> String.format("Node %d peeked: %s, size: %d",
-                  nodeId, item, stack.size()));
-              yield (T) new Response(Optional.of(item));
-            }
-          };
-        } catch (EmptyStackException e) {
-          LOGGER.warning(() -> String.format("Node %d slot %d stack operation failed: %s",
-              nodeId, slot, e.getMessage()));
-          return (T) new Response(Optional.of("Stack is empty"));
-        }
-      }
-    };
-  }
-  
   /**
    * Configure logging levels for the stack service and related components
    */
@@ -132,22 +78,70 @@ public class StackServiceImpl2 implements StackService {
 
   StackServiceImpl2(short nodeId, Supplier<Legislators> legislatorsSupplier, TestNetworkLayer networkLayer) {
     LOGGER.fine(() -> "Creating node " + nodeId);
-    this.nodeId = nodeId;
-    
+
+    // Create pickler for Value objects
+    final Pickler<Value> valuePickler = SealedRecordsPickler.createPickler(Value.class);
+
     // Create command handler function
+    BiFunction<Long, Command, Response> commandHandler = (slot, cmd) -> {
+      final var value = valuePickler.deserialize(cmd.operationBytes());
+      LOGGER.fine(() -> "Node " + nodeId + " processing command: " + value.getClass().getSimpleName());
+
+      // Synchronize on the stack to ensure thread safety
+      synchronized (stack) {
+        try {
+          // Use exhaustive pattern matching with switch expression
+          return switch (value) {
+            case Push p -> {
+              LOGGER.fine(() -> String.format("Node %d pushing: %s, current size: %d",
+                  nodeId, p.item(), stack.size()));
+              stack.push(p.item());
+              LOGGER.fine(() -> String.format("Node %d push complete, new size: %d",
+                  nodeId, stack.size()));
+              yield new Response(Optional.empty());
+            }
+            case Pop _ -> {
+              if (stack.isEmpty()) {
+                LOGGER.fine(() -> "Node " + nodeId + " attempted pop on empty stack");
+                yield new Response(Optional.of("Stack is empty"));
+              }
+              var item = stack.pop();
+              LOGGER.fine(() -> String.format("Node %d popped: %s, new size: %d",
+                  nodeId, item, stack.size()));
+              yield new Response(Optional.of(item));
+            }
+            case Peek _ -> {
+              if (stack.isEmpty()) {
+                LOGGER.fine(() -> "Node " + nodeId + " attempted peek on empty stack");
+                yield new Response(Optional.of("Stack is empty"));
+              }
+              var item = stack.peek();
+              LOGGER.fine(() -> String.format("Node %d peeked: %s, size: %d",
+                  nodeId, item, stack.size()));
+              yield new Response(Optional.of(item));
+            }
+          };
+        } catch (EmptyStackException e) {
+          LOGGER.warning(() -> String.format("Node %d slot %d stack operation failed: %s",
+              nodeId, slot, e.getMessage()));
+          return new Response(Optional.of("Stack is empty"));
+        }
+      }
+    };
 
     // Create journal
     Journal journal = new TransparentJournal(nodeId);
+
     // Create quorum strategy
     QuorumStrategy quorum = new SimpleMajority(2);
 
     // Build configuration for TrexService
-    TrexService.Config<Value, Response> config = TrexService.config()
+    TrexService.Config<Value, Response> config = TrexService.<Value, Response>config()
         .withNodeId(new NodeId(nodeId))
         .withLegislatorsSupplier(legislatorsSupplier)
         .withQuorumStrategy(quorum)
         .withJournal(journal)
-        .withCommandHandler(createCommandHandler())
+        .withCommandHandler(commandHandler)
         .withNetworkLayer(networkLayer)
         .withPickler(valuePickler)
         .withTiming(Duration.ofMillis(500), Duration.ofSeconds(2));

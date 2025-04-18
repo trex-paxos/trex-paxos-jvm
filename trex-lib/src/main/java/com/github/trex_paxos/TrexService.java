@@ -85,7 +85,18 @@ public interface TrexService<C, R> {
    * Create a new configuration builder with default settings
    */
   static <C, R> Config<C, R> config() {
-    return Config.defaults();
+    return new Config<>(
+        null,                  // nodeId
+        null,                  // legislatorsSupplier
+        null,                  // quorumStrategy
+        null,                  // journal
+        null,                  // commandHandler
+        null,                  // networkLayer
+        null,                  // pickler
+        Duration.ofMillis(500), // heartbeatInterval
+        Duration.ofSeconds(3),  // electionTimeout
+        false                  // applicationManagesTransactions
+    );
   }
 
   /**
@@ -113,23 +124,6 @@ public interface TrexService<C, R> {
       // Advanced settings
       boolean applicationManagesTransactions
   ) {
-    /**
-     * Creates a default configuration with sensible defaults where possible
-     */
-    public static <C, R> Config<C, R> defaults() {
-      return new Config<>(
-          null,                  // nodeId
-          null,                  // legislatorsSupplier
-          null,                  // quorumStrategy
-          null,                  // journal
-          null,                  // commandHandler
-          null,                  // networkLayer
-          null,                  // pickler
-          Duration.ofMillis(500), // heartbeatInterval
-          Duration.ofSeconds(2),  // electionTimeout
-          false                  // applicationManagesTransactions
-      );
-    }
 
     /**
      * Convenience method to set both timing parameters at once
