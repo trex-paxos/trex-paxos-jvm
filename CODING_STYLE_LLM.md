@@ -51,6 +51,31 @@ This file is a Gen AI summary of CODEING_STYLE.md to use less tokens of context 
 * Support immutability throughout processing
 * Example: `IntStream.range(0, 100).filter(i -> i % 2 == 0).sum()` instead of counting loops
 
+## Documentation
+
+IMPORTANT: You must not write JavaDoc comments that start with `/**` and end with `*/`
+IMPORTANT: You must "JEP 467: Markdown Documentation Comments" that start all lines with `///`
+
+Here is an example of the correct format for documentation comments:
+
+```java
+/// Returns a hash code value for the object. This method is
+/// supported for the benefit of hash tables such as those provided by
+/// [java.util.HashMap].
+///
+/// The general contract of `hashCode` is:
+///
+///   - Whenever it is invoked on the same object more than once during
+///     an execution of a Java application, the `hashCode` method
+///   - If two objects are equal according to the
+///     [equals][#equals(Object)] method, then calling the
+///   - It is _not_ required that if two objects are unequal
+///     according to the [equals][#equals(Object)] method, then
+///
+/// @return a hash code value for this object.
+/// @see     java.lang.Object#equals(java.lang.Object)
+```
+
 ## JEP References
 
 [JEP 467](https://openjdk.org/jeps/467): Markdown Documentation in JavaDoc

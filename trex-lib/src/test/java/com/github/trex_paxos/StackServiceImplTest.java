@@ -1,8 +1,11 @@
-// SPDX-FileCopyrightText: 2024 - 2025 Simon Massey
-// SPDX-License-Identifier: Apache-2.0
+/*
+ * // SPDX-FileCopyrightText: 2024 - 2025 Simon Massey
+ * // SPDX-License-Identifier: Apache-2.0
+ */
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.network.*;
+import com.github.trex_paxos.network.PickleMsg;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,19 +31,32 @@ public class StackServiceImplTest {
 
     StackServiceImpl.setLogLevel(Level.parse(logLevel));
 
-    Supplier<NodeEndpoint> members = () -> new NodeEndpoint(
-        Map.of(new NodeId((short) 1), new NetworkAddress("localhost", 5000),
-            new NodeId((short) 2), new NetworkAddress("localhost", 5001)));
-
-    NetworkLayer networkLayer1 = new TestNetworkLayer(new NodeId((short) 1),
-        Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), Pickle.instance)
-    );
-    NetworkLayer networkLayer2 = new TestNetworkLayer(new NodeId((short) 1),
-        Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), Pickle.instance)
+    Supplier<Legislators> members = () -> Legislators.of(
+        new VotingWeight(new NodeId((short) 1), 1),
+        new VotingWeight(new NodeId((short) 2), 1),
+        new VotingWeight(new NodeId((short) 3), 1)
     );
 
-    stackService1 = new StackServiceImpl((short)1, members, networkLayer1);
-    stackService2 = new StackServiceImpl((short)2, members, networkLayer2);
+    TestNetworkLayer networkLayer1 = new TestNetworkLayer(new NodeId((short) 1),
+        Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), Pickle.instance)
+    );
+    TestNetworkLayer networkLayer2 = new TestNetworkLayer(new NodeId((short) 1),
+        Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), Pickle.instance)
+    );
+
+    stackService1 = new StackServiceImpl((short) 1, members, networkLayer1);
+    stackService2 = new StackServiceImpl((short) 2, members, networkLayer2);
+
+    // Make sure stackService2 knows that node 1 is the leader
+    // This simulates stackService2 receiving a Fixed message with node 1 as leader
+    ((TrexService.Implementation<StackService.Value, StackService.Response>)
+        stackService2.service()).getLeaderTracker().setLeader(new NodeId((short)1));
+  }
+
+  @AfterEach
+  void tearDown() {
+    if (stackService1 != null) stackService1.stop();
+    if (stackService2 != null) stackService2.stop();
   }
 
   @Test
@@ -50,12 +66,12 @@ public class StackServiceImplTest {
     stackService1.push("second");
 
     // then we can still peek and pop correctly from the second node
-    assertEquals("second", stackService2.peek().value().orElseThrow());
-    assertEquals("second", stackService2.pop().value().orElseThrow());
-    assertEquals("first", stackService2.pop().value().orElseThrow());
+    assertEquals("second", stackService2.peek().payload());
+    assertEquals("second", stackService2.pop().payload());
+    assertEquals("first", stackService2.pop().payload());
 
     // and empty stack returns expected message
-    assertEquals("Stack is empty", stackService2.pop().value().orElseThrow());
+    assertEquals("Stack is empty", stackService2.pop().payload());
   }
 
   @Test
@@ -72,3 +88,4 @@ public class StackServiceImplTest {
         future.get(1, TimeUnit.SECONDS));
   }
 }
+

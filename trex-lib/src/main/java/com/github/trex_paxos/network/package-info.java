@@ -7,7 +7,7 @@
 /// - `Channel`: Defines CONSENSUS and PROXY channels
 /// - `NodeId`: Unique node identifier within cluster
 /// - `NetworkAddress`: TrexNetwork location abstraction
-/// - `NodeEndpoint`: Cluster topology management
+/// - `NodeEndpoints`: Cluster topology management
 ///
 /// Design characteristics:
 /// 1. Only COMMAND objects are sent between nodes

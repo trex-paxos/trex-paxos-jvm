@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.github.trex_paxos.paxe;
 
-import com.github.trex_paxos.network.NodeEndpoint;
+import com.github.trex_paxos.network.NodeEndpoints;
 import com.github.trex_paxos.network.NetworkAddress;
 import com.github.trex_paxos.NodeId;
 
@@ -79,8 +79,8 @@ public class NetworkTestHarness implements AutoCloseable {
     LOGGER.finest(() -> String.format("Generated verifier for %d", nodeId));
 
     Supplier<Map<NodeId, NodeVerifier>> verifierLookup = () -> verifierMap;
-    Supplier<NodeEndpoint> membershipSupplier = () ->
-        new NodeEndpoint(new HashMap<>(addressMap));
+    Supplier<NodeEndpoints> membershipSupplier = () ->
+        new NodeEndpoints(new HashMap<>(addressMap));
 
     SessionKeyManager keyManager = new SessionKeyManager(
         id,

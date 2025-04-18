@@ -34,10 +34,25 @@
             <version>3.26.3</version>
             <scope>test</scope>
         </dependency>
+        <!--
+        The JetBrains annotations are used to provide @TestOnly and @NotNull annotations.
+        The @TestOnly is code smell that functional programming should help to remove.
+        These annotations are build time only.
+        -->
         <dependency>
             <groupId>org.jetbrains</groupId>
             <artifactId>annotations</artifactId>
-            <version>24.0.1</version>
+            <version>26.0.2</version>
+            <scope>provided</scope>
+        </dependency>
+        <!--
+        @With is used to polyfill 'with' until JEP 468 removes the need for it.
+        These annotations are build time only.
+        -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.38</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
@@ -52,6 +67,13 @@
                         <arg>-Werror</arg>
                         <arg>--enable-preview</arg>
                     </compilerArgs>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>1.18.38</version>
+                        </path>
+                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
             <plugin>

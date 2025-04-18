@@ -10,9 +10,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-
+record ChannelAndSubscriber(Channel channel, ChannelSubscription subscriber) {
+}
 class InMemoryNetwork {
-  private final List<StackServiceImpl.ChannelAndSubscriber> handlers = new ArrayList<>();
+  private final List<ChannelAndSubscriber> handlers = new ArrayList<>();
   private final LinkedBlockingQueue<NetworkMessage> messageQueue = new LinkedBlockingQueue<>();
   private volatile boolean running = true;
 
@@ -30,7 +31,7 @@ class InMemoryNetwork {
   }
 
   public void subscribe(Channel channel, ChannelSubscription handler) {
-    StackServiceImpl.ChannelAndSubscriber channelAndSubscriber = new StackServiceImpl.ChannelAndSubscriber(channel, handler);
+    ChannelAndSubscriber channelAndSubscriber = new ChannelAndSubscriber(channel, handler);
     handlers.add(channelAndSubscriber);
   }
 

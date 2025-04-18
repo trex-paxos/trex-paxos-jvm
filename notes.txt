@@ -1,3 +1,6 @@
+mvn versions:display-dependency-updates
+mvn versions:display-plugin-updates
+
 
 mvn -DskipTests clean install && mvn test -pl trex-lib
 
@@ -17,6 +20,8 @@ npx repomix@latest
 # run just one test
 mvn -DskipTests clean package && \
     mvn test -Dtest=PickleHandshakeTest -pl trex-paxe
+
+mvn -DskipTests clean package && mvn test -pl trex-lib
 
 # just run subpackage tests
 mvn -DskipTests clean install && \

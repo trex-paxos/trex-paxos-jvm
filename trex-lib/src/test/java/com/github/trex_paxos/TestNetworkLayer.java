@@ -12,7 +12,7 @@ import java.util.function.Supplier;
 
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 
-class TestNetworkLayer implements NetworkLayer {
+public class TestNetworkLayer implements NetworkLayer {
   static final InMemoryNetwork network = new InMemoryNetwork();
   private final Map<Channel, Pickler<?>> picklers;
   private final NodeId nodeId;
@@ -41,8 +41,8 @@ class TestNetworkLayer implements NetworkLayer {
   }
 
   @Override
-  public <T> void broadcast(Supplier<NodeEndpoint> membershipSupplier, Channel channel, T msg) {
-    NodeEndpoint membership = membershipSupplier.get();
+  public <T> void broadcast(Supplier<Legislators> membershipSupplier, Channel channel, T msg) {
+    Legislators membership = membershipSupplier.get();
     var others = new HashSet<>(membership.otherNodes(nodeId));
     others.forEach(nodeId -> send(channel, nodeId, msg));
   }

@@ -3,7 +3,7 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.*;
-import org.jetbrains.annotations.TestOnly;
+import org.jetbrains.annotations.TestOnly;  // TODO can we refactor to functional programming to avoid this?
 
 import java.util.*;
 import java.util.logging.Level;
@@ -93,7 +93,7 @@ public class TrexNode {
   /// The durable storage and durable log.
   final Journal journal;
 
-  /// The quorum strategy that may be a SimpleMakority or a FlexiblePaxosQuorumStrategy.
+  /// The quorum strategy that may be a SimpleMajority or a FlexiblePaxosQuorumStrategy.
   final QuorumStrategy quorumStrategy;
 
   /// If we have rebooted then we start off as a follower.
@@ -840,7 +840,7 @@ class ErrorStrings {
   static final String PROTOCOL_VIOLATION_NUMBER = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the promise has decreased.";
   static final String PROTOCOL_VIOLATION_INDEX = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the fixed slot index has decreased.";
   static final String PROTOCOL_VIOLATION_SLOT_FIXING = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the promise has been changed when the message is not a LearningMessage type.";
-  static final String CRASHED = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted) is now the only source of truth.";
-  static final String COMMAND_INDEXES = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued results that do not align to its committed slot index: ";
-  static final String COMMAND_GAPS = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued results that are not sequential in commited slot index: ";
+  static final String CRASHED = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted) is now the only source of truth.";
+  static final String COMMAND_INDEXES = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED This node has issued results that do not align to its committed slot index: ";
+  static final String COMMAND_GAPS = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED This node has issued results that are not sequential in commited slot index: ";
 }
