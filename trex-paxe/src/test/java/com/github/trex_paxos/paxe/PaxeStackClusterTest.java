@@ -17,8 +17,8 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class PaxeStackClusterTest {
   private static final Duration TEST_TIMEOUT = Duration.ofMillis(500);
@@ -65,11 +65,19 @@ class PaxeStackClusterTest {
 
     LOGGER.info("Starting applications");
 
-    // Allow time for leader election and initialization
-    Thread.sleep(50);
+    // Explicitly set up the leader
+    // Set node 1 as the leader
+    ((TrexService.TrexServiceImpl<StackService.Value, StackService.Response>)
+        stackService1.service()).setLeader();
+
+    // Make sure node 2 knows that node 1 is the leader
+    ((TrexService.TrexServiceImpl<StackService.Value, StackService.Response>)
+        stackService2.service()).getLeaderTracker().setLeader(new NodeId((short) 1));
+
+    // Allow time for initialization - increased from 50ms
+    Thread.sleep(100);
     LOGGER.fine("Test setup complete");
   }
-
   @Test
   void testBasicStackOperations() throws Exception {
     LOGGER.info("Testing basic stack operations");
@@ -85,18 +93,18 @@ class PaxeStackClusterTest {
     // Peek - should see "second"
     LOGGER.info("Testing peek operation");
     StackService.Response peekResponse = stackService2.peek();
-    final var peeked = peekResponse.value().orElse(null);
+    final var peeked = peekResponse.payload();
     assertEquals("second", peeked);
 
     // Pop twice and verify ordering
     LOGGER.info("Testing first pop operation");
     StackService.Response popResponse1 = stackService2.pop();
-    final var popped1 = popResponse1.value().orElse(null);
+    final var popped1 = popResponse1.payload();
     assertEquals("second", popped1);
 
     LOGGER.info("Testing second pop operation");
     StackService.Response popResponse2 = stackService2.pop();
-    final var popped2 = popResponse2.value().orElse(null);
+    final var popped2 = popResponse2.payload();
     assertEquals("first", popped2);
 
     LOGGER.info("Basic stack operations test completed successfully");
@@ -116,7 +124,8 @@ class PaxeStackClusterTest {
 
     // Should throw exception due to network failure
     LOGGER.info("Attempting operation on failed network");
-    assertThrows(Exception.class, () -> stackService2.push("should-fail"));
+    final var error = stackService2.push("should-fail");
+    assertThat(error).isInstanceOf(StackService.Failure.class);
 
     LOGGER.info("Node failure test completed successfully");
   }

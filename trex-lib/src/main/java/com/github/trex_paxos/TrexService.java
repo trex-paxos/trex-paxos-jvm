@@ -396,7 +396,8 @@ public interface TrexService<C, R> {
       setLeader(new NodeId(msg.leader()));
     }
 
-    void setLeader(NodeId nodeId) {
+    @TestOnly
+    public void setLeader(NodeId nodeId) {
       currentLeaderId.set(nodeId);
     }
 

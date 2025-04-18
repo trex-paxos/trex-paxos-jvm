@@ -20,7 +20,6 @@ import com.github.trex_paxos.network.NetworkLayer;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.EmptyStackException;
-import java.util.Optional;
 import java.util.Stack;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -91,33 +90,33 @@ public class StackServiceImpl implements StackService {
               stack.push(p.item());
               LOGGER.fine(() -> String.format("Node %d push complete, new size: %d",
                   nodeId, stack.size()));
-              yield new Response(Optional.empty());
+              yield Response.success(null);
             }
             case Pop _ -> {
               if (stack.isEmpty()) {
                 LOGGER.fine(() -> "Node " + nodeId + " attempted pop on empty stack");
-                yield new Response(Optional.of("Stack is empty"));
+                yield Response.success("Stack is empty");
               }
               var item = stack.pop();
               LOGGER.fine(() -> String.format("Node %d popped: %s, new size: %d",
                   nodeId, item, stack.size()));
-              yield new Response(Optional.of(item));
+              yield Response.success(item);
             }
             case Peek _ -> {
               if (stack.isEmpty()) {
                 LOGGER.fine(() -> "Node " + nodeId + " attempted peek on empty stack");
-                yield new Response(Optional.of("Stack is empty"));
+                yield Response.success("Stack is empty");
               }
               var item = stack.peek();
               LOGGER.fine(() -> String.format("Node %d peeked: %s, size: %d",
                   nodeId, item, stack.size()));
-              yield new Response(Optional.of(item));
+              yield Response.success(item);
             }
           };
         } catch (EmptyStackException e) {
           LOGGER.warning(() -> String.format("Node %d slot %d stack operation failed: %s",
               nodeId, slot, e.getMessage()));
-          return new Response(Optional.of("Stack is empty"));
+          return Response.success("Stack is empty");
         }
       }
     };
@@ -169,9 +168,9 @@ public class StackServiceImpl implements StackService {
     var future = new CompletableFuture<Response>();
     service.submit(new Push(item))
         .thenAccept(future::complete)
-        .exceptionally(ex -> {
-          LOGGER.warning(() -> String.format("Push failed: %s", ex.getMessage()));
-          future.complete(new Response(Optional.of("Error: " + ex.getMessage())));
+        .exceptionally(e -> {
+          LOGGER.warning(() -> String.format("Push failed: %s", e.getMessage()));
+          future.complete(Response.failure(e));
           return null;
         });
 
@@ -181,7 +180,7 @@ public class StackServiceImpl implements StackService {
       return response;
     } catch (Exception e) {
       LOGGER.warning(() -> String.format("Push failed: %s", e.getMessage()));
-      return new Response(Optional.of("Error: " + e.getMessage()));
+      return Response.failure(e);
     }
   }
 
@@ -190,19 +189,19 @@ public class StackServiceImpl implements StackService {
     var future = new CompletableFuture<Response>();
     service.submit(new Pop())
         .thenAccept(future::complete)
-        .exceptionally(ex -> {
-          LOGGER.warning(() -> String.format("Pop failed: %s", ex.getMessage()));
-          future.complete(new Response(Optional.of("Error: " + ex.getMessage())));
+        .exceptionally(e -> {
+          LOGGER.warning(() -> String.format("Pop failed: %s", e.getMessage()));
+          future.complete(Response.failure(e));
           return null;
         });
 
     try {
       var response = future.get(1, TimeUnit.SECONDS);
-      LOGGER.fine(() -> String.format("Pop completed: %s", response.value().orElse("empty")));
+      LOGGER.fine(() -> String.format("Pop completed: %s", response));
       return response;
     } catch (Exception e) {
       LOGGER.warning(() -> String.format("Pop failed: %s", e.getMessage()));
-      return new Response(Optional.of("Error: " + e.getMessage()));
+      return Response.failure(e);
     }
   }
 
@@ -211,26 +210,26 @@ public class StackServiceImpl implements StackService {
     var future = new CompletableFuture<Response>();
     service.submit(new Peek())
         .thenAccept(future::complete)
-        .exceptionally(ex -> {
-          LOGGER.warning(() -> String.format("Peek failed: %s", ex.getMessage()));
-          future.complete(new Response(Optional.of("Error: " + ex.getMessage())));
+        .exceptionally(e -> {
+          LOGGER.warning(() -> String.format("Peek failed: %s", e.getMessage()));
+          future.complete(Response.failure(e));
           return null;
         });
 
     try {
       var response = future.get(1, TimeUnit.SECONDS);
-      LOGGER.fine(() -> String.format("Peek completed: %s", response.value().orElse("empty")));
+      LOGGER.fine(() -> String.format("Peek completed: %s", response));
       return response;
     } catch (Exception e) {
       LOGGER.warning(() -> String.format("Peek failed: %s", e.getMessage()));
-      return new Response(Optional.of("Error: " + e.getMessage()));
+      return Response.failure(e);
     }
   }
 
   /**
    * Get the underlying TrexService for testing
    */
-  TrexService<Value, Response> service() {
+  public TrexService<Value, Response> service() {
     return service;
   }
 

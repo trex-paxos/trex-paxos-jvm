@@ -66,12 +66,12 @@ public class StackServiceImplTest {
     stackService1.push("second");
 
     // then we can still peek and pop correctly from the second node
-    assertEquals("second", stackService2.peek().value().orElseThrow());
-    assertEquals("second", stackService2.pop().value().orElseThrow());
-    assertEquals("first", stackService2.pop().value().orElseThrow());
+    assertEquals("second", stackService2.peek().payload());
+    assertEquals("second", stackService2.pop().payload());
+    assertEquals("first", stackService2.pop().payload());
 
     // and empty stack returns expected message
-    assertEquals("Stack is empty", stackService2.pop().value().orElseThrow());
+    assertEquals("Stack is empty", stackService2.pop().payload());
   }
 
   @Test
