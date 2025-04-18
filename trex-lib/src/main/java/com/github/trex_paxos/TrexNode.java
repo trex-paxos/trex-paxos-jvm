@@ -840,7 +840,7 @@ class ErrorStrings {
   static final String PROTOCOL_VIOLATION_NUMBER = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the promise has decreased.";
   static final String PROTOCOL_VIOLATION_INDEX = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the fixed slot index has decreased.";
   static final String PROTOCOL_VIOLATION_SLOT_FIXING = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED  Paxos Protocol Violation the promise has been changed when the message is not a LearningMessage type.";
-  static final String CRASHED = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted) is now the only source of truth.";
-  static final String COMMAND_INDEXES = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued results that do not align to its committed slot index: ";
-  static final String COMMAND_GAPS = TrexNode.class.getCanonicalName() + "FATAL SEVERE ERROR CRASHED This node has issued results that are not sequential in commited slot index: ";
+  static final String CRASHED = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR  CRASHED This node has crashed and must be rebooted. The durable journal state (if not corrupted) is now the only source of truth.";
+  static final String COMMAND_INDEXES = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED This node has issued results that do not align to its committed slot index: ";
+  static final String COMMAND_GAPS = TrexNode.class.getCanonicalName() + " FATAL SEVERE ERROR CRASHED This node has issued results that are not sequential in commited slot index: ";
 }
