@@ -37,55 +37,40 @@ import static com.github.trex_paxos.TrexLogger.LOGGER;
 import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
 import static com.github.trex_paxos.network.SystemChannel.PROXY;
 
-/**
- * Main entry point for applications using Trex Paxos consensus.
- *
- * TrexService manages the lifecycle of a Paxos consensus node, handling network communication,
- * command submission, and result delivery.
- */
-public interface TrexService<C, R> {
-  /**
-   * Submit a command for consensus processing
-   *
-   * @param command The command to process
-   * @return A future that will be completed with the result
-   */
-  CompletableFuture<R> submit(C command);
+/// TrexService is an interface that defines the core functionality of a Paxos consensus service.
+///
+/// The class is parameterized by:
+/// - COMMAND - The application-specific command type that will be submitted for consensus
+/// - RESULT - The application-specific result type produced after a command is chosen
+///
+/// @param <COMMAND> The type of commands submitted to the consensus algorithm
+/// @param <RESULT> The type of results produced after commands are chosen
+/// TODO the proxying to the leader has no resilience i am in two minds whether that is okay
+public sealed interface TrexService<COMMAND, RESULT> permits TrexService.Implementation {
+  /// Submit a command for consensus processing
+  ///
+  /// @param command The command to process
+  /// @return A future that will be completed with the result
+  CompletableFuture<RESULT> submit(COMMAND command);
 
-  /**
-   * Start the service
-   */
+  /// Start the service
   void start();
 
-  /**
-   * Stop the service
-   */
+  /// Stop the service
   void stop();
 
-  /**
-   * Handle incoming consensus messages
-   *
-   * @param buffer The message data
-   */
+  /// Handle incoming consensus messages
   void handleConsensusMessage(TrexMessage msg);
 
-  /**
-   * Handle incoming proxy messages
-   *
-   * @param buffer The message data
-   */
+  /// Handle incoming proxy messages
   void handleProxyMessage(Command cmd);
 
-  /**
-   * Get the pickler used by this service
-   *
-   * @return The pickler
-   */
-  Pickler<C> pickler();
+  /// Get the pickler used by this service
+  ///
+  /// @return The pickler
+  Pickler<COMMAND> pickler();
 
-  /**
-   * Create a new configuration builder with default settings
-   */
+  /// Create a new configuration builder with default settings
   static <C, R> Config<C, R> config() {
     return new Config<>(
         null,                  // nodeId
@@ -101,9 +86,7 @@ public interface TrexService<C, R> {
     );
   }
 
-  /**
-   * Immutable configuration for building a TrexService instance
-   */
+  /// Immutable configuration for building a TrexService instance
   @With
   record Config<C, R>(
       // Core cluster configuration
@@ -127,9 +110,7 @@ public interface TrexService<C, R> {
       boolean applicationManagesTransactions
   ) {
 
-    /**
-     * Convenience method to set both timing parameters at once
-     */
+    /// Convenience method to set both timing parameters at once
     public Config<C, R> withTiming(Duration heartbeat, Duration election) {
       return new Config<>(
           nodeId, legislatorsSupplier, quorumStrategy, journal, commandHandler,
@@ -137,9 +118,7 @@ public interface TrexService<C, R> {
       );
     }
 
-    /**
-     * Builds the TrexService from the configuration
-     */
+    /// Builds the TrexService from the configuration
     public TrexService<C, R> build() {
       // Validate configuration
       if (nodeId == null) throw new IllegalStateException("NodeId must be specified");
@@ -151,14 +130,12 @@ public interface TrexService<C, R> {
       if (pickler == null) throw new IllegalStateException("Pickler must be specified");
 
       // Create and return the service implementation
-      return new TrexServiceImpl<>(this);
+      return new Implementation<>(this);
     }
   }
 
-  /**
-   * Implementation of TrexService that manages the consensus process
-   */
-  class TrexServiceImpl<C, R> implements TrexService<C, R> {
+  /// Implementation of TrexService that manages the consensus process
+  final class Implementation<C, R> implements TrexService<C, R> {
     // Configuration
     final Config<C, R> config;
 
@@ -177,7 +154,7 @@ public interface TrexService<C, R> {
     // State
     volatile boolean running;
 
-    TrexServiceImpl(Config<C, R> config) {
+    Implementation(Config<C, R> config) {
       this.config = config;
       this.leaderTracker = new LeaderTracker();
       this.responseTracker = new ResponseTracker<>();
@@ -298,9 +275,7 @@ public interface TrexService<C, R> {
       }
     }
 
-    /**
-     * Processes messages through Paxos and handles results.
-     */
+    /// Processes messages through Paxos and handles results.
     private List<TrexMessage> paxosThenUpCall(List<TrexMessage> messages) {
       LOGGER.finer(() -> engine.nodeIdentifier() + " paxosThenUpCall input: " + messages);
       EngineResult<R> result = engine.paxos(messages);
@@ -369,26 +344,20 @@ public interface TrexService<C, R> {
       return config.pickler();
     }
 
-    /**
-     * Set this node as the leader (for testing)
-     */
+    /// Set this node as the leader (for testing)
     public void setLeader() {
       engine.setLeader();
       leaderTracker.setLeader(config.nodeId());
     }
 
-    /**
-     * Get the leader tracker (for testing)
-     */
+    /// Get the leader tracker (for testing)
     @TestOnly
     public LeaderTracker getLeaderTracker() {
       return leaderTracker;
     }
   }
 
-  /**
-   * Tracks the current leader in the cluster
-   */
+  /// Tracks the current leader in the cluster
   class LeaderTracker {
     final AtomicReference<NodeId> currentLeaderId = new AtomicReference<>(null);
 
@@ -401,10 +370,6 @@ public interface TrexService<C, R> {
       currentLeaderId.set(nodeId);
     }
 
-    void clearLeader() {
-      currentLeaderId.set(null);
-    }
-
     NodeId getLeaderId() {
       return currentLeaderId.get();
     }
@@ -415,9 +380,7 @@ public interface TrexService<C, R> {
     }
   }
 
-  /**
-   * Tracks responses to submitted commands
-   */
+  /// Tracks responses to submitted commands
   class ResponseTracker<R> {
     private final ConcurrentHashMap<String, CompletableFuture<R>> pendingResponses =
         new ConcurrentHashMap<>();

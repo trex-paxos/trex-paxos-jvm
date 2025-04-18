@@ -154,7 +154,7 @@ public class StackServiceImpl implements StackService {
 
     // Set leader for testing purposes
     if (nodeId == 1) {
-      ((TrexService.TrexServiceImpl<Value, Response>) service).setLeader();
+      ((TrexService.Implementation<Value, Response>) service).setLeader();
     }
 
     // Start network layer

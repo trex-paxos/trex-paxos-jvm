@@ -49,7 +49,7 @@ public class StackServiceImplTest {
 
     // Make sure stackService2 knows that node 1 is the leader
     // This simulates stackService2 receiving a Fixed message with node 1 as leader
-    ((TrexService.TrexServiceImpl<StackService.Value, StackService.Response>)
+    ((TrexService.Implementation<StackService.Value, StackService.Response>)
         stackService2.service()).getLeaderTracker().setLeader(new NodeId((short)1));
   }
 

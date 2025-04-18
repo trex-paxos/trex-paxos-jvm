@@ -67,11 +67,11 @@ class PaxeStackClusterTest {
 
     // Explicitly set up the leader
     // Set node 1 as the leader
-    ((TrexService.TrexServiceImpl<StackService.Value, StackService.Response>)
+    ((TrexService.Implementation<StackService.Value, StackService.Response>)
         stackService1.service()).setLeader();
 
     // Make sure node 2 knows that node 1 is the leader
-    ((TrexService.TrexServiceImpl<StackService.Value, StackService.Response>)
+    ((TrexService.Implementation<StackService.Value, StackService.Response>)
         stackService2.service()).getLeaderTracker().setLeader(new NodeId((short) 1));
 
     // Allow time for initialization - increased from 50ms
