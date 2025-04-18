@@ -31,9 +31,11 @@ public class StackServiceImpl2Test {
 
     StackServiceImpl2.setLogLevel(Level.parse(logLevel));
 
-    Supplier<NodeEndpoint> members = () -> new NodeEndpoint(
-        Map.of(new NodeId((short) 1), new NetworkAddress("localhost", 5000),
-            new NodeId((short) 2), new NetworkAddress("localhost", 5001)));
+    Supplier<Legislators> members = () -> Legislators.of(
+        new VotingWeight(new NodeId((short) 1), 1),
+        new VotingWeight(new NodeId((short) 2), 1),
+        new VotingWeight(new NodeId((short) 3), 1)
+    );
 
     TestNetworkLayer networkLayer1 = new TestNetworkLayer(new NodeId((short) 1),
         Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), Pickle.instance)

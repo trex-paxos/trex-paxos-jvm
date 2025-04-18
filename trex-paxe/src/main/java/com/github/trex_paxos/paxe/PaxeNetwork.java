@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.github.trex_paxos.paxe;
 
+import com.github.trex_paxos.Legislators;
 import com.github.trex_paxos.NodeId;
 import com.github.trex_paxos.Pickle;
 import com.github.trex_paxos.Pickler;
@@ -103,7 +104,7 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
   final DatagramChannel channel;
   final Selector selector;
   private final Map<Channel, List<Consumer<?>>> subscribers;
-  final Supplier<NodeEndpoint> membership;
+  final Supplier<NodeEndpoints> endpoints;
   private final Map<Channel, Pickler<?>> picklers;
 
   private volatile boolean running;
@@ -124,33 +125,33 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
     private final SessionKeyManager keyManager;
     private final int port;
     private final NodeId local;
-    private final Supplier<NodeEndpoint> membership;
+    private final Supplier<NodeEndpoints> endpointsSupplier;
 
     public Builder(SessionKeyManager keyManager, int port, NodeId local,
-                   Supplier<NodeEndpoint> membership) {
+                   Supplier<NodeEndpoints> endpointsSupplier) {
       Objects.requireNonNull(keyManager, "Key manager cannot be null");
       Objects.requireNonNull(local, "Local node ID cannot be null");
-      Objects.requireNonNull(membership, "Membership supplier cannot be null");
+      Objects.requireNonNull(endpointsSupplier, "Membership supplier cannot be null");
       this.keyManager = keyManager;
       this.port = port;
       this.local = local;
-      this.membership = membership;
+      this.endpointsSupplier = endpointsSupplier;
       picklers.put(CONSENSUS.value(), PickleMsg.instance);
       picklers.put(PROXY.value(), Pickle.instance);
       picklers.put(KEY_EXCHANGE.value(), PickleHandshake.instance);
     }
 
     public PaxeNetwork build() throws IOException {
-      return new PaxeNetwork(keyManager, port, local, membership, picklers);
+      return new PaxeNetwork(keyManager, port, local, endpointsSupplier, picklers);
     }
   }
 
   PaxeNetwork(SessionKeyManager keyManager, int port, NodeId local,
-              Supplier<NodeEndpoint> membership,
+              Supplier<NodeEndpoints> endpoints,
               Map<Channel, Pickler<?>> picklers) throws IOException {
     this.keyManager = keyManager;
     this.localNode = local;
-    this.membership = membership;
+    this.endpoints = endpoints;
     this.picklers = Map.copyOf(picklers);
     this.subscribers = new ConcurrentHashMap<>();
 
@@ -290,7 +291,7 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
   }
 
   @Override
-  public <T> void broadcast(Supplier<NodeEndpoint> membershipSupplier, Channel channel, T msg) {
+  public <T> void broadcast(Supplier<Legislators> membershipSupplier, Channel channel, T msg) {
     Collection<NodeId> recipients = membershipSupplier.get().otherNodes(localNode);
     byte[] serialized = serializeMessage(msg, channel);
 
@@ -453,7 +454,7 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
   }
 
   private SocketAddress resolveAddress(NodeId to) {
-    NetworkAddress address = membership.get().addressFor(to)
+    NetworkAddress address = endpoints.get().addressFor(to)
         .orElseThrow(() -> new IllegalStateException("No address for " + to));
     return new InetSocketAddress(address.host(), address.port());
   }

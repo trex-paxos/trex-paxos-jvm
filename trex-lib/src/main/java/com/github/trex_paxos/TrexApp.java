@@ -5,7 +5,6 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.DirectMessage;
 import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
-import com.github.trex_paxos.network.NodeEndpoint;
 import com.github.trex_paxos.network.NetworkLayer;
 import org.jetbrains.annotations.TestOnly;
 
@@ -80,7 +79,7 @@ public class TrexApp<COMMAND, RESULT> {
 
   protected final TrexEngine<RESULT> engine;
   protected final NetworkLayer networkLayer;
-  protected final Supplier<NodeEndpoint> nodeEndpointSupplier;
+  protected final Supplier<Legislators> latestConfiguration;
   protected final LeaderTracker leaderTracker = new LeaderTracker();
   protected final ResponseTracker<RESULT> responseTracker = new ResponseTracker<>();
   protected final Pickler<COMMAND> valuePickler;
@@ -88,18 +87,18 @@ public class TrexApp<COMMAND, RESULT> {
 
   /// Constructs a new TrexApp instance.
   ///
-  /// @param nodeEndpointSupplier Supplies the node endpoints for the cluster
+  /// @param latestConfiguration Supplies the node endpoints for the cluster
   /// @param engine The consensus engine that implements the Paxos algorithm
   /// @param networkLayer The network communication layer
   /// @param valuePickler Serializer/deserializer for commands
   public TrexApp(
-      Supplier<NodeEndpoint> nodeEndpointSupplier,
+      Supplier<Legislators> latestConfiguration,
       TrexEngine<RESULT> engine,
       NetworkLayer networkLayer,
       Pickler<COMMAND> valuePickler) {
     this.engine = engine;
     this.networkLayer = networkLayer;
-    this.nodeEndpointSupplier = nodeEndpointSupplier;
+    this.latestConfiguration = latestConfiguration;
     this.valuePickler = valuePickler;
     this.nodeId = new NodeId(engine.nodeIdentifier());
   }
@@ -229,7 +228,7 @@ public class TrexApp<COMMAND, RESULT> {
 
   /// Transmits a list of Trex messages across the network to their respective destinations.
   /// DirectMessage instances are sent to specific nodes while other messages are broadcast.
-  /// Delegates to the NetworkLayer to handle actual transmission and NodeEndpoint for broadcasts.
+  /// Delegates to the NetworkLayer to handle actual transmission and NodeEndpoints for broadcasts.
   ///
   /// @param messages The list of Trex messages to be transmitted
   protected void transmitTrexMessages(List<TrexMessage> messages) {
@@ -239,7 +238,7 @@ public class TrexApp<COMMAND, RESULT> {
         networkLayer.send(CONSENSUS.value(), new NodeId(directMessage.to()), message);
       } else {
         LOGGER.finer(() -> engine.nodeIdentifier() + " broadcasting message " + message);
-        networkLayer.broadcast(nodeEndpointSupplier, CONSENSUS.value(), message);
+        networkLayer.broadcast(latestConfiguration, CONSENSUS.value(), message);
       }
     });
   }
