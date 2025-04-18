@@ -15,12 +15,13 @@
  */
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.network.NetworkAddress;
 import com.github.trex_paxos.network.NetworkLayer;
-import com.github.trex_paxos.network.NodeEndpoints;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.Arrays;
+import java.util.EmptyStackException;
+import java.util.Optional;
+import java.util.Stack;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -32,9 +33,9 @@ import java.util.logging.Logger;
 import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
 import static com.github.trex_paxos.network.SystemChannel.PROXY;
 
-public class StackServiceImpl2 implements StackService {
+public class StackServiceImpl implements StackService {
   // This is public as we will use it in jshell to demo the stack service
-  public static final Logger LOGGER = Logger.getLogger(StackServiceImpl2.class.getName());
+  public static final Logger LOGGER = Logger.getLogger(StackServiceImpl.class.getName());
 
   // Stack data structure - shared state that needs synchronization
   private final Stack<String> stack = new Stack<>();
@@ -55,7 +56,7 @@ public class StackServiceImpl2 implements StackService {
 
     // Configure component-specific loggers using streams
     Arrays.asList(
-        StackServiceImpl2.class.getName(),
+        StackServiceImpl.class.getName(),
         TrexService.class.getName(),
         TrexNode.class.getName(),
         NetworkLayer.class.getName()
@@ -68,15 +69,7 @@ public class StackServiceImpl2 implements StackService {
     });
   }
 
-  /**
-   * Factory method to create a new StackServiceImpl2 instance
-   */
-  public static StackServiceImpl2 create(short nodeId, Supplier<Legislators> legislatorsSupplier, TestNetworkLayer networkLayer) {
-    LOGGER.info(() -> "Creating StackServiceImpl2 node " + nodeId);
-    return new StackServiceImpl2(nodeId, legislatorsSupplier, networkLayer);
-  }
-
-  StackServiceImpl2(short nodeId, Supplier<Legislators> legislatorsSupplier, TestNetworkLayer networkLayer) {
+  public StackServiceImpl(short nodeId, Supplier<Legislators> legislatorsSupplier, NetworkLayer networkLayer) {
     LOGGER.fine(() -> "Creating node " + nodeId);
 
     // Create pickler for Value objects
@@ -169,14 +162,6 @@ public class StackServiceImpl2 implements StackService {
     networkLayer.start();
 
     LOGGER.info(() -> "Node " + nodeId + " started successfully");
-  }
-
-  /**
-   * Convert endpoint supplier to map format required by TrexService
-   */
-  private Map<NodeId, NetworkAddress> createEndpointsMap(Supplier<NodeEndpoints> supplier) {
-    NodeEndpoints legislators = supplier.get();
-    return new HashMap<>(legislators.nodeAddresses());
   }
 
   @Override

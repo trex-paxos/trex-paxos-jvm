@@ -4,7 +4,7 @@
  */
 package com.github.trex_paxos;
 
-import com.github.trex_paxos.network.*;
+import com.github.trex_paxos.network.PickleMsg;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,16 +20,16 @@ import static com.github.trex_paxos.network.SystemChannel.PROXY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class StackServiceImpl2Test {
+public class StackServiceImplTest {
 
-  StackServiceImpl2 stackService1;
-  StackServiceImpl2 stackService2;
+  StackServiceImpl stackService1;
+  StackServiceImpl stackService2;
 
   @BeforeEach
   void setup() {
     final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
 
-    StackServiceImpl2.setLogLevel(Level.parse(logLevel));
+    StackServiceImpl.setLogLevel(Level.parse(logLevel));
 
     Supplier<Legislators> members = () -> Legislators.of(
         new VotingWeight(new NodeId((short) 1), 1),
@@ -44,8 +44,8 @@ public class StackServiceImpl2Test {
         Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), Pickle.instance)
     );
 
-    stackService1 = StackServiceImpl2.create((short)1, members, networkLayer1);
-    stackService2 = StackServiceImpl2.create((short)2, members, networkLayer2);
+    stackService1 = new StackServiceImpl((short) 1, members, networkLayer1);
+    stackService2 = new StackServiceImpl((short) 2, members, networkLayer2);
 
     // Make sure stackService2 knows that node 1 is the leader
     // This simulates stackService2 receiving a Fixed message with node 1 as leader
