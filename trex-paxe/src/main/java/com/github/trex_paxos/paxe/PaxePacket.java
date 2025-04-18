@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.github.trex_paxos.paxe;
 
-import com.github.trex_paxos.network.Channel;
 import com.github.trex_paxos.NodeId;
+import com.github.trex_paxos.network.Channel;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
@@ -46,15 +46,17 @@ import java.util.concurrent.ThreadLocalRandom;
 /// ### DEK Message Format
 ///
 /// ```
-/// | Header (8)  | flags (1)  | nonce (12) | DEK | Auth Tag (16) | Length (2) | Payload | Auth Tag (16)
+/// | Header (8)  | flags (1)  | nonce (12) | DEK (16) | Auth Tag (16) | Length (2) | Payload | Auth Tag (16)
 /// ```
 /// - Header: Message header defined above
 /// - Flags: Encryption mode and magic bits
 /// - Nonce: Unique 12-byte nonce for AES-GCM encryption
-/// - DEK: Data Encryption Key encrypted with the peer-to-peer session key.
-/// - Length: Payload length
+/// - DEK: Data Encryption Key encrypted with the peer-to-peer session key 16 byte (128 bit)
+/// - Length: Payload length (2 bytes)
 /// - Payload: The large message payload encrypted with the DEK.
 /// - Auth Tag: 16-byte authentication tag of the encrypted payload.
+///
+/// This means tha there is a 71 byte overhead for DEK messages.
 ///
 /// ### Flags Byte Structure
 ///
