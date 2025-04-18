@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.github.trex_paxos.msg;
 
-
 /// TrexMessage is the base interface for all messages in the protocol.
 public sealed interface TrexMessage permits
     Accept,
