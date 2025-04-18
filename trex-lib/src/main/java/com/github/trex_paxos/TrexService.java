@@ -324,6 +324,7 @@ public sealed interface TrexService<COMMAND, RESULT> permits TrexService.Impleme
 
     @Override
     public void stop() {
+
       if (!running) {
         return;
       }

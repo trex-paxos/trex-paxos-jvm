@@ -1,18 +1,5 @@
-/*
- * Copyright 2024 - 2025 Simon Massey
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-FileCopyrightText: 2024 - 2025 Simon Massey
+// SPDX-License-Identifier: Apache-2.0
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.network.NetworkLayer;
@@ -32,6 +19,23 @@ import java.util.logging.Logger;
 import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
 import static com.github.trex_paxos.network.SystemChannel.PROXY;
 
+/// A demonstration implementation of a distributed Stack using the Trex Paxos library.
+/// See [com.github.trex_paxos] package documentation for detailed information about the core library.
+///
+/// ```mermaid
+/// graph TD
+///   Client([Client Application]) -->|"push()/pop()/peek()"| SS([StackServiceImpl])
+///   SS -->|implements| SI([StackService])
+///   SS -->|"submit(Value)"| TS([TrexService])
+///   TS -->|consensus| TN([TrexNode])
+///   SS -->|synchronized| Stack([Stack&lt;String&gt;])
+///   TS -->|messages| NL([NetworkLayer])
+///   NL -->|connects| Cluster([Other Nodes])
+///```
+///
+/// This class demonstrates how to build a simple distributed data structure using Trex Paxos.
+/// All operations (push, pop, peek) are replicated to the cluster for fault tolerance.
+/// The TrexService ensures that all nodes process commands in the same order.
 public class StackServiceImpl implements StackService {
   // This is public as we will use it in jshell to demo the stack service
   public static final Logger LOGGER = Logger.getLogger(StackServiceImpl.class.getName());
@@ -42,9 +46,8 @@ public class StackServiceImpl implements StackService {
   // TrexService for consensus
   private final TrexService<Value, Response> service;
 
-  /**
-   * Configure logging levels for the stack service and related components
-   */
+  /// Configures logging levels for the stack service and related components.
+  /// @param level The logging level to set for all components
   public static void setLogLevel(Level level) {
     // Configure root logger and handler
     Logger root = Logger.getLogger("");
@@ -68,6 +71,10 @@ public class StackServiceImpl implements StackService {
     });
   }
 
+  /// Creates a new StackService node that participates in the distributed consensus.
+  /// @param nodeId The unique identifier for this node
+  /// @param legislatorsSupplier Supplies information about all nodes in the cluster
+  /// @param networkLayer Handles network communication between nodes
   public StackServiceImpl(short nodeId, Supplier<Legislators> legislatorsSupplier, NetworkLayer networkLayer) {
     LOGGER.fine(() -> "Creating node " + nodeId);
 
@@ -162,6 +169,10 @@ public class StackServiceImpl implements StackService {
     LOGGER.info(() -> "Node " + nodeId + " started successfully");
   }
 
+  /// Pushes an item onto the distributed stack.
+  /// Only if the value is fixed by consensus will it be applied locally to complete the future.
+  /// @param item The string item to push onto the stack
+  /// @return A response indicating success or failure
   @Override
   public Response push(String item) {
     var future = new CompletableFuture<Response>();
@@ -183,6 +194,9 @@ public class StackServiceImpl implements StackService {
     }
   }
 
+  /// Pops an item from the distributed stack.
+  /// Only if the value is fixed by consensus will it be applied locally to complete the future.
+  /// @return A response indicating success or failure with the popped value
   @Override
   public Response pop() {
     var future = new CompletableFuture<Response>();
@@ -204,6 +218,9 @@ public class StackServiceImpl implements StackService {
     }
   }
 
+  /// Peeks an item from the distributed stack.
+  /// Only if the value is fixed by consensus will it be applied locally to complete the future.
+  /// @return A response indicating success or failure with the peeked value
   @Override
   public Response peek() {
     var future = new CompletableFuture<Response>();
@@ -225,17 +242,16 @@ public class StackServiceImpl implements StackService {
     }
   }
 
-  /**
-   * Get the underlying TrexService for testing
-   */
+  /// Gets the underlying TrexService for testing and diagnostics.
+  /// @return The TrexService instance used by this stack service
   public TrexService<Value, Response> service() {
     return service;
   }
 
-  /**
-   * Stop the service
-   */
+  /// Stops the service and releases resources.
+  /// This should be called when the service is no longer needed.
   public void stop() {
-    service.stop();
+    LOGGER.info(() -> "Stopping StackServiceImpl");
+    this.service().stop();
   }
 }
