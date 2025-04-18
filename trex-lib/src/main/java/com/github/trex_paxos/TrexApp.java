@@ -6,7 +6,7 @@ import com.github.trex_paxos.msg.DirectMessage;
 import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
 import com.github.trex_paxos.network.NetworkLayer;
-import org.jetbrains.annotations.TestOnly;
+import org.jetbrains.annotations.TestOnly; // TODO can we refactor to functional programming to avoid this?
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;

@@ -5,7 +5,7 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.AcceptResponse;
 import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
-import org.jetbrains.annotations.TestOnly;
+import org.jetbrains.annotations.TestOnly; // TODO can we refactor to functional programming to avoid this?
 
 import java.util.ArrayList;
 import java.util.List;

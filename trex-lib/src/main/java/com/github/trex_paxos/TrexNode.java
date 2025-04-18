@@ -3,7 +3,7 @@
 package com.github.trex_paxos;
 
 import com.github.trex_paxos.msg.*;
-import org.jetbrains.annotations.TestOnly;
+import org.jetbrains.annotations.TestOnly;  // TODO can we refactor to functional programming to avoid this?
 
 import java.util.*;
 import java.util.logging.Level;
@@ -93,7 +93,7 @@ public class TrexNode {
   /// The durable storage and durable log.
   final Journal journal;
 
-  /// The quorum strategy that may be a SimpleMakority or a FlexiblePaxosQuorumStrategy.
+  /// The quorum strategy that may be a SimpleMajority or a FlexiblePaxosQuorumStrategy.
   final QuorumStrategy quorumStrategy;
 
   /// If we have rebooted then we start off as a follower.
