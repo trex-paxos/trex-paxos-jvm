@@ -20,6 +20,7 @@ import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
 import com.github.trex_paxos.network.NetworkLayer;
 import lombok.With;
+import org.jetbrains.annotations.TestOnly;
 
 import java.time.Duration;
 import java.util.List;
@@ -374,6 +375,14 @@ public interface TrexService<C, R> {
     public void setLeader() {
       engine.setLeader();
       leaderTracker.setLeader(config.nodeId());
+    }
+
+    /**
+     * Get the leader tracker (for testing)
+     */
+    @TestOnly
+    public LeaderTracker getLeaderTracker() {
+      return leaderTracker;
     }
   }
 

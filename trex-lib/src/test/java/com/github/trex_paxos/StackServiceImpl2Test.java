@@ -46,6 +46,11 @@ public class StackServiceImpl2Test {
 
     stackService1 = StackServiceImpl2.create((short)1, members, networkLayer1);
     stackService2 = StackServiceImpl2.create((short)2, members, networkLayer2);
+
+    // Make sure stackService2 knows that node 1 is the leader
+    // This simulates stackService2 receiving a Fixed message with node 1 as leader
+    ((TrexService.TrexServiceImpl<StackService.Value, StackService.Response>)
+        stackService2.service()).getLeaderTracker().setLeader(new NodeId((short)1));
   }
 
   @AfterEach
@@ -83,3 +88,4 @@ public class StackServiceImpl2Test {
         future.get(1, TimeUnit.SECONDS));
   }
 }
+
