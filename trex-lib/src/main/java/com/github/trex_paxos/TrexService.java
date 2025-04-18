@@ -30,6 +30,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
+import java.util.logging.Level;
 
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
@@ -183,7 +184,7 @@ public interface TrexService<C, R> {
 
       // Initialize the node and engine
       this.node = new TrexNode(
-          TrexLogger.LOGGER.getLevel(),
+          Level.INFO,
           config.nodeId().id(),
           config.quorumStrategy(),
           config.journal()
