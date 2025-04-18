@@ -96,7 +96,7 @@ public sealed interface TrexService<COMMAND, RESULT> permits TrexService.Impleme
 
       // Integration points
       Journal journal,
-      BiFunction<Long, Command, R> commandHandler,
+      BiFunction<Long, C, R> commandHandler,
 
       // Network and serialization
       NetworkLayer networkLayer,
@@ -128,6 +128,14 @@ public sealed interface TrexService<COMMAND, RESULT> permits TrexService.Impleme
       if (commandHandler == null) throw new IllegalStateException("CommandHandler must be specified");
       if (networkLayer == null) throw new IllegalStateException("NetworkLayer must be specified");
       if (pickler == null) throw new IllegalStateException("Pickler must be specified");
+
+      final BiFunction<Long, C, R> commandHandler = (slot, cmd) -> {
+        return null;
+      };
+
+      final BiFunction<Long, Command, R> stuff = (slot, cmd) -> {
+        return commandHandler.apply(slot, pickler.deserialize(cmd.operationBytes()));
+      };
 
       // Create and return the service implementation
       return new Implementation<>(this);
@@ -168,11 +176,19 @@ public sealed interface TrexService<COMMAND, RESULT> permits TrexService.Impleme
           config.journal()
       );
 
-      this.engine = new TrexEngine<>(node, config.commandHandler());
+      final var commandHandler = (BiFunction<Long, Command, R>) (slot, cmd) -> {
+        // Deserialize the command
+        final var value = config.pickler().deserialize(cmd.operationBytes());
+        // Call the application command handler
+        return config.commandHandler().apply(slot, value);
+      };
+
+      this.engine = new TrexEngine<>(node, commandHandler);
     }
 
+    /// The host application value that we will run consensus over to have it chosen.
     @Override
-    public CompletableFuture<R> submit(C command) {
+    public CompletableFuture<R> submit(C value) {
       if (!running) {
         CompletableFuture<R> future = new CompletableFuture<>();
         future.completeExceptionally(new IllegalStateException("Service not running"));
@@ -191,7 +207,7 @@ public sealed interface TrexService<COMMAND, RESULT> permits TrexService.Impleme
       if (leaderTracker.isLeader(config.nodeId())) {
         try {
           // Serialize the command
-          byte[] serializedCommand = config.pickler().serialize(command);
+          byte[] serializedCommand = config.pickler().serialize(value);
 
           // Create a Command object
           Command cmd = new Command(uuid, serializedCommand, (byte) 0);
@@ -208,7 +224,7 @@ public sealed interface TrexService<COMMAND, RESULT> permits TrexService.Impleme
         if (leaderId != null) {
           try {
             // Serialize command
-            byte[] serializedCommand = config.pickler().serialize(command);
+            byte[] serializedCommand = config.pickler().serialize(value);
 
             // Create a Command object to send to the leader
             Command cmd = new Command(uuid, serializedCommand, (byte) 0);

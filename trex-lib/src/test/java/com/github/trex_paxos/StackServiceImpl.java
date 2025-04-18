@@ -75,8 +75,7 @@ public class StackServiceImpl implements StackService {
     final Pickler<Value> valuePickler = SealedRecordsPickler.createPickler(Value.class);
 
     // Create command handler function
-    BiFunction<Long, Command, Response> commandHandler = (slot, cmd) -> {
-      final var value = valuePickler.deserialize(cmd.operationBytes());
+    BiFunction<Long, Value, Response> commandHandler = (slot, value) -> {
       LOGGER.fine(() -> "Node " + nodeId + " processing command: " + value.getClass().getSimpleName());
 
       // Synchronize on the stack to ensure thread safety
