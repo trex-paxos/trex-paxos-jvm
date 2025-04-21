@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.github.trex_paxos;
 
-import java.lang.reflect.Constructor;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.RecordComponent;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Optional;
 
 /// This is a pickler for flat Record types. It only supports records that have components that are
 /// primitive types, strings, and Optional<String>. This is good enough for all the messages in Trex.
 public class FlatRecordPickler {
-
-  public static <T extends Record> Pickler<T> createPickler(Class<T> recordClass) {
+  public static <T extends Record> Pickler<T> createPickler(Class<T> recordClass) throws NoSuchMethodException, IllegalAccessException {
     if (!recordClass.isRecord()) {
       throw new IllegalArgumentException("Class must be a record");
     }
@@ -23,23 +25,37 @@ public class FlatRecordPickler {
         );
       }
     }
+    MethodHandles.Lookup lookup = MethodHandles.lookup();
+    final MethodHandle[] componentAccessors = new MethodHandle[components.length];
+    Arrays.setAll(componentAccessors, i -> {
+      try {
+        return lookup.unreflect(components[i].getAccessor());
+      } catch (IllegalAccessException e) {
+        throw new RuntimeException("Failed to access component check if the record type is public: " + components[i].getName(), e);
+      }
+    });
 
-    @SuppressWarnings("unchecked")
-    Constructor<T> constructor = (Constructor<T>) recordClass.getDeclaredConstructors()[0];
+    // Extract component types for the constructor
+    Class<?>[] paramTypes = Arrays.stream(components).map(RecordComponent::getType).toArray(Class<?>[]::new);
+
+    // Create method type for the canonical constructor
+    MethodType constructorType = MethodType.methodType(void.class, paramTypes);
+    MethodHandle constructorHandle = lookup.findConstructor(recordClass, constructorType);
 
     return new Pickler<>() {
       @Override
       public void serialize(T record, ByteBuffer buffer) {
         if (record == null) return;
-
-        for (RecordComponent comp : components) {
-          try {
-            Object value = comp.getAccessor().invoke(record);
-            writeToBuffer(buffer, comp.getType(), value);
-          } catch (Exception e) {
-            throw new RuntimeException("Error serializing field: " + comp.getName(), e);
-          }
-        }
+        var index = 0;
+        for (MethodHandle accessor : componentAccessors) {
+              try {
+                Object value = accessor.invokeWithArguments(record);
+                Class<?> type = paramTypes[index++];
+                writeToBuffer(buffer, type, value);
+              } catch (Throwable e) {
+                throw new RuntimeException("Error serializing field: " + accessor, e);
+              }
+            }
       }
       
       @Override
@@ -47,12 +63,15 @@ public class FlatRecordPickler {
         if (record == null) return 0;
         
         int size = 0;
-        for (RecordComponent comp : components) {
+        int index = 0;
+        for (MethodHandle accessor : componentAccessors) {
           try {
-            Object value = comp.getAccessor().invoke(record);
-            size += FlatRecordPickler.sizeOf(comp.getType(), value);
-          } catch (Exception e) {
-            throw new RuntimeException("Error accessing field: " + comp.getName(), e);
+            Object value = accessor.invokeWithArguments(record);
+            Class<?> type = paramTypes[index];
+            size += FlatRecordPickler.sizeOf(type, value);
+            index++;
+          } catch (Throwable e) {
+            throw new RuntimeException("Error accessing field: " + paramTypes[index].getName(), e);
           }
         }
         return size;
@@ -66,20 +85,18 @@ public class FlatRecordPickler {
         buffer.mark();
 
         try {
-          Object[] args = new Object[components.length];
-
-          for (int i = 0; i < components.length; i++) {
-            args[i] = readFromBuffer(buffer, components[i].getType());
+          Object[] args = new Object[componentAccessors.length];
+          for (int i = 0; i < componentAccessors.length; i++) {
+            args[i] = readFromBuffer(buffer, paramTypes[i]);
           }
 
-          return constructor.newInstance(args);
-        } catch (java.nio.BufferUnderflowException e) {
+          //noinspection unchecked
+          return (T) constructorHandle.invokeWithArguments(args);
+        } catch (Throwable e) {
           // Reset buffer to its original position
           buffer.reset();
           // Not enough data to deserialize the complete record
           return null;
-        } catch (Exception e) {
-          throw new RuntimeException("Error creating record instance", e);
         }
       }
     };
@@ -103,6 +120,7 @@ public class FlatRecordPickler {
       return Integer.BYTES + bytes.length;
     }
     if (type == Optional.class) {
+      if (value == null) return 1; // Treat null Optional as empty
       Optional<?> opt = (Optional<?>) value;
       if (opt.isEmpty()) return 1;
       Object innerValue = opt.get();
@@ -133,12 +151,18 @@ public class FlatRecordPickler {
         }
       }
     } else if (type == Optional.class) {
-      Optional<?> opt = (Optional<?>) value;
-      if (opt.isEmpty()) {
-        buffer.put((byte) 0);
+      if (value == null) {
+        buffer.put((byte) 0); // Treat null Optional as empty
       } else {
-        buffer.put((byte) 1);
-        writeToBuffer(buffer, opt.get().getClass(), opt.get());
+        Optional<?> opt = (Optional<?>) value;
+        if (opt.isEmpty()) {
+          buffer.put((byte) 0);
+        } else {
+          buffer.put((byte) 1);
+          Object innerValue = opt.get();
+          Class<?> innerType = innerValue.getClass();
+          writeToBuffer(buffer, innerType, innerValue);
+        }
       }
     }
   }

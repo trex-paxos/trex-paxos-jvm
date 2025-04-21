@@ -72,7 +72,7 @@ public class StackServiceImpl implements StackService {
   /// @param nodeId The unique identifier for this node
   /// @param legislatorsSupplier Supplies information about all nodes in the cluster
   /// @param networkLayer Handles network communication between nodes
-  public StackServiceImpl(short nodeId, Supplier<Legislators> legislatorsSupplier, NetworkLayer networkLayer) {
+  public StackServiceImpl(short nodeId, Supplier<Legislators> legislatorsSupplier, NetworkLayer networkLayer) throws Exception {
     LOGGER.fine(() -> "Creating node " + nodeId);
 
     // Create pickler for Value objects

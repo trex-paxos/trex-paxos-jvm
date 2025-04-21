@@ -10,7 +10,7 @@ import java.util.Map;
 /// This pickler serializes and deserializes sealed records. It creates pickler for each permitted subclass.
 public class SealedRecordsPickler {
 
-  public static <T> Pickler<T> createPickler(Class<T> sealedInterface) {
+  public static <T> Pickler<T> createPickler(Class<T> sealedInterface) throws Exception {
     if (!sealedInterface.isSealed()) {
       throw new IllegalArgumentException("Class must be a sealed interface");
     }
@@ -126,7 +126,7 @@ public class SealedRecordsPickler {
    * @param instance The pre-created instance of the empty record
    * @return A pickler that handles the empty record
    */
-  private static <T extends Record> Pickler<T> createEmptyRecordPickler(T instance) {
+  static <T extends Record> Pickler<T> createEmptyRecordPickler(T instance) {
 
     return new Pickler<>() {
       @Override

@@ -24,7 +24,7 @@ public class StackServiceImplTest {
   StackServiceImpl stackService2;
 
   @BeforeEach
-  void setup() {
+  void setup() throws Exception {
     final var logLevel = System.getProperty("java.util.logging.ConsoleHandler.level", "WARNING");
 
     StackServiceImpl.setLogLevel(Level.parse(logLevel));

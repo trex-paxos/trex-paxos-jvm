@@ -34,7 +34,7 @@ class FlatRecordPicklerTest {
   }
 
   @Test
-  void testBasicSerialization() {
+  void testBasicSerialization() throws NoSuchMethodException, IllegalAccessException {
     var pickler = FlatRecordPickler.createPickler(TestRecord.class);
     var record = new TestRecord(42, 123L, true, "hello");
 
@@ -53,7 +53,7 @@ class FlatRecordPicklerTest {
   }
 
   @Test
-  void testNullString() {
+  void testNullString() throws Exception {
     var pickler = FlatRecordPickler.createPickler(StringRecord.class);
     var record = new StringRecord(null);
 
@@ -72,7 +72,7 @@ class FlatRecordPicklerTest {
   }
 
   @Test
-  void testEmptyString() {
+  void testEmptyString() throws Exception {
     var pickler = FlatRecordPickler.createPickler(StringRecord.class);
     var record = new StringRecord("");
 
@@ -91,7 +91,7 @@ class FlatRecordPicklerTest {
   }
 
   @Test
-  void testNullInputs() {
+  void testNullInputs() throws Exception {
     var pickler = FlatRecordPickler.createPickler(TestRecord.class);
 
     assertNull(pickler.deserialize(null));
@@ -111,7 +111,7 @@ class FlatRecordPicklerTest {
   }
 
   @Test
-  void testEdgeCases() {
+  void testEdgeCases() throws Exception {
     var pickler = FlatRecordPickler.createPickler(TestRecord.class);
     var record = new TestRecord(
         Integer.MAX_VALUE,
@@ -135,7 +135,7 @@ class FlatRecordPicklerTest {
   }
 
   @Test
-  void testEmptyOptional() {
+  void testEmptyOptional() throws Exception {
     var pickler = FlatRecordPickler.createPickler(OptionalRecord.class);
     var record = new OptionalRecord(Optional.empty());
 
@@ -155,7 +155,7 @@ class FlatRecordPicklerTest {
   }
 
   @Test
-  void testPresentOptional() {
+  void testPresentOptional() throws Exception {
     var pickler = FlatRecordPickler.createPickler(OptionalRecord.class);
     var record = new OptionalRecord(Optional.of("test id"));
 
@@ -176,7 +176,7 @@ class FlatRecordPicklerTest {
   }
 
   @Test
-  void testMixedRecord() {
+  void testMixedRecord() throws Exception {
     var pickler = FlatRecordPickler.createPickler(MixedRecord.class);
     var record = new MixedRecord(42, Optional.of("optional"), "required");
 

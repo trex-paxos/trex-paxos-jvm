@@ -43,7 +43,7 @@ class SealedRecordsPicklerTest {
   }
 
   @BeforeEach
-  void setup() {
+  void setup() throws Exception {
     pickler = SealedRecordsPickler.createPickler(StackService.Value.class);
     LOGGER.fine("Created pickler for StackService.Value");
   }
