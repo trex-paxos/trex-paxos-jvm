@@ -9,7 +9,7 @@ import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class PickleHandshakeTest {
+class CommandPicklerHandshakeTest {
   static {
     System.setProperty(SRPUtils.class.getName() + ".useHash", "SHA-1");
   }

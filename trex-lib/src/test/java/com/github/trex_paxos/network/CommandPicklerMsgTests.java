@@ -10,12 +10,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Optional;
 
-import static com.github.trex_paxos.Pickle.readProgress;
-import static com.github.trex_paxos.Pickle.writeProgress;
+import static com.github.trex_paxos.CommandPickler.readProgress;
+import static com.github.trex_paxos.CommandPickler.writeProgress;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class PickleMsgTests {
+public class CommandPicklerMsgTests {
 
   @Test
   public void testPreparePickleUnpickle() {

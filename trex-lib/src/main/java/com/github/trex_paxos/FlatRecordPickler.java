@@ -10,8 +10,15 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Optional;
 
-/// This is a pickler for flat Record types. It only supports records that have components that are
-/// primitive types, strings, and Optional<String>. This is good enough for all the messages in Trex.
+/// This is a pickler for the simple flat Record types that make up the TrexMessage protocol as well as the Progress
+/// state that is persistent into the Journal.
+/// It only supports the following types:
+/// - int
+/// - long
+/// - boolean
+/// - String
+/// - Optional<String>
+/// It is not a general purpose pickler for all Java records.
 public class FlatRecordPickler {
   public static <T extends Record> Pickler<T> createPickler(Class<T> recordClass) throws NoSuchMethodException, IllegalAccessException {
     if (!recordClass.isRecord()) {

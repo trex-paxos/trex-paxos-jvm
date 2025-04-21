@@ -7,7 +7,11 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-/// This pickler serializes and deserializes sealed records. It creates pickler for each permitted subclass.
+/// This pickler serializes and deserializes sealed records of the TrexMessage protocol.
+/// It delegates serialization to the appropriate [FlatRecordPickler] for each record type.
+/// The pickle is not a general purpose pickler for all Java records. It only supports the
+/// simple flat Record types that make up the TrexMessage protocol as well as the Progress
+/// state that is persistent into the Journal.
 public class SealedRecordsPickler {
 
   public static <T> Pickler<T> createPickler(Class<T> sealedInterface) throws Exception {

@@ -36,10 +36,10 @@ public class StackServiceImplTest {
     );
 
     TestNetworkLayer networkLayer1 = new TestNetworkLayer(new NodeId((short) 1),
-        Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), Pickle.instance)
+        Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), CommandPickler.instance)
     );
     TestNetworkLayer networkLayer2 = new TestNetworkLayer(new NodeId((short) 1),
-        Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), Pickle.instance)
+        Map.of(CONSENSUS.value(), PickleMsg.instance, PROXY.value(), CommandPickler.instance)
     );
 
     stackService1 = new StackServiceImpl((short) 1, members, networkLayer1);

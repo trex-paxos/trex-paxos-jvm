@@ -8,10 +8,10 @@ import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.UUID;
 
-/// Pickle is a utility class for serializing and deserializing the record types that the [Journal] uses.
+/// CommandPickler is a utility class for serializing and deserializing the record types that the [Journal] uses.
 /// Java serialization is famously broken but the Java Platform team are working on it.
 /// This class does things the boilerplate way.
-public class Pickle {
+public class CommandPickler {
 
   public static Pickler<Command> instance = new Pickler<>() {
 
@@ -31,7 +31,7 @@ public class Pickle {
         // Get remaining bytes from the buffer instead of using array()
         byte[] bytes = new byte[buffer.remaining()];
         buffer.get(bytes);
-        return (Command) Pickle.readCommand(bytes);
+        return (Command) CommandPickler.readCommand(bytes);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }

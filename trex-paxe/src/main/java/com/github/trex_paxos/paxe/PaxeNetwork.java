@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.github.trex_paxos.paxe;
 
+import com.github.trex_paxos.CommandPickler;
 import com.github.trex_paxos.NodeId;
-import com.github.trex_paxos.Pickle;
 import com.github.trex_paxos.Pickler;
 import com.github.trex_paxos.network.*;
 
@@ -132,7 +132,7 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
       this.local = local;
       this.endpointsSupplier = endpointsSupplier;
       picklers.put(CONSENSUS.value(), PickleMsg.instance);
-      picklers.put(PROXY.value(), Pickle.instance);
+      picklers.put(PROXY.value(), CommandPickler.instance);
       picklers.put(KEY_EXCHANGE.value(), PickleHandshake.instance);
     }
 
