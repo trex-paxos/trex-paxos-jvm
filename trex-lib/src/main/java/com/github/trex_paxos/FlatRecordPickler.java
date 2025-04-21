@@ -35,12 +35,14 @@ public class FlatRecordPickler {
       }
     });
 
-    // Extract component types for the constructor
+    // Extract component types which we need for the constructor. This is required as MethodHandles can return unboxed types.
     Class<?>[] paramTypes = Arrays.stream(components).map(RecordComponent::getType).toArray(Class<?>[]::new);
 
     // Create method type for the canonical constructor
     MethodType constructorType = MethodType.methodType(void.class, paramTypes);
     MethodHandle constructorHandle = lookup.findConstructor(recordClass, constructorType);
+
+    String[] paramNames = Arrays.stream(components).map(RecordComponent::getName).toArray(String[]::new);
 
     return new Pickler<>() {
       @Override
@@ -51,6 +53,7 @@ public class FlatRecordPickler {
               try {
                 Object value = accessor.invokeWithArguments(record);
                 Class<?> type = paramTypes[index++];
+                // we cannot use value.getClass() as it will be the boxed type and the type may be a primitive type
                 writeToBuffer(buffer, type, value);
               } catch (Throwable e) {
                 throw new RuntimeException("Error serializing field: " + accessor, e);
@@ -71,7 +74,7 @@ public class FlatRecordPickler {
             size += FlatRecordPickler.sizeOf(type, value);
             index++;
           } catch (Throwable e) {
-            throw new RuntimeException("Error accessing field: " + paramTypes[index].getName(), e);
+            throw new RuntimeException("Error accessing field: " + paramNames[index], e);
           }
         }
         return size;
