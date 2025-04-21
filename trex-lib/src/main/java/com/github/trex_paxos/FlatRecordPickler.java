@@ -19,6 +19,7 @@ import java.util.Optional;
 /// - String
 /// - Optional<String>
 /// It is not a general purpose pickler for all Java records.
+/// TODO replace with [simple-pickler](https://github.com/simbo1905/simple-pickle/blob/main/src/main/java/io/github/simbo1905/simple_pickle/Pickler.java)
 public class FlatRecordPickler {
   public static <T extends Record> Pickler<T> createPickler(Class<T> recordClass) throws NoSuchMethodException, IllegalAccessException {
     if (!recordClass.isRecord()) {
