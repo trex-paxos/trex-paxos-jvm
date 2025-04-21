@@ -29,20 +29,9 @@ public class FlatRecordPickler {
 
     return new Pickler<>() {
       @Override
-      public byte[] serialize(T record) {
-        if (record == null) return new byte[0];
+      public void serialize(T record, ByteBuffer buffer) {
+        if (record == null) return;
 
-        int size = 0;
-        for (RecordComponent comp : components) {
-          try {
-            Object value = comp.getAccessor().invoke(record);
-            size += sizeOf(comp.getType(), value);
-          } catch (Exception e) {
-            throw new RuntimeException("Error accessing field: " + comp.getName(), e);
-          }
-        }
-
-        ByteBuffer buffer = ByteBuffer.allocate(size);
         for (RecordComponent comp : components) {
           try {
             Object value = comp.getAccessor().invoke(record);
@@ -51,22 +40,44 @@ public class FlatRecordPickler {
             throw new RuntimeException("Error serializing field: " + comp.getName(), e);
           }
         }
-        return buffer.array();
+      }
+      
+      @Override
+      public int sizeOf(T record) {
+        if (record == null) return 0;
+        
+        int size = 0;
+        for (RecordComponent comp : components) {
+          try {
+            Object value = comp.getAccessor().invoke(record);
+            size += FlatRecordPickler.sizeOf(comp.getType(), value);
+          } catch (Exception e) {
+            throw new RuntimeException("Error accessing field: " + comp.getName(), e);
+          }
+        }
+        return size;
       }
 
       @Override
-      public T deserialize(byte[] bytes) {
-        if (bytes == null || bytes.length == 0) return null;
+      public T deserialize(ByteBuffer buffer) {
+        if (buffer == null || buffer.remaining() == 0) return null;
 
-        ByteBuffer buffer = ByteBuffer.wrap(bytes);
-        Object[] args = new Object[components.length];
-
-        for (int i = 0; i < components.length; i++) {
-          args[i] = readFromBuffer(buffer, components[i].getType());
-        }
+        // Mark the current position to reset if needed
+        buffer.mark();
 
         try {
+          Object[] args = new Object[components.length];
+
+          for (int i = 0; i < components.length; i++) {
+            args[i] = readFromBuffer(buffer, components[i].getType());
+          }
+
           return constructor.newInstance(args);
+        } catch (java.nio.BufferUnderflowException e) {
+          // Reset buffer to its original position
+          buffer.reset();
+          // Not enough data to deserialize the complete record
+          return null;
         } catch (Exception e) {
           throw new RuntimeException("Error creating record instance", e);
         }
@@ -133,6 +144,10 @@ public class FlatRecordPickler {
   }
 
   public static Object readFromBuffer(ByteBuffer buffer, Class<?> type) {
+    if (buffer.remaining() < getMinBytesForType(type)) {
+      throw new java.nio.BufferUnderflowException();
+    }
+
     if (type == int.class) {
       return buffer.getInt();
     } else if (type == long.class) {
@@ -143,14 +158,36 @@ public class FlatRecordPickler {
       int length = buffer.getInt();
       if (length == -1) return null;
       if (length == 0) return "";
+
+      // Check if we have enough bytes for the string
+      if (buffer.remaining() < length) {
+        throw new java.nio.BufferUnderflowException();
+      }
+
       byte[] strBytes = new byte[length];
       buffer.get(strBytes);
       return new String(strBytes);
     } else if (type == Optional.class) {
       byte isPresent = buffer.get();
       if (isPresent == 0) return Optional.empty();
+
+      // For Optional<String>, we need to check the inner type's requirements
+      if (buffer.remaining() < Integer.BYTES) {
+        throw new java.nio.BufferUnderflowException();
+      }
+
       return Optional.ofNullable(readFromBuffer(buffer, String.class));
     }
+    throw new IllegalArgumentException("Unsupported type: " + type);
+  }
+
+  // Helper method to determine minimum bytes needed for a type
+  private static int getMinBytesForType(Class<?> type) {
+    if (type == int.class) return Integer.BYTES;
+    if (type == long.class) return Long.BYTES;
+    if (type == boolean.class) return 1;
+    if (type == String.class) return Integer.BYTES; // At least the length field
+    if (type == Optional.class) return 1; // At least the presence byte
     throw new IllegalArgumentException("Unsupported type: " + type);
   }
 }

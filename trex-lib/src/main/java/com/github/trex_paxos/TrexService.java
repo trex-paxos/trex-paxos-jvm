@@ -9,6 +9,7 @@ import com.github.trex_paxos.network.NetworkLayer;
 import lombok.With;
 import org.jetbrains.annotations.TestOnly;
 
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
@@ -116,14 +117,6 @@ public sealed interface TrexService<COMMAND, RESULT> permits TrexService.Impleme
       if (networkLayer == null) throw new IllegalStateException("NetworkLayer must be specified");
       if (pickler == null) throw new IllegalStateException("Pickler must be specified");
 
-      final BiFunction<Long, C, R> commandHandler = (slot, cmd) -> {
-        return null;
-      };
-
-      final BiFunction<Long, Command, R> stuff = (slot, cmd) -> {
-        return commandHandler.apply(slot, pickler.deserialize(cmd.operationBytes()));
-      };
-
       // Create and return the service implementation
       return new Implementation<>(this);
     }
@@ -165,7 +158,7 @@ public sealed interface TrexService<COMMAND, RESULT> permits TrexService.Impleme
 
       final var commandHandler = (BiFunction<Long, Command, R>) (slot, cmd) -> {
         // Deserialize the command
-        final var value = config.pickler().deserialize(cmd.operationBytes());
+        final var value = config.pickler().deserialize(ByteBuffer.wrap(cmd.operationBytes()));
         // Call the application command handler
         return config.commandHandler().apply(slot, value);
       };
@@ -194,10 +187,14 @@ public sealed interface TrexService<COMMAND, RESULT> permits TrexService.Impleme
       if (leaderTracker.isLeader(config.nodeId())) {
         try {
           // Serialize the command
-          byte[] serializedCommand = config.pickler().serialize(value);
+          ByteBuffer buffer = ByteBuffer.allocate(config.pickler().sizeOf(value));
+          config.pickler().serialize(value, buffer);
+          buffer.flip();
 
-          // Create a Command object
-          Command cmd = new Command(uuid, serializedCommand, (byte) 0);
+          // Create a Command object with copied buffer contents
+          byte[] bytes = new byte[buffer.remaining()];
+          buffer.get(bytes);
+          Command cmd = new Command(uuid, bytes, (byte) 0);
 
           // Generate consensus messages and transmit them
           List<TrexMessage> messages = engine.nextLeaderBatchOfMessages(List.of(cmd));
@@ -211,10 +208,14 @@ public sealed interface TrexService<COMMAND, RESULT> permits TrexService.Impleme
         if (leaderId != null) {
           try {
             // Serialize command
-            byte[] serializedCommand = config.pickler().serialize(value);
-
+            ByteBuffer buffer = ByteBuffer.allocate(config.pickler().sizeOf(value));
+            config.pickler().serialize(value, buffer);
+            buffer.flip();
+            
             // Create a Command object to send to the leader
-            Command cmd = new Command(uuid, serializedCommand, (byte) 0);
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.get(bytes);
+            Command cmd = new Command(uuid, bytes, (byte) 0);
 
             // Send to leader via proxy channel
             config.networkLayer().send(PROXY.value(), leaderId, cmd);
@@ -415,3 +416,4 @@ public sealed interface TrexService<COMMAND, RESULT> permits TrexService.Impleme
     }
   }
 }
+

@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.github.trex_paxos.paxe;
 
+import com.github.trex_paxos.NodeId;
+
 import java.util.Objects;
 
-import com.github.trex_paxos.NodeId;
-/// This is an Secure Remote Password secret for a node see RFC5054
+/// This is the Secure Remote Password secret for a node see RFC5054
 public record NodeClientSecret(
   String srpIdentity,
   String password,

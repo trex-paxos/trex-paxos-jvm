@@ -12,7 +12,16 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
+import static com.github.trex_paxos.TrexLogger.LOGGER;
+
 public class PickleMsg implements Pickler<TrexMessage> {
+  @Override
+  public int sizeOf(TrexMessage msg) {
+    if (msg == null) return 0;
+    final var size = HEADER_SIZE + calculateMessageSize(msg);
+    LOGGER.fine(() -> "PickleMsg sizeOf: " + msg.getClass() + " size: " + size);
+    return size;
+  }
   public static PickleMsg instance = new PickleMsg();
 
   protected PickleMsg() {
@@ -26,7 +35,12 @@ public class PickleMsg implements Pickler<TrexMessage> {
     ByteBuffer buffer = ByteBuffer.allocate(size);
     writeHeader(msg, buffer);
     writeMessageBody(msg, buffer);
-    return buffer.array();
+
+    // Copy buffer contents to new array rather than using array()
+    byte[] result = new byte[buffer.position()];
+    buffer.flip();
+    buffer.get(result);
+    return result;
   }
 
   private static int calculateMessageSize(TrexMessage msg) {
@@ -65,9 +79,11 @@ public class PickleMsg implements Pickler<TrexMessage> {
   }
 
   public static TrexMessage unpickle(ByteBuffer buffer) {
+    assert 0 < buffer.remaining() : "Buffer not flipped drained";
     short fromNode = buffer.getShort();
     short toNode = buffer.getShort();
     byte type = buffer.get();
+    LOGGER.fine(() -> "UnpickleMsg type: " + type + " from: " + fromNode + " to: " + toNode + " buffer.remaining(): " + buffer.remaining());
     return switch (type) {
       case 1 -> readPrepare(buffer, fromNode);
       case 2 -> readPrepareResponse(buffer, fromNode, toNode);
@@ -320,12 +336,15 @@ public class PickleMsg implements Pickler<TrexMessage> {
   }
 
   @Override
-  public byte[] serialize(TrexMessage trexMessage) {
-    return pickle(trexMessage);
+  public void serialize(TrexMessage trexMessage, ByteBuffer buffer) {
+    if (trexMessage == null) return;
+    assert buffer.remaining() >= sizeOf(trexMessage) : "Buffer not large enough to hold message";
+    buffer.put(pickle(trexMessage));
   }
 
   @Override
-  public TrexMessage deserialize(byte[] bytes) {
-    return unpickle(ByteBuffer.wrap(bytes));
+  public TrexMessage deserialize(ByteBuffer buffer) {
+    return unpickle(buffer);
   }
 }
+

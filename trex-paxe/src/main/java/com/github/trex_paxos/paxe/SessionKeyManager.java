@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.github.trex_paxos.paxe;
 
-import com.github.trex_paxos.Pickler;
 import com.github.trex_paxos.NodeId;
+import com.github.trex_paxos.Pickler;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -174,28 +174,32 @@ public class SessionKeyManager {
 class PickleHandshake {
 
   public static Pickler<SessionKeyManager.KeyMessage> instance = new Pickler<>() {
+
+
     @Override
-    public byte[] serialize(SessionKeyManager.KeyMessage msg) {
-      return PickleHandshake.pickle(msg);
+    public void serialize(SessionKeyManager.KeyMessage object, ByteBuffer buffer) {
+      PickleHandshake.pickle(object, buffer);
     }
 
     @Override
-    public SessionKeyManager.KeyMessage deserialize(byte[] bytes) {
-      return PickleHandshake.unpickle(bytes);
+    public SessionKeyManager.KeyMessage deserialize(ByteBuffer buffer) {
+      return PickleHandshake.unpickle(buffer);
+    }
+
+    @Override
+    public int sizeOf(SessionKeyManager.KeyMessage msg) {
+      return PickleHandshake.calculateSize(msg);
     }
   };
 
-  static byte[] pickle(SessionKeyManager.KeyMessage msg) {
-    ByteBuffer buffer = ByteBuffer.allocate(calculateSize(msg));
+  static void pickle(SessionKeyManager.KeyMessage msg, ByteBuffer buffer) {
     buffer.put(toByte(msg));
     buffer.putShort(msg.from().id());
     buffer.putInt(msg.publicKey().length);
     buffer.put(msg.publicKey());
-    return buffer.array();
   }
 
-  static SessionKeyManager.KeyMessage unpickle(byte[] bytes) {
-    ByteBuffer buffer = ByteBuffer.wrap(bytes);
+  static SessionKeyManager.KeyMessage unpickle(ByteBuffer buffer) {
     byte type = buffer.get();
     NodeId from = new NodeId(buffer.getShort());
     int keyLength = buffer.getInt();

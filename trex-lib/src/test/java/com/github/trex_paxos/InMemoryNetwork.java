@@ -10,6 +10,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+
+import static com.github.trex_paxos.TrexLogger.LOGGER;
+
 record ChannelAndSubscriber(Channel channel, ChannelSubscription subscriber) {
 }
 class InMemoryNetwork {
@@ -18,7 +21,7 @@ class InMemoryNetwork {
   private volatile boolean running = true;
 
   public InMemoryNetwork() {
-    StackServiceImpl.LOGGER.fine(() -> "Created InMemoryNetwork");
+    LOGGER.fine(() -> "Created InMemoryNetwork");
   }
 
   private record NetworkMessage(short nodeId, Channel channel, ByteBuffer data) {
@@ -42,25 +45,28 @@ class InMemoryNetwork {
           NetworkMessage msg = messageQueue.poll(100, TimeUnit.MILLISECONDS);
 
           if (msg != null) {
+            msg.data().flip();
+            msg.data().mark();
             handlers.forEach(h -> {
               if (h.channel().equals(msg.channel)) {
-                StackServiceImpl.LOGGER.fine(() -> InMemoryNetwork.class.getSimpleName() + " received message on channel " + msg.channel + " from " + msg.nodeId + " delivering to " + h.subscriber().name());
+                LOGGER.fine(() -> InMemoryNetwork.class.getSimpleName() + " received message on channel " + msg.channel + " from " + msg.nodeId + " delivering to " + h.subscriber().name());
                 h.subscriber().accept(msg.data);
+                msg.data().reset();
               }
             });
           }
         } catch (InterruptedException e) {
           if (running) {
-            StackServiceImpl.LOGGER.warning(InMemoryNetwork.class.getSimpleName() + " message processor interrupted: " + e.getMessage());
+            LOGGER.warning(InMemoryNetwork.class.getSimpleName() + " message processor interrupted: " + e.getMessage());
           }
         }
       }
     });
-    StackServiceImpl.LOGGER.info(() -> InMemoryNetwork.class.getSimpleName() + " network started with subscribers " + handlers);
+    LOGGER.info(() -> InMemoryNetwork.class.getSimpleName() + " network started with subscribers " + handlers);
   }
 
   public void close() {
-    StackServiceImpl.LOGGER.fine(() -> InMemoryNetwork.class.getSimpleName() + " network stopping");
+    LOGGER.fine(() -> InMemoryNetwork.class.getSimpleName() + " network stopping");
     running = false;
   }
 }

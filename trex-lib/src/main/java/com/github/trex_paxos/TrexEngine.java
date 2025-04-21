@@ -5,7 +5,7 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.AcceptResponse;
 import com.github.trex_paxos.msg.Fixed;
 import com.github.trex_paxos.msg.TrexMessage;
-import org.jetbrains.annotations.TestOnly; // TODO can we refactor to functional programming to avoid this?
+import org.jetbrains.annotations.TestOnly;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,6 +49,7 @@ public class TrexEngine<RESULT> implements AutoCloseable {
   private final Semaphore mutex = new Semaphore(1);
 
   /// In order to perform cluster reconfiguration we need to be able to perform some operations holding the mutex
+  @SuppressWarnings("unused") // TODO use this in UPaxos reconfigurations
   protected void withMutex(Runnable runnable) {
     try {
       mutex.acquire();

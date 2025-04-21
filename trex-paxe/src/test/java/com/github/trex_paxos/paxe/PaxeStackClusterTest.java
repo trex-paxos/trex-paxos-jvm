@@ -3,15 +3,11 @@
 package com.github.trex_paxos.paxe;
 
 import com.github.trex_paxos.*;
-import com.github.trex_paxos.network.NetworkAddress;
-import com.github.trex_paxos.network.NodeEndpoints;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.time.Duration;
-import java.util.Map;
 import java.util.function.Supplier;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
@@ -19,9 +15,9 @@ import java.util.logging.Level;
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class PaxeStackClusterTest {
-  private static final Duration TEST_TIMEOUT = Duration.ofMillis(500);
 
   private NetworkTestHarness harness;
   StackServiceImpl stackService1;
@@ -50,10 +46,6 @@ class PaxeStackClusterTest {
     harness.waitForNetworkEstablishment();
     LOGGER.fine("Network established successfully");
 
-    Supplier<NodeEndpoints> eps = () -> new NodeEndpoints(
-        Map.of(new NodeId((short) 1), new NetworkAddress(network1.port()),
-            new NodeId((short) 2), new NetworkAddress(network2.port())));
-
     Supplier<Legislators> members = () -> Legislators.of(
         new VotingWeight(new NodeId((short) 1), 1),
         new VotingWeight(new NodeId((short) 2), 1),
@@ -79,16 +71,17 @@ class PaxeStackClusterTest {
     LOGGER.fine("Test setup complete");
   }
   @Test
-  void testBasicStackOperations() throws Exception {
+  void testBasicStackOperations() {
     LOGGER.info("Testing basic stack operations");
 
     // Push "first"
     LOGGER.info("Pushing 'first' to stack");
     StackService.Response response1 = stackService1.push("first");
-
+    assertNotNull(response1);
     // Push "second"
     LOGGER.info("Pushing 'second' to stack from alternate node");
     StackService.Response response2 = stackService2.push("second");
+    assertNotNull(response2);
 
     // Peek - should see "second"
     LOGGER.info("Testing peek operation");
@@ -111,7 +104,7 @@ class PaxeStackClusterTest {
   }
 
   @Test
-  void testNodeFailure() throws Exception {
+  void testNodeFailure() {
     LOGGER.info("Testing node failure handling");
 
     // Push initial value

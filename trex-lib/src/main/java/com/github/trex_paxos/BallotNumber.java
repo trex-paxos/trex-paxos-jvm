@@ -40,6 +40,7 @@ public record BallotNumber(short era, int counter, short nodeIdentifier) impleme
 
   ///  increment era
   ///  @return a new ballot number with the era incremented by one.
+  @SuppressWarnings("unused") // TODO use this in Upaxos reconfigurations
   public BallotNumber incrementEra() {
     return new BallotNumber((short) (era + 1), counter, nodeIdentifier);
   }

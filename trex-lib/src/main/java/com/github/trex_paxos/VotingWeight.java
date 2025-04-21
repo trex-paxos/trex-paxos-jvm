@@ -6,7 +6,7 @@ import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/// We can optionally use voting weights to evaluate quoums.
+/// We can optionally use voting weights to evaluate quorums.
 /// FPaxos (Flexible Paxos) and UPaxos (Unbounded Paxos) use 
 /// voting weights. 
 public record VotingWeight(NodeId nodeId, int weight) {

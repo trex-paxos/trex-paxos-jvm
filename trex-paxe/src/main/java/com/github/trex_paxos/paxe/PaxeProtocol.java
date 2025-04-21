@@ -22,6 +22,5 @@ public sealed interface PaxeProtocol permits PaxePacket {
   // Protocol sizing
   int MAX_UDP_SIZE = 65507;
   int MIN_MESSAGE_SIZE = HEADER_SIZE + 1; // Header + flags
-  int DEK_THRESHOLD = 64;
   int DEK_KEY_SIZE = 16;
 }

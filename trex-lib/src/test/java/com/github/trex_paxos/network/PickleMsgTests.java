@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Optional;
-import java.util.UUID;
 
 import static com.github.trex_paxos.Pickle.readProgress;
 import static com.github.trex_paxos.Pickle.writeProgress;

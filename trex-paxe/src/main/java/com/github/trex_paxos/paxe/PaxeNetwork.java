@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.github.trex_paxos.paxe;
 
-import com.github.trex_paxos.Legislators;
 import com.github.trex_paxos.NodeId;
 import com.github.trex_paxos.Pickle;
 import com.github.trex_paxos.Pickler;
@@ -15,7 +14,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
-import java.security.GeneralSecurityException;
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -26,7 +24,6 @@ import java.util.function.Supplier;
 
 import static com.github.trex_paxos.network.SystemChannel.*;
 import static com.github.trex_paxos.paxe.PaxeLogger.LOGGER;
-import static com.github.trex_paxos.paxe.PaxeProtocol.MAX_UDP_SIZE;
 
 /// ## Paxe Network Protocol
 ///
@@ -82,8 +79,6 @@ import static com.github.trex_paxos.paxe.PaxeProtocol.MAX_UDP_SIZE;
 /// - Direct encryption: 65507 - 8 - 1 - 12 - 16 = 65470 bytes
 /// - DEK encryption: 65507 - 8 - 1 - 12 - 16 - 16 - 12 - 16 - 2 = 65424 bytes
 ///```
-///
-/// TODO This logic uses a pickler that will geneerate a lot of byte arrays we should make one that writes to a pooled ByteBuffer
 public class PaxeNetwork implements NetworkLayer, AutoCloseable {
 
   sealed interface Traffic {
@@ -231,10 +226,11 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
     LOGGER.finest(() -> String.format("%s Sending message on channel %s to %s: %s",
         localNode, channel, to, msg));
 
-    byte[] payload;
+    byte[] payload = null;
+    int payloadLength;
     if (channel.id() == KEY_EXCHANGE.id()) {
       LOGGER.finest(() -> "Processing key exchange message");
-      payload = PickleHandshake.pickle((SessionKeyManager.KeyMessage) msg);
+      payloadLength = PickleHandshake.instance.sizeOf((SessionKeyManager.KeyMessage) msg);
     } else {
       byte[] key = keyManager.sessionKeys.get(to);
       LOGGER.finest(() -> String.format("Encrypting message for %d, key %s", to.id(),
@@ -248,17 +244,23 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
         throw new IllegalArgumentException("Serialized message %s too large: %d bytes".formatted(msg, serializeMessage.length));
       }
       payload = Crypto.encrypt(serializeMessage, key);
+      payloadLength = payload.length;
     }
 
-    ByteBuffer buffer = ByteBuffer.allocateDirect(payload.length + HEADER_SIZE);
+    // FIXME we can pool these
+    ByteBuffer buffer = ByteBuffer.allocateDirect(payloadLength + HEADER_SIZE);
     buffer.clear();
 
     buffer.putShort(localNode.id());
     buffer.putShort(to.id());
     buffer.putShort(channel.id());
 
-    buffer.putShort((short) payload.length);
-    buffer.put(payload);
+    buffer.putShort((short) payloadLength);
+    if (payload != null)
+      buffer.put(payload);
+    else
+      PickleHandshake.instance.serialize((SessionKeyManager.KeyMessage) msg, buffer);
+
     buffer.flip();
 
     try {
@@ -288,33 +290,6 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
 
     var handshake = keyManager.initiateHandshake(to);
     handshake.ifPresent(keyMessage -> send(KEY_EXCHANGE.value(), to, keyMessage));
-  }
-
-  @Override
-  public <T> void broadcast(Supplier<Legislators> membershipSupplier, Channel channel, T msg) {
-    Collection<NodeId> recipients = membershipSupplier.get().otherNodes(localNode);
-    byte[] serialized = serializeMessage(msg, channel);
-
-    if (serialized.length <= PaxeProtocol.DEK_THRESHOLD) {
-      // Small messages: Use standard per-recipient encryption
-      recipients.forEach(recipient -> send(channel, recipient, msg));
-    } else {
-      try {
-        // Large messages: Encrypt payload once with DEK
-        var dekWithEncryptedPayload = Crypto.dekEncryptWithRandomKey(serialized);
-
-        // Then only encrypt DEK per recipient
-        for (NodeId recipient : recipients) {
-          ByteBuffer output = ByteBuffer.allocateDirect(MAX_UDP_SIZE);
-          Crypto.sessionKeyEncryptDek(output, dekWithEncryptedPayload, keyManager.sessionKeys.get(recipient));
-          output.flip();
-          // Send the encrypted DEK and reuse the encrypted payload
-          send(channel, recipient, output);
-        }
-      } catch (GeneralSecurityException e) {
-        throw new SecurityException("DEK encryption failed", e);
-      }
-    }
   }
 
   @Override
@@ -430,7 +405,8 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
       return;
     }
 
-    Object msg = pickler.deserialize(bytes);
+    // FIXME
+    Object msg = pickler.deserialize(ByteBuffer.wrap(bytes));
     LOGGER.finest(() -> String.format("Deserialized message on channel %s: %s", channel, msg));
 
     List<Consumer<?>> handlers = subscribers.get(channel);
@@ -445,12 +421,21 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
 
   private <T> byte[] serializeMessage(T msg, Channel channel) {
     LOGGER.finest(() -> String.format("Serializing message type: %s", msg.getClass().getName()));
-    Pickler<?> pickler = picklers.get(channel);
+    // FIXME
+    @SuppressWarnings("unchecked")
+    Pickler<Object> pickler = (Pickler<Object>) picklers.get(channel);
     if (pickler == null) {
       throw new IllegalStateException("No pickler for channel: " + channel);
     }
-    //noinspection unchecked
-    return ((Pickler<Object>) pickler).serialize(msg);
+    int size = pickler.sizeOf(msg);
+    ByteBuffer buffer = ByteBuffer.allocate(size);
+    pickler.serialize(msg, buffer);
+
+    // Copy buffer contents to a new byte array instead of using array()
+    byte[] result = new byte[buffer.position()];
+    buffer.flip();
+    buffer.get(result);
+    return result;
   }
 
   private SocketAddress resolveAddress(NodeId to) {
@@ -479,3 +464,4 @@ public class PaxeNetwork implements NetworkLayer, AutoCloseable {
     }
   }
 }
+

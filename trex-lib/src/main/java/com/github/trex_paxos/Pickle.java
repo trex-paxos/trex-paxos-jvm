@@ -5,6 +5,7 @@ package com.github.trex_paxos;
 import com.github.trex_paxos.msg.Accept;
 
 import java.io.*;
+import java.nio.ByteBuffer;
 import java.util.UUID;
 
 /// Pickle is a utility class for serializing and deserializing the record types that the [Journal] uses.
@@ -15,21 +16,38 @@ public class Pickle {
   public static Pickler<Command> instance = new Pickler<>() {
 
     @Override
-    public byte[] serialize(Command cmd) {
+    public void serialize(Command cmd, ByteBuffer buffer) {
       try {
-        return Pickle.write(cmd);
+        byte[] bytes = write(cmd);
+        buffer.put(bytes);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
     }
 
     @Override
-    public Command deserialize(byte[] bytes) {
+    public Command deserialize(ByteBuffer buffer) {
       try {
+        // Get remaining bytes from the buffer instead of using array()
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.get(bytes);
         return (Command) Pickle.readCommand(bytes);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
+    }
+    
+    @Override
+    public int sizeOf(Command cmd) {
+      if (cmd == null) return 0;
+      
+      // Calculate size based on:
+      // - 4 bytes for operation bytes length
+      // - operation bytes length
+      // - 8 bytes for UUID most significant bits
+      // - 8 bytes for UUID least significant bits
+      // - 1 byte for flavour
+      return 4 + (cmd.operationBytes() != null ? cmd.operationBytes().length : 0) + 8 + 8 + 1;
     }
   };
 
@@ -156,3 +174,4 @@ public class Pickle {
     }
   }
 }
+

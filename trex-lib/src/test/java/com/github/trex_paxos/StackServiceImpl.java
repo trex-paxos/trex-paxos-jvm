@@ -16,9 +16,9 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static com.github.trex_paxos.TrexLogger.LOGGER;
 import static com.github.trex_paxos.network.SystemChannel.CONSENSUS;
 import static com.github.trex_paxos.network.SystemChannel.PROXY;
-
 /// A demonstration implementation of a distributed Stack using the Trex Paxos library.
 /// See [com.github.trex_paxos] package documentation for detailed information about the core library.
 ///
@@ -37,9 +37,6 @@ import static com.github.trex_paxos.network.SystemChannel.PROXY;
 /// All operations (push, pop, peek) are replicated to the cluster for fault tolerance.
 /// The TrexService ensures that all nodes process commands in the same order.
 public class StackServiceImpl implements StackService {
-  // This is public as we will use it in jshell to demo the stack service
-  public static final Logger LOGGER = Logger.getLogger(StackServiceImpl.class.getName());
-
   // Stack data structure - shared state that needs synchronization
   private final Stack<String> stack = new Stack<>();
 

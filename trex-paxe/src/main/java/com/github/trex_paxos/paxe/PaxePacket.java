@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
+
 /// Represents a secure network packet for the Paxe protocol, encapsulating both unencrypted and
 /// encrypted message formats. Packets include metadata for routing, integrity checks, and optional
 /// authenticated encryption using AES-GCM.
@@ -162,7 +163,11 @@ public record PaxePacket(
     authTag.ifPresent(buffer::put);
     buffer.put(payload);
 
-    return buffer.array();
+    // Copy buffer contents to byte array rather than using array()
+    byte[] result = new byte[buffer.position()];
+    buffer.flip();
+    buffer.get(result);
+    return result;
   }
 
   public static PaxePacket fromBytes(byte[] bytes) {
@@ -199,7 +204,12 @@ public record PaxePacket(
     buffer.putShort(from.id());
     buffer.putShort(to.id());
     buffer.putShort(channel.id());
-    return buffer.array();
+
+    // Copy buffer contents to byte array rather than using array()
+    byte[] result = new byte[buffer.position()];
+    buffer.flip();
+    buffer.get(result);
+    return result;
   }
 
   public static PaxeMessage decrypt(PaxePacket packet, byte[] key) {
@@ -274,3 +284,4 @@ public record PaxePacket(
     return result;
   }
 }
+

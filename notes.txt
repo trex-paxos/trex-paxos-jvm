@@ -3,6 +3,7 @@ mvn versions:display-plugin-updates
 
 
 mvn -DskipTests clean install && mvn test -pl trex-lib
+mvn -DskipTests clean install && mvn test -pl trex-paxe
 
 # tests
 mvn clean package

@@ -18,23 +18,10 @@ public record Legislators(Set<VotingWeight> weights) {
     return new Legislators(Set.of(votingWeights));
   }
 
-  public int totalWeight() {
-    return weights.stream().mapToInt(VotingWeight::weight).sum();
-  }
-
-  public int quorum() {
-    return totalWeight() / 2 + 1;
-  }
   public Set<NodeId> otherNodes(NodeId self) {
     return weights.stream()
         .map(VotingWeight::nodeId)
         .filter(nodeId -> !nodeId.equals(self))
-        .collect(Collectors.toSet());
-  }
-
-  public Iterable<NodeId> members() {
-    return weights.stream()
-        .map(VotingWeight::nodeId)
         .collect(Collectors.toSet());
   }
 }
