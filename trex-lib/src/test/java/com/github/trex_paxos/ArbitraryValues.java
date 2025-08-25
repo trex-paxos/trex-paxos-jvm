@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.github.trex_paxos;
 
-public class ArbitraryValues {
+public sealed interface ArbitraryValues permits ArbitraryValues.None {
+  enum None implements ArbitraryValues {
+    INSTANCE
+  }
   /// Current TrexRole of the node under test when receiving messages
   enum RoleState {FOLLOW, RECOVER, LEAD}
 

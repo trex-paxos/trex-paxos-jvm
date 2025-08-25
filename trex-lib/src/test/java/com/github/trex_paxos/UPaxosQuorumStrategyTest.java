@@ -458,4 +458,34 @@ class UPaxosQuorumStrategyTest {
     assertTrue(result.get(0).isEmpty());
     assertTrue(result.get(1).isEmpty());
   }
+
+  @lombok.ToString
+  public static class Link {
+    private final String current;
+    private Link next;
+
+    public Link(String current, Link next) {
+      this.current = current;
+      this.next = next;
+      ;
+    }
+  }
+
+  public static void main(String[] args) {
+    // no circular dependencies
+    final var directedAsynchronousGraph = new Link("A", new Link("B", new Link("C", null)));
+    final var dagString = directedAsynchronousGraph.toString();
+    if (!dagString.equals("UPaxosQuorumStrategyTest.Link(current=A, next=UPaxosQuorumStrategyTest.Link(current=B, next=UPaxosQuorumStrategyTest.Link(current=C, next=null)))")) {
+      throw new RuntimeException("Expected: UPaxosQuorumStrategyTest.Link(current=A, next=UPaxosQuorumStrategyTest.Link(current=B, next=UPaxosQuorumStrategyTest.Link(current=C, next=null))) but got: " + dagString);
+    }
+    // with circular dependencies
+    final var linkA = new Link("A", null);
+    final var linkB = new Link("B", linkA);
+    final var linkC = new Link("C", linkB);
+    linkA.next = linkC; // Create circular dependency
+    final var circularDagString = linkA.toString();
+    if (!circularDagString.equals("UPaxosQuorumStrategyTest.Link(current=A, next=UPaxosQuorumStrategyTest.Link(current=B, next=UPaxosQuorumStrategyTest.Link(current=C, next=UPaxosQuorumStrategyTest.Link(current=A, next=null))))")) {
+      throw new RuntimeException("Expected: UPaxosQuorumStrategyTest.Link(current=A, next=UPaxosQuorumStrategyTest.Link(current=B, next=UPaxosQuorumStrategyTest.Link(current=C, next=UPaxosQuorumStrategyTest.Link(current=A, next=null)))) but got: " + circularDagString);
+    }
+  }
 }
