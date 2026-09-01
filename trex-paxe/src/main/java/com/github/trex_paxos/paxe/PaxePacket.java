@@ -12,276 +12,155 @@ import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 
-/// Represents a secure network packet for the Paxe protocol, encapsulating both unencrypted and
-/// encrypted message formats. Packets include metadata for routing, integrity checks, and optional
-/// authenticated encryption using AES-GCM.
+/// Authenticated unicast PAXE datagram: `Prefix(9) | Nonce(12) | Ciphertext | Tag(16)`.
 ///
-/// ## Packet Structure
+/// The nine-byte prefix is `BE16(fromId) || BE16(toId) || BE32(channel) || epoch` and is the
+/// exact AES-GCM associated data. `fromId` is authenticated routing metadata; every member holds
+/// the same cluster PSK, so it is not a distinct cryptographic node identity.
 ///
-/// ### Message Header (8 bytes):
-///
-/// ```
-/// | fromId (2 bytes) | toId (2 bytes) | channel  (2 bytes) | length (2 bytes)
-/// ```
-///
-/// - fromId: Source node identifier
-/// - toId: Destination node identifier
-/// - channel: Communication channel identifier
-/// - length: Payload length
-///
-/// ### Standard Message Format:
-///
-/// ```
-/// | Header (8 bytes)  | flags (1 byte)  | nonce(12) | Payload  | Auth Tag (16)
-/// ```
-///
-/// - Header: Message header defined above
-/// - Flags: Encryption mode and magic bits
-/// - Nonce: Unique 12-byte nonce for AES-GCM encryption
-/// - Payload: The small message payload encrypted with the peer-to-peer session key.
-/// - Auth Tag: 16-byte authentication tag
-///
-/// ### DEK Message Format
-///
-/// ```
-/// | Header (8)  | flags (1)  | nonce (12) | DEK (16) | Auth Tag (16) | Length (2) | Payload | Auth Tag (16)
-/// ```
-/// - Header: Message header defined above
-/// - Flags: Encryption mode and magic bits
-/// - Nonce: Unique 12-byte nonce for AES-GCM encryption
-/// - DEK: Data Encryption Key encrypted with the peer-to-peer session key 16 byte (128 bit)
-/// - Length: Payload length (2 bytes)
-/// - Payload: The large message payload encrypted with the DEK.
-/// - Auth Tag: 16-byte authentication tag of the encrypted payload.
-///
-/// This means tha there is a 71 byte overhead for DEK messages.
-///
-/// ### Flags Byte Structure
-///
-/// - Bit 0: DEK flag (0=standard, 1=DEK mode)
-/// - Bit 1: Must be 0
-/// - Bit 2: Must be 1
-/// - Bits 3-7: Reserved
-///
-/// ## Encryption Details
-///
-/// Encrypted packets:
-///
-/// - Use AES-GCM with 16-byte authentication tag appended to ciphertext.
-/// - Unique 12-byte nonce for AES-GCM encryption.
-/// - Uses SRP6a (RFC5054) for peer-to-peer session key negotiation.
-/// - Small message less than 64 bytes are encrypted with the peer-to-peer session key.
-/// - Large messages are encrypted with a Data Encryption Key (DEK) shared amongst broadcast messages.
-/// - DEK is encrypted with each node pair session key.
-///
-/// ## Validation Rules
-///
-/// - Nonce and auth tag must both be present or both absent
-/// - Nonce must be exactly 12 bytes when present
-/// - Auth tag must be exactly 16 bytes when present
-/// - Total packet size cannot exceed 65,535 bytes
-/// - Flags byte must have magic bits set correctly
-///
-/// @see PaxeProtocol PaxeProtocol constants and validation rules
-/// @see #decrypt(PaxePacket, byte[]) Packet decryption method
-/// @see #encrypt(PaxeMessage, NodeId, byte[]) Packet encryption method
+/// Plaintext length is derived from the received UDP datagram length minus {@link #FRAME_OVERHEAD};
+/// there is no encoded length field.
 public record PaxePacket(
     NodeId from,
     NodeId to,
     Channel channel,
-    Optional<byte[]> nonce,
-    Optional<byte[]> authTag,
-    byte[] payload) implements PaxeProtocol {
+    byte epoch,
+    byte[] nonce,
+    byte[] ciphertext,
+    byte[] authTag) implements PaxeProtocol {
 
-  public static final int HEADER_SIZE = 8; // from(2) + to(2) + channel(2) + length(2)
-  public static final int AUTHENTICATED_DATA_SIZE = 6; // from(2) + to(2) + channel(2)
-  public static final int NONCE_SIZE = 12;
-  public static final int AUTH_TAG_SIZE = 16;
-  public static final int MAX_PACKET_LENGTH = 65535;
+  public static final int NONCE_SIZE = GCM_NONCE_LENGTH;
+  public static final int AUTH_TAG_SIZE = GCM_TAG_LENGTH;
 
   public PaxePacket {
-    Objects.requireNonNull(from, "from cannot be null");
-    Objects.requireNonNull(to, "to cannot be null");
-    Objects.requireNonNull(channel, "channel cannot be null");
-    Objects.requireNonNull(payload, "payload cannot be null");
-    Objects.requireNonNull(nonce, "nonce cannot be null");
-    Objects.requireNonNull(authTag, "authTag cannot be null");
-
-    var totalSize = HEADER_SIZE + payload.length;
-    if (nonce.isPresent()) {
-      totalSize += NONCE_SIZE + AUTH_TAG_SIZE;
+    Objects.requireNonNull(from, "from");
+    Objects.requireNonNull(to, "to");
+    Objects.requireNonNull(channel, "channel");
+    Objects.requireNonNull(nonce, "nonce");
+    Objects.requireNonNull(ciphertext, "ciphertext");
+    Objects.requireNonNull(authTag, "authTag");
+    if (nonce.length != NONCE_SIZE) {
+      throw new IllegalArgumentException("Invalid nonce size");
     }
-    if (totalSize > MAX_PACKET_LENGTH) {
-      throw new IllegalArgumentException(
-          String.format("Total payload size %d when adding headers exceeds UDP limit of %d as %d", payload.length, MAX_PACKET_LENGTH, totalSize));
+    if (authTag.length != AUTH_TAG_SIZE) {
+      throw new IllegalArgumentException("Invalid auth tag size");
     }
-
-    nonce.ifPresent(n -> {
-      if (n.length != NONCE_SIZE)
-        throw new IllegalArgumentException("Invalid nonce size");
-    });
-
-    authTag.ifPresent(t -> {
-      if (t.length != AUTH_TAG_SIZE)
-        throw new IllegalArgumentException("Invalid auth tag size");
-    });
-
-    if (nonce.isPresent() != authTag.isPresent()) {
-      throw new IllegalArgumentException("Both nonce and authTag must be present for encrypted packets");
+    if (ciphertext.length > MAX_PLAINTEXT_SIZE) {
+      throw new IllegalArgumentException("Ciphertext exceeds maximum UDP payload");
     }
   }
 
-  // Constructor for unencrypted packets
-  public PaxePacket(NodeId from, NodeId to, Channel channel, byte[] payload) {
-    this(from, to, channel, Optional.empty(), Optional.empty(), payload);
-  }
-
-  private static void putLength(ByteBuffer buffer, int length) {
-    buffer.put((byte) ((length >>> 8) & 0xFF));
-    buffer.put((byte) (length & 0xFF));
-  }
-
-  private static int getLength(ByteBuffer buffer) {
-    return ((buffer.get() & 0xFF) << 8) | (buffer.get() & 0xFF);
-  }
-
-  public byte[] toBytes() {
-    var size = HEADER_SIZE +
-        (nonce.isPresent() ? NONCE_SIZE + AUTH_TAG_SIZE : 0) +
-        payload.length;
-
-    var buffer = ByteBuffer.allocate(size);
+  /// Serializes the nine-byte prefix used as AES-GCM associated data.
+  public byte[] prefixBytes() {
+    var buffer = ByteBuffer.allocate(PREFIX_SIZE);
     buffer.putShort(from.id());
     buffer.putShort(to.id());
-    buffer.putShort(channel.id());
-    putLength(buffer, payload.length);
-
-    nonce.ifPresent(buffer::put);
-    authTag.ifPresent(buffer::put);
-    buffer.put(payload);
-
-    // Copy buffer contents to byte array rather than using array()
-    byte[] result = new byte[buffer.position()];
-    buffer.flip();
-    buffer.get(result);
-    return result;
+    buffer.putInt(channel.id());
+    buffer.put(epoch);
+    return buffer.array();
   }
 
-  public static PaxePacket fromBytes(byte[] bytes) {
-    var buffer = ByteBuffer.wrap(bytes);
+  /// Assembles the full on-wire datagram.
+  public byte[] toDatagram() {
+    var buffer = ByteBuffer.allocate(FRAME_OVERHEAD + ciphertext.length);
+    buffer.put(prefixBytes());
+    buffer.put(nonce);
+    buffer.put(ciphertext);
+    buffer.put(authTag);
+    return buffer.array();
+  }
+
+  /// Parses a received UDP datagram without decrypting. Rejects undersized datagrams.
+  public static PaxePacket fromDatagram(byte[] datagram) {
+    if (datagram.length < FRAME_OVERHEAD) {
+      throw new SecurityException("Datagram shorter than fixed PAXE overhead");
+    }
+    var buffer = ByteBuffer.wrap(datagram);
     var from = new NodeId(buffer.getShort());
     var to = new NodeId(buffer.getShort());
-    var channel = new Channel(buffer.getShort());
-    var payloadLength = getLength(buffer);
+    var channel = new Channel(buffer.getInt());
+    byte epoch = buffer.get();
 
-    var remaining = buffer.remaining();
-    var isEncrypted = remaining > payloadLength;
+    var nonce = new byte[NONCE_SIZE];
+    buffer.get(nonce);
 
-    Optional<byte[]> nonce = Optional.empty();
-    Optional<byte[]> authTag = Optional.empty();
+    int ciphertextLength = datagram.length - FRAME_OVERHEAD;
+    var ciphertext = new byte[ciphertextLength];
+    buffer.get(ciphertext);
 
-    if (isEncrypted) {
-      var n = new byte[NONCE_SIZE];
-      buffer.get(n);
-      nonce = Optional.of(n);
+    var authTag = new byte[AUTH_TAG_SIZE];
+    buffer.get(authTag);
 
-      var t = new byte[AUTH_TAG_SIZE];
-      buffer.get(t);
-      authTag = Optional.of(t);
+    if (buffer.hasRemaining()) {
+      throw new SecurityException("Datagram longer than expected for derived ciphertext length");
     }
 
-    var payload = new byte[payloadLength];
-    buffer.get(payload);
-
-    return new PaxePacket(from, to, channel, nonce, authTag, payload);
+    return new PaxePacket(from, to, channel, epoch, nonce, ciphertext, authTag);
   }
 
-  public byte[] authenticatedData() {
-    var buffer = ByteBuffer.allocate(AUTHENTICATED_DATA_SIZE);
-    buffer.putShort(from.id());
-    buffer.putShort(to.id());
-    buffer.putShort(channel.id());
+  public static PaxePacket seal(NodeId from, NodeId to, Channel channel, byte epoch, byte[] plaintext, byte[] clusterKey)
+      throws GeneralSecurityException {
+    var nonce = new byte[NONCE_SIZE];
+    ThreadLocalRandom.current().nextBytes(nonce);
 
-    // Copy buffer contents to byte array rather than using array()
-    byte[] result = new byte[buffer.position()];
-    buffer.flip();
-    buffer.get(result);
-    return result;
+    var cipher = Cipher.getInstance("AES/GCM/NoPadding");
+    cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(clusterKey, "AES"), new GCMParameterSpec(GCM_TAG_LENGTH_BITS, nonce));
+
+    var prefix = prefixBytes(from, to, channel, epoch);
+    cipher.updateAAD(prefix);
+
+    var encrypted = cipher.doFinal(plaintext);
+    var authTag = Arrays.copyOfRange(encrypted, encrypted.length - AUTH_TAG_SIZE, encrypted.length);
+    var ciphertext = Arrays.copyOf(encrypted, encrypted.length - AUTH_TAG_SIZE);
+
+    return new PaxePacket(from, to, channel, epoch, nonce, ciphertext, authTag);
   }
 
-  public static PaxeMessage decrypt(PaxePacket packet, byte[] key) {
-    if (packet.nonce.isEmpty() || packet.authTag.isEmpty()) {
-      throw new SecurityException("Cannot decrypt unencrypted packet");
-    }
-
+  public byte[] decrypt(byte[] clusterKey) {
     try {
       var cipher = Cipher.getInstance("AES/GCM/NoPadding");
-      var gcmSpec = new GCMParameterSpec(AUTH_TAG_SIZE * 8, packet.nonce.get());
-      cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), gcmSpec);
-      cipher.updateAAD(packet.authenticatedData());
+      cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(clusterKey, "AES"), new GCMParameterSpec(GCM_TAG_LENGTH_BITS, nonce));
+      cipher.updateAAD(prefixBytes());
 
-      var combined = new byte[packet.payload.length + AUTH_TAG_SIZE];
-      System.arraycopy(packet.payload, 0, combined, 0, packet.payload.length);
-      System.arraycopy(packet.authTag.get(), 0, combined, packet.payload.length, AUTH_TAG_SIZE);
-
-      var decrypted = cipher.doFinal(combined);
-      return PaxeMessage.deserialize(packet.from, packet.to, packet.channel, decrypted);
+      var combined = new byte[ciphertext.length + AUTH_TAG_SIZE];
+      System.arraycopy(ciphertext, 0, combined, 0, ciphertext.length);
+      System.arraycopy(authTag, 0, combined, ciphertext.length, AUTH_TAG_SIZE);
+      return cipher.doFinal(combined);
     } catch (GeneralSecurityException e) {
       throw new SecurityException("Decryption failed", e);
     }
   }
 
-  public static PaxePacket encrypt(PaxeMessage message, NodeId from, byte[] key) throws GeneralSecurityException {
-    var nonce = new byte[NONCE_SIZE];
-    ThreadLocalRandom.current().nextBytes(nonce);
-
-    var cipher = Cipher.getInstance("AES/GCM/NoPadding");
-    var gcmSpec = new GCMParameterSpec(AUTH_TAG_SIZE * 8, nonce);
-    cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), gcmSpec);
-
-    var tempPacket = new PaxePacket(from, message.to(), message.channel(), message.serialize());
-    cipher.updateAAD(tempPacket.authenticatedData());
-
-    var ciphertext = cipher.doFinal(message.serialize());
-
-    var authTag = new byte[AUTH_TAG_SIZE];
-    System.arraycopy(ciphertext, ciphertext.length - AUTH_TAG_SIZE, authTag, 0, AUTH_TAG_SIZE);
-
-    var actualCiphertext = new byte[ciphertext.length - AUTH_TAG_SIZE];
-    System.arraycopy(ciphertext, 0, actualCiphertext, 0, ciphertext.length - AUTH_TAG_SIZE);
-
-    return new PaxePacket(
-        from,
-        message.to(),
-        message.channel(),
-        Optional.of(nonce),
-        Optional.of(authTag),
-        actualCiphertext);
+  private static byte[] prefixBytes(NodeId from, NodeId to, Channel channel, byte epoch) {
+    var buffer = ByteBuffer.allocate(PREFIX_SIZE);
+    buffer.putShort(from.id());
+    buffer.putShort(to.id());
+    buffer.putInt(channel.id());
+    buffer.put(epoch);
+    return buffer.array();
   }
 
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;
-    //noinspection DeconstructionCanBeUsed
-    if (!(o instanceof PaxePacket that)) return false;
+  if (!(o instanceof PaxePacket that)) return false;
     return from.equals(that.from)
         && to.equals(that.to)
         && channel.equals(that.channel)
-        && Arrays.equals(nonce.orElse(null), that.nonce.orElse(null))
-        && Arrays.equals(authTag.orElse(null), that.authTag.orElse(null))
-        && Arrays.equals(payload, that.payload);
+        && epoch == that.epoch
+        && Arrays.equals(nonce, that.nonce)
+        && Arrays.equals(ciphertext, that.ciphertext)
+        && Arrays.equals(authTag, that.authTag);
   }
 
   @Override
   public int hashCode() {
-    int result = Objects.hash(from, to, channel);
-    result = 31 * result + Arrays.hashCode(nonce.orElse(null));
-    result = 31 * result + Arrays.hashCode(authTag.orElse(null));
-    result = 31 * result + Arrays.hashCode(payload);
+    int result = Objects.hash(from, to, channel, epoch);
+    result = 31 * result + Arrays.hashCode(nonce);
+    result = 31 * result + Arrays.hashCode(ciphertext);
+    result = 31 * result + Arrays.hashCode(authTag);
     return result;
   }
 }
-

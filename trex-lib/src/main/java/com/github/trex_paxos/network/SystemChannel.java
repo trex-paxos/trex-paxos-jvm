@@ -4,12 +4,11 @@ package com.github.trex_paxos.network;
 
 import java.util.List;
 
-/// System channels are used for system messages that are part of the trex paxos and paxe protocols.
-/// Channels below 100 are reserved for system channels.
+/// Well-known Trex channels. All `u32` channel values belong to the host application; these are
+/// conventional defaults for Paxos traffic.
 public enum SystemChannel {
-  CONSENSUS((short) 1),       // Core paxos consensus
-  PROXY((short) 2),          // Forward results to leader
-  KEY_EXCHANGE((short) 3);   // Key exchange for secure communication
+  CONSENSUS(1),
+  PROXY(2);
 
   final Channel channel;
 
@@ -17,15 +16,15 @@ public enum SystemChannel {
     return channel;
   }
 
-  SystemChannel(short id) {
+  SystemChannel(int id) {
     this.channel = new Channel(id);
   }
 
   public static List<Channel> systemChannels() {
-    return List.of(CONSENSUS.channel, PROXY.channel, KEY_EXCHANGE.channel);
+    return List.of(CONSENSUS.channel, PROXY.channel);
   }
 
-  public short id() {
+  public int id() {
     return channel.id();
   }
 }

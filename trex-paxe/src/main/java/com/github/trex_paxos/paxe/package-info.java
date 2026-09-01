@@ -2,32 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 /// # PAXE Wire Protocol Implementation
 ///
-/// The PAXE (Paxos Encrypted) protocol is designed for atomic broadcast consensus, featuring authenticated encryption
-/// with AES-GCM-256, strict message structure validation, and channel-based message routing.
+/// PAXE (Paxos Encrypted) is a protected intracluster UDP datagram codec. Each cluster member holds
+/// the same 32-byte pre-shared key per epoch, installed out of band. PAXE does not negotiate keys,
+/// distribute verifiers, or derive pairwise session state.
 ///
-/// ## Protocol Overview
+/// ## Wire format
 ///
-/// Key features include:
-/// - **Authenticated Encryption**: AES-GCM-256 ensures secure data transmission.
-/// - **Message Validation**: Strict validation ensures protocol compliance.
-/// - **Channel Routing**: Messages are routed through designated channels.
+/// ```
+/// Prefix(9) | Nonce(12) | Ciphertext | Tag(16)
+/// ```
 ///
-/// ## Protocol Structure
+/// Prefix bytes: `BE16(fromId) || BE16(toId) || BE32(channel) || epoch`
 ///
-/// Each message consists of:
-/// 1. **Header (8 bytes)**: Contains source/destination node IDs, channel identifier, and payload length.
-/// 2. **Flags (1 byte)**: Indicates encryption mode and protocol version.
-/// 3. **Nonce (12 bytes)**: Used for AES-GCM encryption.
-/// 4. **Encrypted Payload**: Includes a 16-byte authentication tag.
+/// The prefix is the exact AES-256-GCM associated data. `fromId` is authenticated routing metadata;
+/// because every member holds the same cluster key it is not a distinct cryptographic node identity.
 ///
-/// ## Encryption Modes
+/// Plaintext length is derived from the UDP datagram length minus 37 bytes of fixed overhead.
 ///
-/// PAXE will negotiate a peer-to-peer session key between each node pair using RFC5054 SRP6a to generate a shared secret.
-///
-/// Supports two operational modes:
-/// - **Small Messages**: When the packet size is small enough to be in a cache line the entire message is encrypted with each node pair session key.
-/// - **DEK Encryption**: Large messages are encrypted with a Data Encryption Key (DEK) that is shared among all messages then the DEK is encrypted with each node pair session key.
-///
-/// @see com.github.trex_paxos.paxe.SRPUtils SRPUtils for session key negotiation using RFC5054 SRP6a
-/// @see javax.crypto.Cipher
+/// Optional TLS 1.3 external-PSK provisioning may transport the cluster PSK, but that control-plane
+/// connection is outside PAXE and must not derive a different per-node data key.
 package com.github.trex_paxos.paxe;
