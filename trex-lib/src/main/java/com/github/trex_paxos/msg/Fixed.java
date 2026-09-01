@@ -6,7 +6,11 @@ import com.github.trex_paxos.BallotNumber;
 import com.github.trex_paxos.SlotTerm;
 
 /// A leader sends out a Fixed when it learns of a new fixed log index. It will also heartbeat this message to keep
-/// the followers from timing out. This message type is one of the three [LearningMessage] types where the progress
+/// the followers from timing out when the leader is idle. During steady-state replication the current fixed index is
+/// also piggybacked on leader outbound batches (see {@link com.github.trex_paxos.TrexEngine#nextLeaderBatchOfMessages})
+/// and on {@link AcceptResponse#highestFixedIndex} replies. This is equivalent to the commit-index piggybacking and
+/// idle commit announcements described in Liskov and Cowling, "Viewstamped Replication Revisited", section 4.1 step 6.
+/// This message type is one of the three [LearningMessage] types where the progress
 /// of the node in terms of fixing slots and making an up-call to the host is called.
 ///
 /// @param from          see {@link TrexMessage}
