@@ -32,8 +32,7 @@
             "name": "App",
             "request": "launch",
             "mainClass": "com.github.trex_paxos.App",
-            "projectName": "trex2-demo",
-            "vmArgs": "--enable-preview"
+            "projectName": "trex2-demo"
         }
     ]
 }
