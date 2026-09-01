@@ -13,6 +13,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <maven.compiler.release>25</maven.compiler.release>
+        <jacoco.version>0.8.15</jacoco.version>
     </properties>
     <description>This is an implementation of the Paxos Logarithm as written in Paxos Made Simple by Leslie Lamport
     </description>
