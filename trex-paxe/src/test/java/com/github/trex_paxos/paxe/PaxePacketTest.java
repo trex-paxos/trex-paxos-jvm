@@ -149,4 +149,51 @@ class PaxePacketTest {
     PaxePacket parsed = PaxePacket.fromDatagram(tamperedEpoch);
     assertThrows(SecurityException.class, () -> parsed.decrypt(key));
   }
+
+  @Test
+  void rejectsWrongClusterKey() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    byte[] otherKey = randomClusterKey();
+    PaxePacket packet = PaxePacket.seal(new NodeId((short) 1), new NodeId((short) 2), new Channel(1), (byte) 0, new byte[4], key);
+    assertThrows(SecurityException.class, () -> packet.decrypt(otherKey));
+  }
+
+  @Test
+  void rejectsInvalidNonceAndTagSizes() {
+    assertThrows(IllegalArgumentException.class, () -> new PaxePacket(
+        new NodeId((short) 1), new NodeId((short) 2), new Channel(1), (byte) 0,
+        new byte[11], new byte[0], new byte[16]));
+    assertThrows(IllegalArgumentException.class, () -> new PaxePacket(
+        new NodeId((short) 1), new NodeId((short) 2), new Channel(1), (byte) 0,
+        new byte[12], new byte[0], new byte[15]));
+  }
+
+  @Test
+  void prefixBytesMatchDatagramPrefix() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    PaxePacket packet = PaxePacket.seal(
+        new NodeId((short) 1), new NodeId((short) 2), new Channel(0x01020304), (byte) 5, new byte[]{9}, key);
+    assertArrayEquals(packet.prefixBytes(), Arrays.copyOfRange(packet.toDatagram(), 0, PaxePacket.PREFIX_SIZE));
+  }
+
+  @Test
+  void rejectsOversizedPlaintext() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    assertThrows(IllegalArgumentException.class, () -> PaxePacket.seal(
+        new NodeId((short) 1),
+        new NodeId((short) 2),
+        new Channel(1),
+        (byte) 0,
+        new byte[PaxeProtocol.MAX_PLAINTEXT_SIZE + 1],
+        key));
+  }
+
+  @Test
+  void equalsAndHashCodeUseValueSemantics() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    PaxePacket one = PaxePacket.seal(new NodeId((short) 1), new NodeId((short) 2), new Channel(3), (byte) 0, new byte[]{1}, key);
+    PaxePacket two = PaxePacket.fromDatagram(one.toDatagram());
+    assertEquals(one, two);
+    assertEquals(one.hashCode(), two.hashCode());
+  }
 }

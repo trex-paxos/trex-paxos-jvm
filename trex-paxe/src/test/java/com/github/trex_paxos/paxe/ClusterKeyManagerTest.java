@@ -42,4 +42,42 @@ class ClusterKeyManagerTest {
     new SecureRandom().nextBytes(tooShort);
     assertThrows(IllegalArgumentException.class, () -> new ClusterKeyManager(tooShort));
   }
+
+  @Test
+  void rejectsNullClusterPsk() {
+    assertThrows(NullPointerException.class, () -> new ClusterKeyManager(null));
+  }
+
+  @Test
+  void setCurrentEpochRequiresInstalledKey() {
+    var manager = new ClusterKeyManager(NetworkTestHarness.generateClusterPsk());
+    assertThrows(IllegalArgumentException.class, () -> manager.setCurrentEpoch((byte) 9));
+  }
+
+  @Test
+  void installEpochRejectsWrongSize() {
+    var manager = new ClusterKeyManager(NetworkTestHarness.generateClusterPsk());
+    assertThrows(IllegalArgumentException.class, () -> manager.installEpoch((byte) 1, new byte[8]));
+  }
+
+  @Test
+  void keyForEpochThrowsForUnknownEpoch() {
+    var manager = new ClusterKeyManager(NetworkTestHarness.generateClusterPsk());
+    assertThrows(SecurityException.class, () -> manager.keyForEpoch((byte) 3));
+  }
+
+  @Test
+  void clonesPskOnConstruction() {
+    byte[] psk = NetworkTestHarness.generateClusterPsk();
+    var manager = new ClusterKeyManager(psk);
+    psk[0] = (byte) 0xFF;
+    assertNotEquals((byte) 0xFF, manager.keyForEpoch((byte) 0)[0]);
+  }
+
+  @Test
+  void clearRemovesAllEpochs() {
+    var manager = new ClusterKeyManager(NetworkTestHarness.generateClusterPsk());
+    manager.clear();
+    assertFalse(manager.hasEpoch((byte) 0));
+  }
 }

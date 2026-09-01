@@ -45,6 +45,10 @@ public class NetworkTestHarness implements AutoCloseable {
   }
 
   public NetworkWithTempPort createNetwork(short nodeId) throws Exception {
+    return createNetwork(nodeId, new ClusterKeyManager(clusterPsk));
+  }
+
+  public NetworkWithTempPort createNetwork(short nodeId, ClusterKeyManager keyManager) throws Exception {
     if (closed) {
       LOGGER.warning("Attempt to create network after harness closed");
       throw new IllegalStateException("Harness is closed");
@@ -59,12 +63,15 @@ public class NetworkTestHarness implements AutoCloseable {
     NodeId id = new NodeId(nodeId);
     addressMap.put(id, new NetworkAddress("127.0.0.1", port));
 
-    ClusterKeyManager keyManager = new ClusterKeyManager(clusterPsk);
     Supplier<NodeEndpoints> membershipSupplier = () -> new NodeEndpoints(new HashMap<>(addressMap));
 
     PaxeNetwork network = new PaxeNetwork.Builder(keyManager, port, id, membershipSupplier).build();
     networks.add(network);
     return new NetworkWithTempPort(network, port);
+  }
+
+  public int portFor(NodeId nodeId) {
+    return addressMap.get(nodeId).port();
   }
 
   public void waitForNetworkEstablishment() throws Exception {
