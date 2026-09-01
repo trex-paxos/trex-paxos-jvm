@@ -122,6 +122,8 @@ This issue specified a format that #26 explicitly retired:
 
 ## Recommended GitHub actions
 
+> **Note:** The cloud agent token cannot post issue comments on this repository. Use the suggested comments below when closing issues.
+
 ### Close as duplicate of #26
 
 ```
