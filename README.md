@@ -204,10 +204,9 @@ Any value `V` journaled into slot `S` by a mathematical majority of nodes will n
 typically only support point-to-point messaging. This means that `AcceptResponse` messages are only sent to the leader.
 As the leader is the first to learn which values are fixed, Lamport calls it the “distinguished learner”.
 
-The leader can send a short `fixed(S,N)` message to inform the other nodes when a value has been fixed. This message can
-piggyback at the front of the subsequent outbound `accept` message network packet. Due to lost messaging, a leader may
-learn which slots are fixed out of sequential order. In this implementation leaders only send `fixed` messages in
-sequential slot order.
+The leader can send a short `fixed(S,N)` message to inform the other nodes when a value has been fixed.
+See [Commit-Index Piggybacking and Idle Fixed Announcements](#commit-index-piggybacking-and-idle-fixed-announcements)
+below for where and why this is piggybacked or sent explicitly.
 
 Leaders must always increment their counter to create a fresh `N` each time they attempt to lead. That ensures that each
 `fixed(S,N)` refers to a unique `accept(S,N,V)` message. If any node does not have the matching
@@ -235,6 +234,46 @@ public record CatchupResponse(List<Accept> catchup) {
 
 Each node learns which value `V` is fixed into each sequential slot `S`.
 Each node will then up-call the command value `V` to the host application.
+
+#### Commit-Index Piggybacking and Idle Fixed Announcements
+
+This implementation uses an equivalent technique to that described in Barbara Liskov and James Cowling,
+["Viewstamped Replication Revisited"](https://pmg.csail.mit.edu/papers/vr-revisited.pdf) section 4.1 step 6:
+the current commit index is piggybacked on routine protocol messages, and the leader sends an explicit
+announcement when idle. Trex names these concepts `highestFixedIndex` and `Fixed` respectively; the
+[Cluster Replication With Paxos](https://simbo1905.wordpress.com/2014/10/28/transaction-log-replication-with-paxos/)
+blog post describes the same design using `commit(S,N)` terminology.
+
+The table below maps the VSR technique to this codebase:
+
+| VSR Revisited (§4.1) | Trex2 equivalent | Where |
+|---|---|---|
+| Commit number piggybacked on `PREPARE` | `highestAcceptedIndex` on `PrepareResponse` | `PrepareResponse.java`, `TrexNode.processPrepareResponse` |
+| Commit number piggybacked on replication messages | `highestFixedIndex` on `AcceptResponse` | `AcceptResponse.java`, `TrexNode.ack` / `nack` |
+| `Fixed` appended to leader outbound batch | `currentFixedMessage()` after `Accept` messages | `TrexEngine.nextLeaderBatchOfMessages` |
+| Explicit `COMMIT` when the leader is idle | `Fixed` heartbeat | `TrexNode.createHeartbeatMessages` |
+
+**Why piggyback the commit index?** Followers need to learn which slots are fixed so they can apply
+commands to the host application in order. Sending the current `highestFixedIndex` inside routine
+`AcceptResponse` and `PrepareResponse` messages lets lagging replicas detect that they are behind and
+lets a partitioned leader abdicate when it sees a higher fixed index from a majority. This avoids
+extra round-trips for the common case.
+
+**Why send explicit `Fixed` messages when idle?** When the leader has no new commands to propose,
+followers would otherwise have no inbound traffic and might time out into an unnecessary election.
+`TrexNode.createHeartbeatMessages()` broadcasts the current `Fixed` message on a timer so followers
+know the leader is alive and can advance their fixed index. The same method also re-broadcasts any
+`Accept` messages that are still awaiting a quorum response.
+
+**Piggybacking `Fixed` on leader batches.** After the leader learns that a slot is fixed, it adds a
+`Fixed` message to the outbound message list (`TrexNode.processAcceptResponse`). When the host
+application submits new commands, `TrexEngine.nextLeaderBatchOfMessages` returns the new `Accept`
+messages followed by a `currentFixedMessage()`. The transport layer may send these as separate
+messages or coalesce them into a single network frame; either way the `Fixed` announcement rides
+along with the next replication traffic rather than requiring its own round-trip.
+
+Due to lost messaging, a leader may learn which slots are fixed out of sequential order. In this
+implementation leaders only send `Fixed` messages in sequential slot order.
 
 ### Fourth: The Leader Takeover Protocol
 

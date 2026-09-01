@@ -15,7 +15,11 @@ Core implementation of the Paxos consensus algorithm with exhaustive property te
 ### Algorithm Phases
 1. **Steady State**: Leader streams accept messages, commits on majority
 2. **Leader Election**: Prepare/promise exchange for slot recovery
-3. **Learning**: Fixed messages notify nodes of committed values
+3. **Learning**: Fixed messages notify nodes of committed values. The leader piggybacks the current
+   `highestFixedIndex` on `AcceptResponse` and `PrepareResponse` messages, appends a `Fixed` message
+   to each leader outbound batch, and heartbeats `Fixed` when idle. See README §"Commit-Index
+   Piggybacking and Idle Fixed Announcements" and
+   [Viewstamped Replication Revisited](https://pmg.csail.mit.edu/papers/vr-revisited.pdf) §4.1 step 6.
 
 ### Safety Invariants
 - Promises apply to both prepare and accept messages

@@ -8,6 +8,8 @@ import java.util.Objects;
 
 /// An AcceptResponse response back to a {@link Accept} message. We add the highestFixedIndex as more information
 /// to cause a leader to abdicate if it is behind. If the leader gets a NO vote it will abdicate.
+/// The highestFixedIndex field piggybacks the replica's current commit index on every accept reply, equivalent to
+/// the commit-number piggybacking in Liskov and Cowling, "Viewstamped Replication Revisited", section 4.1 step 6.
 /// We do not attempt to send any information
 /// about promises as we do not want to change our own promise outside the normal prepare/accept flow.
 ///
