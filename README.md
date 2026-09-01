@@ -32,7 +32,7 @@ At this the time:
 4. There are junit tests that simulate randomized rolling network partitions 1,000 times.
 5. There is support for Flexible Paxos (FPaxos) quorum strategies.
 
-This repository includes a low-overhead UDP based encrypted network protocol inspired by QUIC called [PAXE](./trex-paxe/PAXE.md).
+This repository includes a low-overhead UDP based encrypted network protocol inspired by QUIC called [PAXE](./trex-paxe/README.md).
 This can be optionally be embedded into your application to perform the Paxos message enchanges.
 
 See the Architecture section for a more detailed explanation of how to use the library.

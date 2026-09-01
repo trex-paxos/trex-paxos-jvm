@@ -18,7 +18,6 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.random.RandomGenerator;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -39,17 +38,7 @@ public class SimulationTests {
     ConsoleHandler consoleHandler = new ConsoleHandler();
     consoleHandler.setLevel(level);
     LOGGER.addHandler(consoleHandler);
-
-    // Configure SessionKeyManager logger
-    Logger sessionKeyManagerLogger = Logger.getLogger("");
-    sessionKeyManagerLogger.setLevel(level);
-    ConsoleHandler skmHandler = new ConsoleHandler();
-    skmHandler.setLevel(level);
-    sessionKeyManagerLogger.addHandler(skmHandler);
-
-    // Optionally disable parent handlers if needed
     LOGGER.setUseParentHandlers(false);
-    sessionKeyManagerLogger.setUseParentHandlers(false);
   }
 
   @Test
