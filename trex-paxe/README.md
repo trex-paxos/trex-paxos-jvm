@@ -36,12 +36,30 @@ AES-GCM associated data is the exact nine prefix bytes carried in the received f
 
 ## Key provisioning
 
+### Data plane
+
 Install a cryptographically random 32-byte cluster PSK on every member. For coordinated rotation,
 install the next epoch key, accept overlap, switch senders to the new epoch, then retire the old
 epoch.
 
-Optional TLS 1.3 external-PSK provisioning may transport the cluster PSK, but that TLS connection is
-outside PAXE and must not derive a different per-node or per-connection data key.
+### Control plane (TLS 1.3)
+
+Optional TLS 1.3 external-PSK provisioning distributes or rotates the cluster PSK to members:
+
+- **Bootstrap PSK** — authenticates the TLS provisioning channel only; must not be installed as the
+  PAXE cluster data key.
+- **Cluster PSK** — the shared 32-byte AES-256 key installed into `ClusterKeyManager` for a given
+  epoch after a successful provision.
+- **Epoch** — coordinates rotation; the provisioner delivers the cluster PSK for the requested
+  epoch.
+
+The provisioner uses TLS 1.3 `psk_dhe_ke` with ephemeral X25519, rejects PSK-only `psk_ke`, and
+disables 0-RTT application data. TLS AEAD cipher suites (for example `TLS_AES_128_GCM_SHA256`) are
+independent of the PSK key-exchange mode.
+
+`ClusterPskProvisionerServer` and `ClusterPskProvisionerClient` implement the control plane. Demo
+operators can use `ClusterStackAdmin serve-provision` and `provision` instead of manual hex
+copy/paste; `set-psk` remains available for local development.
 
 ## Key classes
 

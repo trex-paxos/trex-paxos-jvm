@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import static com.github.trex_paxos.TrexLogger.LOGGER;
 import static org.junit.jupiter.api.Assertions.*;
@@ -27,19 +26,7 @@ class SealedRecordsPicklerTest {
     ConsoleHandler consoleHandler = new ConsoleHandler();
     consoleHandler.setLevel(level);
     LOGGER.addHandler(consoleHandler);
-
-    // Configure SessionKeyManager logger
-    Logger logger = Logger.getLogger("com.github.trex_paxos");
-    logger.setLevel(level);
-    ConsoleHandler skmHandler = new ConsoleHandler();
-    skmHandler.setLevel(level);
-    logger.addHandler(skmHandler);
-
-    // Optionally disable parent handlers if needed
     LOGGER.setUseParentHandlers(false);
-    logger.setUseParentHandlers(false);
-
-    LOGGER.info("Logging initialized at level: " + level);
   }
 
   @BeforeEach
