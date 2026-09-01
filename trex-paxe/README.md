@@ -2,141 +2,74 @@
 
 ## Overview
 
-Paxe implements authenticated encryption for Trex Paxos messages using AES-GCM. It supports both standard and Data
-Encryption Key (DEK) modes for efficient large payload handling.
+Paxe implements authenticated encryption for Trex Paxos messages using AES-256-GCM. Every cluster
+member holds the same 32-byte pre-shared key (PSK) per epoch, installed out of band. PAXE is a
+protected intracluster datagram codec, not a key-agreement protocol.
 
 ## Wire Format
 
-### Message Header (8 bytes)
+### Prefix (9 bytes)
 
 ```
-+--------+--------+--------+--------+--------+--------+--------+--------+
-| fromId | toId   | channel| length                                    |
-+--------+--------+--------+--------+--------+--------+--------+--------+
++--------+--------+-------------+--------+
+| fromId | toId   | channel u32 | epoch  |
+| 2 BE   | 2 BE   | 4 BE        | 1 byte |
++--------+--------+-------------+--------+
 ```
 
-- fromId (2 bytes): Source node identifier
-- toId (2 bytes): Destination node identifier
-- channel (2 bytes): Communication channel identifier
-- length (2 bytes): Payload length
+- `fromId` / `toId`: unsigned big-endian node identifiers (authenticated routing metadata)
+- `channel`: unsigned big-endian `u32` application multiplexing identifier
+- `epoch`: cluster-key epoch for coordinated rotation
 
-### Standard Message Format
-
-```
-+----------------+--------+-----------+------------+-----------------+
-| Header (8)     | Flags  | Nonce(12) | Payload    | Auth Tag (16)  |
-+----------------+--------+-----------+------------+-----------------+
-```
-
-### DEK Message Format
+### Frame layout
 
 ```
-+----------------+--------+-----------+------------+----------+--------+------------+-----------------+
-| Header (8)     | Flags  | Nonce(12) | DEK Key(32)| DEKNonce | Length | Payload    | Auth Tag (16)  |
-+----------------+--------+-----------+------------+----------+--------+------------+-----------------+
++----------------+-----------+------------+-----------------+
+| Prefix (9)     | Nonce(12) | Ciphertext | Auth Tag (16)  |
++----------------+-----------+------------+-----------------+
 ```
 
-### Flags Byte Structure
+Fixed overhead is 37 bytes. Plaintext length is `datagram_length - 37`; there is no encoded length
+field.
 
-- Bit 0: DEK flag (0=standard, 1=DEK mode)
-- Bit 1: Must be 0
-- Bit 2: Must be 1
-- Bits 3-7: Reserved
+AES-GCM associated data is the exact nine prefix bytes carried in the received frame.
 
-## Key Classes
+## Key provisioning
 
-### PaxeNetwork
+Install a cryptographically random 32-byte cluster PSK on every member. For coordinated rotation,
+install the next epoch key, accept overlap, switch senders to the new epoch, then retire the old
+epoch.
 
-Core networking implementation handling:
+Optional TLS 1.3 external-PSK provisioning may transport the cluster PSK, but that TLS connection is
+outside PAXE and must not derive a different per-node or per-connection data key.
 
-- Message encryption/decryption
-- Network I/O
-- Channel management
-- Pending message buffering
+## Key classes
 
-### SessionKeyManager
+### `PaxeNetwork`
 
-Manages secure key exchange:
+UDP send/receive, channel multiplexing, and AES-GCM sealing with the cluster PSK.
 
-- Implements SRP (RFC 5054) handshakes
-- Tracks active sessions
-- Handles key derivation
-- Maintains node verifiers
+### `ClusterKeyManager`
 
-### Crypto
+Holds cluster PSK material indexed by epoch.
 
-Encryption primitives:
+### `PaxePacket`
 
-- AES-GCM operations
-- Nonce generation
-- Buffer management
-- DEK encryption logic
+Canonical prefix serialization, seal/open helpers, and tamper detection.
 
-### NetworkTestHarness
+## Security properties
 
-Test infrastructure providing:
+- One cluster PSK per epoch opens frames from every configured member; no pairwise key lookup exists.
+- Tampering with any prefix, nonce, ciphertext, or tag byte prevents acceptance.
+- Truncated or extended datagrams are rejected before releasing plaintext.
+- Broadcast to multiple nodes uses independent sealed datagrams; there is no DEK/KEK mode.
 
-- Network simulation
-- Node creation
-- Key exchange verification
-- Cluster membership management
+## Usage
 
-## Security Properties
+- Maximum plaintext size: `65507 - 37 = 65470` bytes per datagram.
+- All `u32` channel values belong to the host application; there is no reserved SRP/system range.
 
-### Authentication
+## Test support
 
-- Every packet includes GCM authentication tag
-- All headers are authenticated (fromId, toId, channel)
-- Failed authentication triggers SecurityException
-
-### Confidentiality
-
-- AES-256-GCM for all payloads
-- Unique nonce per message
-- DEK mode for large messages
-
-### Key Exchange
-
-- SRP v6a (RFC 5054) for initial authentication
-- Session key derivation via HKDF
-- Key confirmation through GCM tag validation
-
-## Usage Guidelines
-
-### Message Size
-
-- Standard mode for small messages < 64 byte (cpu cache line)
-- DEK mode automatically used for larger payloads
-- Maximum UDP packet size: 65507 bytes
-
-### Channel Management
-
-- System channels (1-99) reserved
-- Application channels start from 100
-- Broadcast vs direct messaging support
-
-### Key Lifecycle
-
-- Session keys rotated on network partition
-- Verifiers distributed via configuration
-- Node IDs must be globally unique
-
-## Error Handling
-
-### Network Errors
-
-- Failed sends queued for retry
-- Messages rejected if no session key
-- Automatic key re-establishment
-
-### Crypto Failures
-
-- SecurityException on auth failures
-- Buffer overflow protection
-- Connection teardown on key errors
-
-## Test Support
-
-- InMemoryNetwork for unit testing
-- NetworkTestHarness for integration
-- Logging levels follow JUL conventions
+- `NetworkTestHarness` builds multi-node UDP test clusters with a shared cluster PSK.
+- `InMemoryNetwork` in `trex-lib` remains available for algorithm tests without PAXE.

@@ -42,20 +42,16 @@ class PaxeStackClusterTest {
     NetworkWithTempPort network1 = harness.createNetwork((short) 1);
     NetworkWithTempPort network2 = harness.createNetwork((short) 2);
 
-    LOGGER.fine("Waiting for network establishment");
-    harness.waitForNetworkEstablishment();
-    LOGGER.fine("Network established successfully");
-
     Supplier<Legislators> members = () -> Legislators.of(
         new VotingWeight(new NodeId((short) 1), 1),
-        new VotingWeight(new NodeId((short) 2), 1),
-        new VotingWeight(new NodeId((short) 3), 1)
+        new VotingWeight(new NodeId((short) 2), 1)
     );
 
+    // Subscribe handlers before starting UDP receivers (StackServiceImpl starts the network).
     stackService1 = new StackServiceImpl((short)1, members, network1.network());
     stackService2 = new StackServiceImpl((short)2, members, network2.network());
 
-    LOGGER.info("Starting applications");
+    LOGGER.fine("Stack services started");
 
     // Explicitly set up the leader
     // Set node 1 as the leader

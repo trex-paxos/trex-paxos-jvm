@@ -55,7 +55,7 @@ sdk install mvnd
 ## Getting Started
 
 ### Prerequisites
-- Java 24+ (with preview features enabled)
+- Java 25+
 - Maven 3.6+
 
 ### Basic Usage

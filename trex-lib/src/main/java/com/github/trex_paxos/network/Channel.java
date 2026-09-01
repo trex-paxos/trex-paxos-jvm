@@ -2,17 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.github.trex_paxos.network;
 
-/// A channel is a short value that identifies the type of message being sent.
-/// Channels below 100 are reserved for system messages
-/// @see SystemChannel
-public record Channel(short id) {
-  
-  // Application channels start from 100 to avoid collisions
-  @SuppressWarnings("unused")
-  public static Channel applicationChannel(short value) {
-    if (value < 100) {
-      throw new IllegalArgumentException("Application channel values must be >= 100");
-    }
-    return new Channel(value);
+/// Unsigned 32-bit channel identifier for multiplexing logical streams.
+/// Values are serialized as big-endian `u32` on the wire; Java stores the bit pattern in a signed `int`.
+public record Channel(int id) {
+
+  /// Returns the unsigned 32-bit value as a `long` for display or comparison.
+  public long unsignedValue() {
+    return Integer.toUnsignedLong(id);
   }
 }

@@ -2,139 +2,198 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.github.trex_paxos.paxe;
 
-import org.junit.jupiter.api.Test;
-
 import com.github.trex_paxos.network.Channel;
 import com.github.trex_paxos.NodeId;
+import org.junit.jupiter.api.Test;
 
-import javax.crypto.SecretKey;
 import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
 import java.util.Arrays;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class PaxePacketTest {
-    static {
-        System.setProperty(SRPUtils.class.getName() + ".useHash", "SHA-1");
+
+  private static final int AES_KEY_SIZE = 256;
+  private static final SecureRandom RANDOM = new SecureRandom();
+
+  private byte[] randomClusterKey() throws GeneralSecurityException {
+    KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+    keyGen.init(AES_KEY_SIZE);
+    SecretKey key = keyGen.generateKey();
+    assertEquals(ClusterKeyManager.CLUSTER_PSK_SIZE, key.getEncoded().length);
+    return key.getEncoded();
+  }
+
+  @Test
+  void prefixIsByteExactBigEndianLayout() throws GeneralSecurityException {
+    NodeId from = new NodeId((short) 0x0102);
+    NodeId to = new NodeId((short) 0x0304);
+    Channel channel = new Channel(0x05060708);
+    byte epoch = (byte) 0x09;
+    byte[] key = randomClusterKey();
+
+    PaxePacket packet = PaxePacket.seal(from, to, channel, epoch, new byte[]{0x42}, key);
+    byte[] datagram = packet.toDatagram();
+
+    assertEquals(PaxePacket.FRAME_OVERHEAD + 1, datagram.length);
+    assertArrayEquals(new byte[]{
+        0x01, 0x02,
+        0x03, 0x04,
+        0x05, 0x06, 0x07, 0x08,
+        0x09
+    }, Arrays.copyOfRange(datagram, 0, PaxePacket.PREFIX_SIZE));
+  }
+
+  @Test
+  void channelRoundTripsAllU32BitPatterns() throws GeneralSecurityException {
+    int[] channelBits = {0, 1, 65535, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF};
+    byte[] key = randomClusterKey();
+    byte[] plaintext = "channel-test".getBytes();
+
+    for (int bits : channelBits) {
+      Channel channel = new Channel(bits);
+      PaxePacket sealed = PaxePacket.seal(new NodeId((short) 1), new NodeId((short) 2), channel, (byte) 0, plaintext, key);
+      PaxePacket parsed = PaxePacket.fromDatagram(sealed.toDatagram());
+
+      assertEquals(channel, parsed.channel(), "channel bits 0x" + Integer.toHexString(bits));
+      assertArrayEquals(plaintext, parsed.decrypt(key));
     }
+  }
 
-    private static final int AES_KEY_SIZE = 256;
+  @Test
+  void frameOverheadIsThirtySevenBytes() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    PaxePacket packet = PaxePacket.seal(
+        new NodeId((short) 1),
+        new NodeId((short) 2),
+        new Channel(1),
+        (byte) 0,
+        new byte[0],
+        key);
 
-    @Test
-    void testConstructorAndGetters() {
-        NodeId from = new NodeId((short) 1);
-        NodeId to = new NodeId((short) 2);
-        Channel channel = new Channel((short) 3);
-        byte[] nonce = new byte[PaxePacket.NONCE_SIZE];
-        byte[] authTag = new byte[PaxePacket.AUTH_TAG_SIZE];
-        byte[] payload = "Test payload".getBytes();
+    assertEquals(37, PaxePacket.FRAME_OVERHEAD);
+    assertEquals(37, packet.toDatagram().length);
+  }
 
-        PaxePacket packet = new PaxePacket(from, to, channel, Optional.of(nonce), Optional.of(authTag), payload);
+  @Test
+  void plaintextLengthDerivedFromDatagramSize() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    byte[] plaintext = new byte[128];
+    RANDOM.nextBytes(plaintext);
 
-        assertEquals(from, packet.from());
-        assertEquals(to, packet.to());
-        assertEquals(channel, packet.channel());
-        assertArrayEquals(nonce, packet.nonce().orElseThrow());
-        assertArrayEquals(authTag, packet.authTag().orElseThrow());
-        assertArrayEquals(payload, packet.payload());
+    PaxePacket packet = PaxePacket.seal(new NodeId((short) 1), new NodeId((short) 2), new Channel(3), (byte) 0, plaintext, key);
+    byte[] datagram = packet.toDatagram();
+
+    assertEquals(PaxePacket.FRAME_OVERHEAD + plaintext.length, datagram.length);
+    assertArrayEquals(plaintext, PaxePacket.fromDatagram(datagram).decrypt(key));
+  }
+
+  @Test
+  void encryptDecryptRoundTrip() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    byte[] plaintext = "Hello, World!".getBytes();
+
+    PaxePacket packet = PaxePacket.seal(new NodeId((short) 1), new NodeId((short) 2), new Channel(1), (byte) 0, plaintext, key);
+    assertArrayEquals(plaintext, packet.decrypt(key));
+  }
+
+  @Test
+  void rejectsTruncatedDatagram() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    PaxePacket packet = PaxePacket.seal(new NodeId((short) 1), new NodeId((short) 2), new Channel(1), (byte) 0, new byte[8], key);
+    byte[] truncated = Arrays.copyOf(packet.toDatagram(), PaxePacket.FRAME_OVERHEAD - 1);
+
+    assertThrows(SecurityException.class, () -> PaxePacket.fromDatagram(truncated));
+  }
+
+  @Test
+  void rejectsExtendedDatagram() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    PaxePacket packet = PaxePacket.seal(new NodeId((short) 1), new NodeId((short) 2), new Channel(1), (byte) 0, new byte[8], key);
+    byte[] extended = Arrays.copyOf(packet.toDatagram(), packet.toDatagram().length + 1);
+    extended[extended.length - 1] = 0x7F;
+
+    PaxePacket parsed = PaxePacket.fromDatagram(extended);
+    assertThrows(SecurityException.class, () -> parsed.decrypt(key));
+  }
+
+  @Test
+  void tamperWithEveryPrefixAndPayloadByteFailsAuthentication() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    PaxePacket packet = PaxePacket.seal(new NodeId((short) 1), new NodeId((short) 2), new Channel(0xAABBCCDD), (byte) 0xEE, new byte[16], key);
+    byte[] datagram = packet.toDatagram();
+
+  for (int offset = 0; offset < datagram.length; offset++) {
+      byte[] tampered = Arrays.copyOf(datagram, datagram.length);
+      tampered[offset] ^= 0x01;
+      PaxePacket parsed = PaxePacket.fromDatagram(tampered);
+      assertThrows(SecurityException.class, () -> parsed.decrypt(key), "offset " + offset);
     }
+  }
 
-    @Test
-    void testConstructorWithInvalidNonceSize() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new PaxePacket(new NodeId((short) 1), new NodeId((short) 2), new Channel((short) 3),
-                        Optional.of(new byte[PaxePacket.NONCE_SIZE - 1]), 
-                        Optional.of(new byte[PaxePacket.AUTH_TAG_SIZE]),
-                        new byte[0]));
-    }
+  @Test
+  void authenticatedDataCoversFullNineBytePrefix() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    NodeId from = new NodeId((short) 9);
+    NodeId to = new NodeId((short) 8);
+    Channel channel = new Channel(0x12345678);
+    byte epoch = (byte) 0xAB;
 
-    @Test
-    void testConstructorWithInvalidAuthTagSize() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new PaxePacket(new NodeId((short) 1), new NodeId((short) 2), new Channel((short) 3),
-                        Optional.of(new byte[PaxePacket.NONCE_SIZE]), 
-                        Optional.of(new byte[PaxePacket.AUTH_TAG_SIZE - 1]),
-                        new byte[0]));
-    }
+    PaxePacket packet = PaxePacket.seal(from, to, channel, epoch, new byte[]{1, 2, 3}, key);
+    byte[] tamperedEpoch = packet.toDatagram();
+    tamperedEpoch[8] ^= 0x01;
 
-    @Test
-    void testToBytes() {
-        NodeId from = new NodeId((short) 1);
-        NodeId to = new NodeId((short) 2);
-        Channel channel = new Channel((short) 3);
-        byte[] nonce = new byte[PaxePacket.NONCE_SIZE];
-        byte[] authTag = new byte[PaxePacket.AUTH_TAG_SIZE];
-        byte[] payload = "Test payload".getBytes();
+    PaxePacket parsed = PaxePacket.fromDatagram(tamperedEpoch);
+    assertThrows(SecurityException.class, () -> parsed.decrypt(key));
+  }
 
-        PaxePacket packet = new PaxePacket(from, to, channel, Optional.of(nonce), Optional.of(authTag), payload);
-        byte[] bytes = packet.toBytes();
+  @Test
+  void rejectsWrongClusterKey() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    byte[] otherKey = randomClusterKey();
+    PaxePacket packet = PaxePacket.seal(new NodeId((short) 1), new NodeId((short) 2), new Channel(1), (byte) 0, new byte[4], key);
+    assertThrows(SecurityException.class, () -> packet.decrypt(otherKey));
+  }
 
-        assertEquals(PaxePacket.HEADER_SIZE + PaxePacket.NONCE_SIZE + PaxePacket.AUTH_TAG_SIZE + payload.length,
-                bytes.length);
-        assertEquals(from.id(), (short) ((bytes[0] << 8) | (bytes[1] & 0xFF)));
-        assertEquals(to.id(), (short) ((bytes[2] << 8) | (bytes[3] & 0xFF)));
-        assertEquals(channel.id(), (short) ((bytes[4] << 8) | (bytes[5] & 0xFF)));
-        assertEquals(payload.length, ((bytes[6] & 0xFF) << 8) | (bytes[7] & 0xFF));
-        assertArrayEquals(nonce, Arrays.copyOfRange(bytes, 8, 8 + PaxePacket.NONCE_SIZE));
-        assertArrayEquals(authTag, Arrays.copyOfRange(bytes, 8 + PaxePacket.NONCE_SIZE,
-                8 + PaxePacket.NONCE_SIZE + PaxePacket.AUTH_TAG_SIZE));
-        assertArrayEquals(payload,
-                Arrays.copyOfRange(bytes, 8 + PaxePacket.NONCE_SIZE + PaxePacket.AUTH_TAG_SIZE, bytes.length));
-    }
+  @Test
+  void rejectsInvalidNonceAndTagSizes() {
+    assertThrows(IllegalArgumentException.class, () -> new PaxePacket(
+        new NodeId((short) 1), new NodeId((short) 2), new Channel(1), (byte) 0,
+        new byte[11], new byte[0], new byte[16]));
+    assertThrows(IllegalArgumentException.class, () -> new PaxePacket(
+        new NodeId((short) 1), new NodeId((short) 2), new Channel(1), (byte) 0,
+        new byte[12], new byte[0], new byte[15]));
+  }
 
-    @Test
-    void testFromBytes() {
-        NodeId from = new NodeId((short) 1);
-        NodeId to = new NodeId((short) 2);
-        Channel channel = new Channel((short) 3);
-        byte[] nonce = new byte[PaxePacket.NONCE_SIZE];
-        byte[] authTag = new byte[PaxePacket.AUTH_TAG_SIZE];
-        byte[] payload = "Test payload".getBytes();
+  @Test
+  void prefixBytesMatchDatagramPrefix() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    PaxePacket packet = PaxePacket.seal(
+        new NodeId((short) 1), new NodeId((short) 2), new Channel(0x01020304), (byte) 5, new byte[]{9}, key);
+    assertArrayEquals(packet.prefixBytes(), Arrays.copyOfRange(packet.toDatagram(), 0, PaxePacket.PREFIX_SIZE));
+  }
 
-        PaxePacket originalPacket = new PaxePacket(from, to, channel, Optional.of(nonce), Optional.of(authTag), payload);
-        byte[] bytes = originalPacket.toBytes();
+  @Test
+  void rejectsOversizedPlaintext() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    assertThrows(IllegalArgumentException.class, () -> PaxePacket.seal(
+        new NodeId((short) 1),
+        new NodeId((short) 2),
+        new Channel(1),
+        (byte) 0,
+        new byte[PaxeProtocol.MAX_PLAINTEXT_SIZE + 1],
+        key));
+  }
 
-        PaxePacket reconstructedPacket = PaxePacket.fromBytes(bytes);
-
-        assertEquals(originalPacket, reconstructedPacket);
-    }
-
-    @Test
-    void testAuthenticatedData() {
-        NodeId from = new NodeId((short) 1);
-        NodeId to = new NodeId((short) 2);
-        Channel channel = new Channel((short) 3);
-        PaxePacket packet = new PaxePacket(from, to, channel, Optional.empty(), Optional.empty(), new byte[0]);
-
-        byte[] authenticatedData = packet.authenticatedData();
-
-        assertEquals(PaxePacket.AUTHENTICATED_DATA_SIZE, authenticatedData.length);
-        assertEquals((byte) (from.id() >> 8), authenticatedData[0]);
-        assertEquals((byte) from.id(), authenticatedData[1]);
-        assertEquals((byte) (to.id() >> 8), authenticatedData[2]);
-        assertEquals((byte) to.id(), authenticatedData[3]);
-        assertEquals((byte) (channel.id() >> 8), authenticatedData[4]);
-        assertEquals((byte) channel.id(), authenticatedData[5]);
-    }
-
-    @Test
-    void testEncryptDecrypt() throws GeneralSecurityException {
-        KeyGenerator keyGen = KeyGenerator.getInstance("AES");
-        keyGen.init(AES_KEY_SIZE);
-        SecretKey key = keyGen.generateKey();
-
-        NodeId from = new NodeId((short) 1);
-        PaxeMessage originalMessage = new PaxeMessage(
-                from,
-                new NodeId((short) 2),
-                new Channel((short) 1),
-                "Hello, World!".getBytes());
-
-        PaxePacket encryptedPacket = PaxePacket.encrypt(originalMessage, from, key.getEncoded());
-        PaxeMessage decryptedMessage = PaxePacket.decrypt(encryptedPacket, key.getEncoded());
-
-        assertEquals(originalMessage, decryptedMessage);
-    }
+  @Test
+  void equalsAndHashCodeUseValueSemantics() throws GeneralSecurityException {
+    byte[] key = randomClusterKey();
+    PaxePacket one = PaxePacket.seal(new NodeId((short) 1), new NodeId((short) 2), new Channel(3), (byte) 0, new byte[]{1}, key);
+    PaxePacket two = PaxePacket.fromDatagram(one.toDatagram());
+    assertEquals(one, two);
+    assertEquals(one.hashCode(), two.hashCode());
+  }
 }
