@@ -50,8 +50,5 @@ public final class ClusterPskProvisionerClient {
     Objects.requireNonNull(keyManager, "keyManager");
     byte[] clusterPsk = fetchClusterPsk(bootstrapPsk, server, epoch);
     keyManager.installEpoch(epoch, clusterPsk);
-    if (!keyManager.hasEpoch(keyManager.currentEpoch())) {
-      keyManager.setCurrentEpoch(epoch);
-    }
   }
 }
